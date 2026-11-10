@@ -415,7 +415,9 @@ export default function DashboardPage() {
   const [workspace, setWorkspace] = useState("Alvian · Personal Brand");
   const [mobileNav, setMobileNav] = useState(false);
   const [quickAction, setQuickAction] = useState("");
-  const [showAllAgents, setShowAllAgents] = useState(false);\n  const [studioBrief,setStudioBrief] = useState<{title:string;account:string;campaign:string;format:string;hook:string}|null>(null);\n  const [pendingIdea,setPendingIdea] = useState("");
+  const [showAllAgents, setShowAllAgents] = useState(false);
+  const [studioBrief,setStudioBrief] = useState<{title:string;account:string;campaign:string;format:string;hook:string}|null>(null);
+  const [pendingIdea,setPendingIdea] = useState("");
 
   const metrics = useMemo(() => {
     if (platform === "TikTok") return [
