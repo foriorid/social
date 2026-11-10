@@ -1475,3 +1475,82 @@ button { font: inherit; cursor: pointer; }
 .module-page .agent-badge,.module-page .muted-chip { font-size:10px; }
 .module-page .module-footer { font-size:10px; line-height:1.55; }
 .module-page p { line-height:1.55; }
+
+/* V7 — larger inner typography and denser UI legibility */
+.module-page :is(p,li,td,th) { font-size:13px; line-height:1.65; }
+.module-page :is(small,.hint,.helper-text,.muted,.meta,.description) { font-size:12px; line-height:1.55; }
+.module-page :is(label,.field-label,.eyebrow,.section-kicker) { font-size:11px; line-height:1.45; }
+.module-page :is(input,select,textarea) { font-size:13px; }
+.module-page :is(button,.button) { font-size:12px; }
+.module-page :is(.card-title,.panel-title,.section-title) { font-size:16px; }
+.module-page :is(.table,.data-table) :is(th,td) { font-size:12px; padding-top:11px; padding-bottom:11px; }
+
+/* Content Plan: make even the metadata, filters and brief fields comfortable to read */
+.content-plan-v3 .plan-v3-card-meta,
+.content-plan-v3 .plan-v3-card-bottom>span,
+.content-plan-v3 .plan-v3-card-bottom button,
+.content-plan-v3 .plan-v3-filter label,
+.content-plan-v3 .plan-v3-filter>span,
+.content-plan-v3 .plan-v3-breadcrumb,
+.content-plan-v3 .plan-v3-content-filters button,
+.content-plan-v3 .plan-v3-content-filters>span { font-size:12px; }
+.content-plan-v3 .plan-v3-filter button { font-size:12px; padding:9px 14px; }
+.content-plan-v3 .plan-v3-card-copy h3 { font-size:17px; }
+.content-plan-v3 .plan-v3-card-copy p { font-size:13px; }
+.content-plan-v3 .plan-v3-item-list>button { min-height:74px; padding:12px; }
+.content-plan-v3 .plan-v3-day { width:40px; height:40px; flex-basis:40px; font-size:13px; }
+.content-plan-v3 .plan-v3-item-copy b { font-size:13px; line-height:1.4; }
+.content-plan-v3 .plan-v3-item-copy small { font-size:12px; }
+.content-plan-v3 .plan-v3-item-copy em { font-size:11px; }
+.content-plan-v3 .plan-v3-brief-top span { font-size:11px; }
+.content-plan-v3 .plan-v3-brief-top h3 { font-size:19px; }
+.content-plan-v3 .plan-v3-brief-top small { font-size:12px; }
+.content-plan-v3 .plan-v3-brief-fields label,
+.content-plan-v3 .plan-v3-brief-block label { font-size:11px; }
+.content-plan-v3 .plan-v3-brief-fields b { font-size:13px; }
+.content-plan-v3 .plan-v3-brief-block p { font-size:13px; line-height:1.7; }
+.content-plan-v3 .plan-v3-mapping b { font-size:13px; }
+.content-plan-v3 .plan-v3-mapping small { font-size:12px; line-height:1.6; }
+.content-plan-v3 .plan-v3-production,
+.content-plan-v3 .plan-v3-hero-actions button,
+.content-plan-v3 .plan-v3-toolbar button { font-size:12px; min-height:40px; }
+.content-plan-v3 .plan-v3-heading h2 { font-size:20px; }
+.content-plan-v3 .plan-v3-heading p,
+.content-plan-v3 .plan-v3-content-head p { font-size:13px; }
+.content-plan-v3 .plan-v3-content-head h2 { font-size:19px; }
+
+/* Settings: replace the original 6–9px microcopy with readable sizes */
+.settings-content { font-size:13px; }
+.settings-nav>button { font-size:12px; min-height:40px; }
+.settings-profile b { font-size:13px; }
+.settings-profile small { font-size:11px; }
+.settings-content-heading h3 { font-size:18px; }
+.settings-content-heading p { font-size:13px; line-height:1.6; }
+.settings-field label,.settings-field small { font-size:12px; }
+.settings-field input,.settings-field select,.settings-field textarea { font-size:13px; min-height:40px; }
+.settings-option-row b,.security-summary b { font-size:13px; }
+.settings-option-row small,.security-summary small { font-size:12px; line-height:1.6; }
+.connected-account-row b { font-size:13px; }
+.connected-account-row small,.connected-account-row em,.connected-accounts>p { font-size:12px; }
+.connected-account-row button { font-size:12px; }
+.model-routing-cards span { font-size:11px; }
+.model-routing-cards b { font-size:13px; }
+.model-routing-cards small,.settings-security-note { font-size:12px; line-height:1.6; }
+
+/* Asset Library: readable labels, file details and folder descriptions */
+.asset-library-page-full :is(p,span,small,label,button,li,td,th) { font-size:12px; line-height:1.55; }
+.asset-library-page-full :is(input,select,textarea) { font-size:13px; }
+.asset-library-page-full .asset-browser-head h3 { font-size:18px; }
+.asset-library-page-full .asset-stat-row b { font-size:24px; }
+.asset-library-page-full .asset-folder-list button { min-height:42px; padding-top:10px; padding-bottom:10px; }
+.asset-library-page-full .storage-overview-copy p,
+.asset-library-page-full .asset-browser-head p,
+.asset-library-page-full .asset-folder-tip p { font-size:13px; }
+
+/* Analytics and Team & Workflow: raise secondary labels and data text */
+.analytics-page :is(small,label,th,td,p,button),
+.team-workflow-page :is(small,label,th,td,p,button) { font-size:12px; line-height:1.55; }
+.analytics-page :is(.metric-value,.stat-value,.kpi-value),
+.team-workflow-page :is(.metric-value,.stat-value,.kpi-value) { font-size:24px; }
+.analytics-page :is(h3,.card-title),
+.team-workflow-page :is(h3,.card-title) { font-size:16px; }
