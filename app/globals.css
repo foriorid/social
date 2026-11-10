@@ -1597,3 +1597,12 @@ button { font: inherit; cursor: pointer; }
  .content-plan-v3 .plan-v3-content-layout { grid-template-columns:minmax(0,1fr) !important; }
  .content-plan-v3 .plan-v3-item-list { max-height:420px; }
 }
+
+/* App-wide floor for previously tiny dashboard body text */
+.app-shell :is(p,li,td,th) { font-size:13px !important; line-height:1.65 !important; }
+.app-shell small { font-size:12px !important; line-height:1.55 !important; }
+.app-shell label { font-size:11px !important; }
+.app-shell .dashboard-content :is(.schedule-item,.agent-item,.insight-card,.pipeline-stage) :is(span,small,b) { font-size:12px; }
+.app-shell .dashboard-content .metric-card :is(.metric-label,.metric-change) { font-size:12px; }
+.app-shell .dashboard-content .panel-heading h3 { font-size:17px; }
+.app-shell .dashboard-content .text-link { font-size:12px; }
