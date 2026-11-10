@@ -462,8 +462,6 @@ export default function DashboardPage() {
   const [pendingIdea,setPendingIdea] = useState("");
   const [publicCampaign,setPublicCampaign] = useState<CampaignData|null>(null);
   useEffect(()=>{const token=window.location.hash.startsWith("#share=")?window.location.hash.slice(7):"";if(token){try{const data=JSON.parse(decodeURIComponent(escape(atob(token))));if(data&&data.name&&Array.isArray(data.items))setPublicCampaign(data);}catch{}}},[]);
-  if(publicCampaign)return <PublicCampaignPage data={publicCampaign}/>;
-
   const metrics = useMemo(() => {
     if (platform === "TikTok") return [
       { label: "Reach", value: "842K", change: "+28%", icon: Users, line: "two" },
@@ -484,7 +482,7 @@ export default function DashboardPage() {
 
   const visibleSchedules = schedules.filter((item) => platform === "All channels" || item.platform === platform);
 
-  return (
+  return publicCampaign ? <PublicCampaignPage data={publicCampaign}/> : (
     <main className="app-shell">
       <aside className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}>
         <div className="sidebar-top">
