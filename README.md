@@ -1,57 +1,38 @@
 # FORIOR Creator OS — V5
 
-Responsive frontend prototype built with Next.js App Router, TypeScript, React, and Lucide React.
+Frontend prototype built with Next.js App Router, TypeScript, React, and Lucide React.
 
 ## Run locally
-
-Requirements: Node.js 20.9+
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000
+## Product structure
 
-## Pages included
+- Accounts / brands: Alvian, FORIOR, Intragama Villa, and additional accounts.
+- Campaigns within each account: for example Christmas & New Year, Valentine's Day, or a property campaign.
+- Each campaign contains 30 content-plan slots.
+- Every content plan has an editable brief (title, hook / core message, format, objective, and status).
+- Content brief fields can be handed into Production Studio as a starting point.
+- Production Studio: Feed & Carousel, Reels & Video, Templates.
+- Asset Library: register Google Drive folders with a title and folder URL.
+- Analytics: illustrative metrics plus a community inbox for comments / mentions that can be sent into Content Plan.
+- Automation: intentionally simplified reminder placeholders.
 
-- Dashboard
-- Research & Insight
-- Content Plan
-- Production Studio
-- AI Agent Team
-- Analytics
-- Asset Library
-- Team & Workflow
-- Settings
+## Prototype limitations
 
-## Prototype status
+Interactions currently use frontend state and illustrative data. They are not yet persisted across sessions or users. Google Drive folder URLs are registered in the UI, but automatic file listing requires Google OAuth, Drive API access, and a secure backend. Analytics comments and metrics are sample data; live platform inboxes require authorized platform APIs.
 
-This repository contains the frontend UI prototype. Navigation, tabs, filters, search, saved hooks, campaign/storyboard selection, approval actions, agent filters, task assignment, folder creation, asset selection, and settings controls are frontend interactions with illustrative sample data.
+Authentication, database persistence, team permissions, real AI model calls, media processing, publishing, and scheduled automation require backend services. Do not put API secrets or service-role keys in this frontend repository.
 
-The following still require backend services and integrations:
-- Authentication, team permissions, database persistence, and audit logs.
-- Live Instagram/TikTok account analytics.
-- Actual AI model calls, image generation, video rendering, and publishing.
-- Google Drive OAuth, Supabase connection, file upload, and signed URLs.
-- Persistent team, project, workflow, and workspace settings.
+## GitHub Pages
 
-Do not put API secrets or service-role keys in this frontend repository.
-
-## GitHub Pages deployment
-
-The project is configured for static export and the repository project-site path:
+The project uses Next.js static export and is configured for the repository project-site path:
 
 https://foriorid.github.io/social/
 
-The GitHub Actions workflow at `.github/workflows/deploy.yml` builds the Next.js app and publishes the generated `out/` directory whenever code is pushed to `main`.
+GitHub Actions builds the app and deploys the generated `out/` folder on pushes to `main`. In repository Settings → Pages, choose **GitHub Actions** as the deployment source.
 
-In GitHub, open **Settings → Pages** and set **Build and deployment → Source** to **GitHub Actions**.
-
-## Important hosting limitation
-
-GitHub Pages serves static HTML, CSS, and JavaScript only. It can host this frontend prototype, but it cannot run a Next.js server, API routes, server actions, authentication backend, database, or background jobs. Add those services separately when the product moves beyond the frontend prototype.
-
-## Visual direction
-
-Premium, spacious, minimal, lavender / deep-purple accent, responsive desktop / tablet / mobile layouts.
+GitHub Pages serves static frontend files only; it cannot host Next.js API routes, server actions, database services, or background jobs.
