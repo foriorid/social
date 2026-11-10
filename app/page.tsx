@@ -31,7 +31,6 @@ const navGroups = [
       { name: "AI Agent Team", icon: Sparkles },
       { name: "Analytics", icon: ChartNoAxesCombined },
       { name: "Asset Library", icon: ImageIcon },
-      { name: "Team & Workflow", icon: Users }
     ]
   }
 ];
@@ -472,7 +471,7 @@ export default function DashboardPage() {
                 const Icon = item.icon;
                 return (
                   <div key={item.name}>
-                    <button className={`nav-item ${activeNav === item.name ? "active" : ""}`} onClick={() => { setActiveNav(item.name); setMobileNav(false); }}>
+                    <button className={`nav-item ${activeNav === item.name || (item.expandable && ["Feed & Carousel","Reels & Video","Templates"].includes(activeNav)) ? "active" : ""}`} onClick={() => { setActiveNav(item.name); setMobileNav(false); }}>
                       <Icon size={18} strokeWidth={1.8} />
                       <span>{item.name}</span>
                       {item.expandable && <ChevronDown className="nav-chevron" size={14} />}
