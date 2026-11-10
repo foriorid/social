@@ -413,7 +413,8 @@ function AnalyticsPage({ onAddToPlan }: {onAddToPlan:(idea:string)=>void}) {
   </div>;
 }
 
-function SettingsPage() {\n  const [integrationValues,setIntegrationValues]=useState<Record<string,string>>({});
+function SettingsPage() {
+  const [integrationValues,setIntegrationValues]=useState<Record<string,string>>({});
   const [tab,setTab]=useState("Workspace");
   const [workspaceName,setWorkspaceName]=useState("Alvian · Personal Brand");
   const [brandName,setBrandName]=useState("Alvian Indonesia");
@@ -458,7 +459,10 @@ export default function DashboardPage() {
   const [quickAction, setQuickAction] = useState("");
   const [showAllAgents, setShowAllAgents] = useState(false);
   const [studioBrief,setStudioBrief] = useState<{title:string;account:string;campaign:string;format:string;hook:string}|null>(null);
-  const [pendingIdea,setPendingIdea] = useState("");\n  const [publicCampaign,setPublicCampaign] = useState<CampaignData|null>(null);\n  useEffect(()=>{const token=window.location.hash.startsWith("#share=")?window.location.hash.slice(7):"";if(token){try{const data=JSON.parse(decodeURIComponent(escape(atob(token))));if(data&&data.name&&Array.isArray(data.items))setPublicCampaign(data);}catch{}}},[]);\n  if(publicCampaign)return <PublicCampaignPage data={publicCampaign}/>;
+  const [pendingIdea,setPendingIdea] = useState("");
+  const [publicCampaign,setPublicCampaign] = useState<CampaignData|null>(null);
+  useEffect(()=>{const token=window.location.hash.startsWith("#share=")?window.location.hash.slice(7):"";if(token){try{const data=JSON.parse(decodeURIComponent(escape(atob(token))));if(data&&data.name&&Array.isArray(data.items))setPublicCampaign(data);}catch{}}},[]);
+  if(publicCampaign)return <PublicCampaignPage data={publicCampaign}/>;
 
   const metrics = useMemo(() => {
     if (platform === "TikTok") return [
