@@ -9,7 +9,7 @@ import {
   Search, Send, Settings, Sparkles, Target, Users, Video, X, Youtube,
   ChartNoAxesCombined, Clock3, Layers3, BriefcaseBusiness, TrendingUp, Bookmark,
   Hash, Eye, Flame, WandSparkles, PlusCircle, ChevronRight, Filter, CirclePlay,
-  MessageSquareText, ChartLine, Lightbulb as LightbulbIcon, Cloud, Database, UploadCloud, Music2, UserCircle2, UserPlus, History, ShieldCheck, Info, ExternalLink, FolderPlus, MessageCircle, AtSign, Zap
+  MessageSquareText, ChartLine, Lightbulb as LightbulbIcon, Cloud, Database, UploadCloud, Music2, UserCircle2, UserPlus, History, ShieldCheck, Info, ExternalLink, FolderPlus, AtSign, Zap
 } from "lucide-react";
 
 type Platform = "All channels" | "Instagram" | "TikTok" | "YouTube";
