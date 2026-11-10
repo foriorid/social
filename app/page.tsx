@@ -544,7 +544,7 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {activeNav !== "Dashboard" && activeNav !== "Research & Insight" && activeNav !== "Content Plan" && activeNav !== "Production Studio" && activeNav !== "Feed & Carousel" && activeNav !== "Reels & Video" && activeNav !== "Templates" && activeNav !== "Asset Library" && activeNav !== "AI Agent Team" && activeNav !== "Automation" && (
+        {activeNav !== "Dashboard" && activeNav !== "Research & Insight" && activeNav !== "Content Plan" && activeNav !== "Production Studio" && activeNav !== "Feed & Carousel" && activeNav !== "Reels & Video" && activeNav !== "Templates" && activeNav !== "Asset Library" && activeNav !== "AI Agent Team" && activeNav !== "Analytics" && activeNav !== "Asset Library" && activeNav !== "Settings" && activeNav !== "Automation" && (
           <div className="section-notice">
             <div><b>{activeNav}</b><span>Preview navigasi — modul ini akan dikembangkan pada tahap berikutnya.</span></div>
             <button onClick={() => setActiveNav("Dashboard")}>Kembali ke Dashboard <ArrowRight size={15} /></button>
