@@ -1554,3 +1554,46 @@ button { font: inherit; cursor: pointer; }
 .team-workflow-page :is(.metric-value,.stat-value,.kpi-value) { font-size:24px; }
 .analytics-page :is(h3,.card-title),
 .team-workflow-page :is(h3,.card-title) { font-size:16px; }
+
+/* V8 — consistent readable body copy across every workspace page */
+.app-shell .module-page :is(p,li,td,th) { font-size:13px !important; line-height:1.65 !important; }
+.app-shell .module-page :is(small,label,summary,.helper-text,.muted,.meta,.description) { font-size:12px !important; line-height:1.55 !important; }
+.app-shell .module-page :is(button,input,select,textarea) { font-size:13px; }
+.app-shell .module-page :is(.panel,.card,.section-card) :is(p,small,span,label) { line-height:1.55; }
+.app-shell .module-page .panel p { font-size:13px !important; }
+.app-shell .module-page .panel small { font-size:12px !important; }
+.app-shell .module-page .panel label { font-size:11px !important; }
+
+/* Dashboard cards, content calendar, pipeline, AI agents and insight descriptions */
+.app-shell .dashboard-content :is(p,small,span,label,button) { font-size:12px; }
+.app-shell .dashboard-content :is(p,small) { line-height:1.6; }
+.app-shell .dashboard-content .section-description { font-size:13px; }
+.app-shell .pipeline-stage :is(span,small) { font-size:12px; }
+.app-shell .schedule-row :is(span,small) { font-size:12px; }
+.app-shell .agent-row :is(span,small) { font-size:12px; }
+
+/* Research & Insight body copy and metrics */
+.app-shell .research-page :is(p,small,label,span,button) { font-size:12px; line-height:1.6; }
+.app-shell .research-page :is(.profile-stat,.metric-value,.result-heading) { font-size:15px; }
+
+/* Force the campaign brief workspace to remain a true side-by-side layout on desktop */
+.content-plan-v3 .plan-v3-content-layout {
+  display:grid !important;
+  grid-template-columns:minmax(0, .95fr) minmax(0, 1.05fr) !important;
+  align-items:stretch;
+  gap:16px;
+}
+.content-plan-v3 .plan-v3-item-list { min-width:0; max-height:760px; overflow-y:auto; }
+.content-plan-v3 .plan-v3-brief-panel { display:block; min-width:0; align-self:stretch; }
+.content-plan-v3 .plan-v3-brief-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.content-plan-v3 .plan-v3-brief-top>div { min-width:0; }
+.content-plan-v3 .plan-v3-edit-brief { display:inline-flex; align-items:center; justify-content:center; gap:7px; flex:0 0 auto; min-height:38px; padding:9px 13px; color:#7650b9; border:1px solid #e7dcf4; border-radius:9px; background:#fff; font-size:12px; font-weight:700; }
+.content-plan-v3 .plan-v3-edit-brief:hover { background:#f7f2ff; border-color:#cbb6ed; }
+.content-plan-v3 .plan-v3-brief-modal label { display:block; margin:12px 0 6px; font-size:12px !important; }
+.content-plan-v3 .plan-v3-brief-modal input,
+.content-plan-v3 .plan-v3-brief-modal select,
+.content-plan-v3 .plan-v3-brief-modal textarea { width:100%; min-height:42px; padding:10px 12px; font-size:13px; }
+@media(max-width:900px) {
+ .content-plan-v3 .plan-v3-content-layout { grid-template-columns:minmax(0,1fr) !important; }
+ .content-plan-v3 .plan-v3-item-list { max-height:420px; }
+}
