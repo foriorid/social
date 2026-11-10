@@ -1464,3 +1464,14 @@ button { font: inherit; cursor: pointer; }
 .asset-library-page-full .asset-stat-row span,.asset-library-page-full .asset-stat-row small { font-size:11px; }
 .asset-library-page-full .asset-stat-row b { font-size:23px; }
 .asset-library-page-full .asset-browser-head h3 { font-size:15px; }
+
+/* Readability pass across dashboard modules */
+.app-shell .eyebrow,.app-shell .nav-label { font-size:10px; letter-spacing:.75px; }
+.app-shell .nav-item { font-size:12px; }
+.app-shell .sidebar-bottom .nav-item { min-height:38px; }
+.app-shell .workspace-switch b { font-size:12px; }
+.app-shell .workspace-switch small { font-size:10px; }
+.app-shell .topbar,.app-shell .topbar button { font-size:12px; }
+.module-page .agent-badge,.module-page .muted-chip { font-size:10px; }
+.module-page .module-footer { font-size:10px; line-height:1.55; }
+.module-page p { line-height:1.55; }
