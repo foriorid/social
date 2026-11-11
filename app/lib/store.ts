@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 // Browser-only persistence: GitHub Pages has no backend, so everything lives in localStorage.
 const PREFIX = "forior-os:";
@@ -56,6 +56,9 @@ export type Settings = {
   handle: string;
   brandVoice: string;
   requireApproval: boolean;
+  googleApiKey: string;
+  autoRun: boolean;
+  autoLimit: number;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -69,7 +72,10 @@ export const DEFAULT_SETTINGS: Settings = {
   brandName: "Alvian Indonesia",
   handle: "@alvian.indonesia",
   brandVoice: "Edukatif, hangat, percaya diri. Tidak menggurui dan tidak berlebihan dalam klaim. Visual premium, minimal, autentik.",
-  requireApproval: true
+  requireApproval: true,
+  googleApiKey: "",
+  autoRun: false,
+  autoLimit: 10
 };
 
 export type Usage = { month: string; inputTokens: number; outputTokens: number; idr: number; calls: number };
@@ -78,7 +84,17 @@ export const EMPTY_USAGE: Usage = { month: "", inputTokens: 0, outputTokens: 0, 
 export type Approval = { id: number; title: string; by: string; type: string; body: string; status: "pending" | "approved" | "revision"; at: string };
 export type Lead = { id: number; name: string; source: string; message: string; status: "Baru" | "Dibalas" | "Penawaran" | "Deal" | "Batal"; reply: string; at: string };
 
-export const useSettings = () => useStored<Settings>("settings", DEFAULT_SETTINGS);
+/** Settings saved by an older version lack newer fields, so always layer them over the defaults. */
+export const getSettings = (): Settings => ({ ...DEFAULT_SETTINGS, ...readStored<Settings>("settings", DEFAULT_SETTINGS) });
+export function useSettings(): [Settings, (next: Settings | ((old: Settings) => Settings)) => void] {
+  const [stored, setStored] = useStored<Settings>("settings", DEFAULT_SETTINGS);
+  const merged = useMemo(() => ({ ...DEFAULT_SETTINGS, ...stored }), [stored]);
+  const set = useCallback((next: Settings | ((old: Settings) => Settings)) => setStored(old => (typeof next === "function" ? next({ ...DEFAULT_SETTINGS, ...old }) : next)), [setStored]);
+  return [merged, set];
+}
+
+export type Task = { id: number; campaignId: string; day: number; kind: "plan" | "brief" | "production" | "publish"; agent: string; title: string; status: "queued" | "running" | "done" | "failed"; chain: boolean; error?: string; at: string };
+export const useTasks = () => useStored<Task[]>("tasks", []);
 export const useUsage = () => useStored<Usage>("usage", EMPTY_USAGE);
 export const useApprovals = () => useStored<Approval[]>("approvals", []);
 export const useIdeas = () => useStored<string[]>("ideas", []);
