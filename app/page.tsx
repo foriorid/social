@@ -15,7 +15,7 @@ import {
 import { AiButton, AiCostBadge, AiError, ApiSettingsTab, ApprovalList, InboxLeadsPage, ModelRouterPanel, notify, runAgentTask, useAI } from "./modules";
 import { askAI, fetchInstagramPosts } from "./lib/ai";
 import { parseIdeas, parseLines, parseProfile } from "./lib/logic";
-import { addApproval, addIdea, useApprovals, useIdeas, useLeads, useSettings, useStored } from "./lib/store";
+import { addApproval, addIdea, useApprovals, useIdeas, useLeads, useSettings, useStored, useTasks } from "./lib/store";
 
 import { ImageTile } from "./ui";
 import { PublicCampaignPage, migrateLegacyPlan, usePlan, type CampaignData } from "./plan-data";
@@ -296,6 +296,7 @@ export default function DashboardPage() {
   const [showRange, setShowRange] = useState(false);
   const [showPlatform, setShowPlatform] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [showWorkspace, setShowWorkspace] = useState(false);
   const [workspace, setWorkspace] = useState("Alvian · Personal Brand");
   const [mobileNav, setMobileNav] = useState(false);
@@ -313,6 +314,15 @@ export default function DashboardPage() {
   plan.campaigns.forEach(c=>c.items.forEach(i=>{counts[i.status]=(counts[i.status]||0)+1;}));
   const pendingApprovals = approvals.filter(a=>a.status==="pending").length;
   const liveCounts: Record<string,number> = { "Ide": ideas.length, "Produksi": (counts["Brief ready"]||0)+(counts["In production"]||0), "Review": (counts["In review"]||0)+pendingApprovals, "Terjadwal": counts["Scheduled"]||0, "Published": counts["Published"]||0 };
+  const [tasks] = useTasks();
+  const failedTasks = tasks.filter(t=>t.status==="failed").length, runningTasks = tasks.filter(t=>t.status==="queued"||t.status==="running").length;
+  const newLeads = leads.filter(l=>l.status==="Baru").length;
+  const notices = [
+    pendingApprovals>0 && { text:`${pendingApprovals} hasil menunggu approval Anda.`, nav:"AI Agent Team" },
+    failedTasks>0 && { text:`${failedTasks} tugas agen gagal — perlu dicoba lagi.`, nav:"AI Agent Team" },
+    runningTasks>0 && { text:`${runningTasks} tugas agen sedang berjalan atau antre.`, nav:"AI Agent Team" },
+    newLeads>0 && { text:`${newLeads} lead baru belum dibalas.`, nav:"Inbox & Leads" }
+  ].filter(Boolean) as { text:string; nav:string }[];
 
   const [publicCampaign,setPublicCampaign] = useState<CampaignData|null>(null);
   useEffect(()=>{const token=window.location.hash.startsWith("#share=")?window.location.hash.slice(7):"";if(token){try{const data=JSON.parse(decodeURIComponent(escape(atob(token))));if(data&&data.name&&Array.isArray(data.items))setPublicCampaign(data);}catch{}}},[]);
@@ -402,34 +412,42 @@ export default function DashboardPage() {
             <p>{activeNav === "Dashboard" ? "Personal Brand Content Command Center" : "Personal Brand Content Workspace"}</p>
           </div>
 
-          <div className="top-actions">
+          {(activeNav === "Dashboard") && <div className="top-filters">
             <div className="dropdown-wrap">
-              <button className="select-button" onClick={() => setShowRange(!showRange)}><CalendarDays size={16} /> {range} <ChevronDown size={15} /></button>
+              <button className="select-button" aria-label={`Rentang waktu: ${range}`} aria-expanded={showRange} onClick={() => { setShowRange(!showRange); setShowPlatform(false); setShowNotifications(false); setShowProfile(false); }}><CalendarDays size={16} /> <span className="select-label">{range}</span> <ChevronDown size={15} /></button>
               {showRange && <div className="floating-menu">
                 {(["Last 7 Days", "Last 30 Days", "Last 90 Days"] as Range[]).map((v) => <button key={v} onClick={() => { setRange(v); setShowRange(false); }}>{v}{range === v && <Check size={14} />}</button>)}
               </div>}
             </div>
             <div className="dropdown-wrap">
-              <button className="platform-filter" onClick={() => setShowPlatform(!showPlatform)}>
+              <button className="platform-filter" aria-label={`Kanal: ${platform}`} aria-expanded={showPlatform} onClick={() => { setShowPlatform(!showPlatform); setShowRange(false); setShowNotifications(false); setShowProfile(false); }}>
                 <Instagram className="ig-brand" size={21} />
                 <span className="tt-brand">♪</span>
                 <Youtube className="yt-brand" size={22} />
-                <Plus size={17} className="plus-platform" />
+                <ChevronDown size={15} className="plus-platform" />
               </button>
               {showPlatform && <div className="floating-menu platform-menu">
                 {(["All channels", "Instagram", "TikTok", "YouTube"] as Platform[]).map((v) => <button key={v} onClick={() => { setPlatform(v); setShowPlatform(false); }}>{v}{platform === v && <Check size={14} />}</button>)}
               </div>}
             </div>
+          </div>}
+          <div className="top-account">
             <div className="dropdown-wrap">
-              <button className={`icon-button ${showNotifications ? "selected" : ""}`} onClick={() => setShowNotifications(!showNotifications)} aria-label="Notifications"><Bell size={19} /><i /></button>
+              <button className={`icon-button ${showNotifications ? "selected" : ""}`} aria-label={`Notifikasi${notices.length ? `, ${notices.length} baru` : ""}`} aria-expanded={showNotifications} onClick={() => { setShowNotifications(!showNotifications); setShowProfile(false); setShowRange(false); setShowPlatform(false); }}><Bell size={19} />{notices.length > 0 && <i />}</button>
               {showNotifications && <div className="floating-menu notification-menu">
-                <b>Notifications</b>
-                <p><span className="notice-dot" /> 2 konten menunggu approval.</p>
-                <p><span className="notice-dot" /> AI Strategist menyelesaikan rekomendasi mingguan.</p>
-                <p><span className="notice-dot" /> Jadwal Reels besok pukul 13.00.</p>
+                <b>Notifikasi</b>
+                {!notices.length && <p>Tidak ada yang perlu ditindaklanjuti.</p>}
+                {notices.map(n => <button key={n.text} onClick={() => { setActiveNav(n.nav); setShowNotifications(false); }}><span className="notice-dot" /><span>{n.text}</span></button>)}
               </div>}
             </div>
-            <div className="avatar avatar-profile">A</div>
+            <div className="dropdown-wrap">
+              <button className="avatar avatar-profile" aria-label="Menu profil" aria-expanded={showProfile} onClick={() => { setShowProfile(!showProfile); setShowNotifications(false); setShowRange(false); setShowPlatform(false); }}>A</button>
+              {showProfile && <div className="floating-menu profile-menu">
+                <div className="profile-head"><b>{workspace.split(" · ")[0]}</b><small>{workspace.split(" · ")[1] ?? ""}</small></div>
+                {["Alvian · Personal Brand", "FORIOR · Business"].map(w => <button key={w} onClick={() => { setWorkspace(w); setShowProfile(false); }}>{w}{workspace === w && <Check size={14} />}</button>)}
+                <button onClick={() => { setActiveNav("Settings"); setShowProfile(false); }}>Settings<Settings size={14} /></button>
+              </div>}
+            </div>
           </div>
         </header>
 
