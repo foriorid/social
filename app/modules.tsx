@@ -4,8 +4,9 @@ import { useState } from "react";
 import { Check, Copy, Eye, EyeOff, FileText, Loader2, MessageCircle, Plus, Printer, ShieldCheck, Sparkles, Trash2, WandSparkles } from "lucide-react";
 import { askAI, type Tier } from "./lib/ai";
 import { monthKey, rupiah } from "./lib/logic";
-import { buildPlan, briefKey, DEFAULT_ACCOUNTS, DEFAULT_CAMPAIGNS, type Brief, type Campaign } from "./lib/plan";
-import { useApprovals, useLeads, useSettings, useStored, useUsage, type Lead } from "./lib/store";
+import { buildPlan, briefKey, DEFAULT_ACCOUNTS, DEFAULT_CAMPAIGNS, SLOTS, STATUSES, type Brief, type Campaign, type Slot } from "./lib/plan";
+import { parseLines } from "./lib/logic";
+import { addApproval, useApprovals, useIdeas, useLeads, useSettings, useStored, useUsage, writeStored, type Lead } from "./lib/store";
 
 /** Runs an AI action and tracks busy/error state for the button that triggered it. */
 export function useAI() {
@@ -149,4 +150,41 @@ export async function runAgentTask(agent: { name: string; group: string }, task:
   return askAI({ tier, role: agent.name, prompt: `Workspace: ${workspace}\nTugas: ${task}\n\nKerjakan sesuai peranmu dan berikan hasil yang siap diperiksa pemilik akun.`, maxTokens: 6000 });
 }
 
-export { WandSparkles };
+export const notify = (message: string) => writeStored<string>("toast", message, "");
+
+/** Per-slot actions in Content Plan: status, AI brief, send to approval, pull an idea from the inbox. */
+export function BriefTools({ campaign, slot }: { campaign: Campaign; slot: Slot }) {
+  const [, setBriefs] = useStored<Record<string, Brief>>("briefs", {});
+  const [ideas, setIdeas] = useIdeas();
+  const ai = useAI();
+  const key = briefKey(campaign.id, slot.day);
+  const patch = (value: Brief) => setBriefs(old => ({ ...old, [key]: { ...old[key], ...value } }));
+  const write = () => ai.run("brief", async () => {
+    const text = await askAI({ tier: "creative", role: "Content Writer", prompt: `Tulis brief konten ${slot.format} untuk akun ${campaign.account}, campaign "${campaign.name}" (tujuan: ${campaign.goal}).\nTopik: ${slot.title}\n\nBaris pertama: "JUDUL: ..." (maksimal 9 kata). Lalu hook pembuka satu kalimat, lalu storyboard: untuk Reels 4-5 scene dengan durasi dan arahan shot; untuk Carousel isi tiap slide. Tutup dengan CTA.` });
+    const title = /^JUDUL\s*:\s*(.+)$/im.exec(text)?.[1]?.trim();
+    patch({ title: title || slot.title, hook: text.replace(/^JUDUL\s*:.*\n?/im, "").trim(), status: "Brief ready" });
+  });
+  return <div className="x-tools">
+    <div className="x-row"><label htmlFor="slot-status">STATUS</label><select id="slot-status" value={slot.status} onChange={e => patch({ status: e.target.value })}>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
+      <AiButton className="outline-button" label="Tulis brief dengan AI" busyLabel="Menulis…" busy={ai.busy === "brief"} onClick={write} />
+      <button className="outline-button" onClick={() => { addApproval({ title: `${slot.format} — ${slot.title}`, by: "Content Plan", type: "Brief", body: slot.hook }); patch({ status: "In review" }); }}><Check size={14} /> Ajukan approval</button></div>
+    <AiError message={ai.error} />
+    {ideas.length > 0 && <div className="x-ideas"><label>INBOX IDE ({ideas.length}) — dari Riset, Analitik, dan Bank Hook</label>{ideas.map(idea => <div key={idea}><span>{idea}</span><button className="outline-button" onClick={() => { patch({ title: idea, hook: "Kembangkan dari ide: " + idea, status: "Planned" }); setIdeas(old => old.filter(x => x !== idea)); }}>Pakai di slot {slot.day}</button><button className="outline-button x-danger" aria-label="Hapus ide" onClick={() => setIdeas(old => old.filter(x => x !== idea))}><Trash2 size={14} /></button></div>)}</div>}
+  </div>;
+}
+
+/** Calendar of the 30 slots plus one-shot AI planning for the whole campaign. */
+export function PlanOverview({ campaign, selected, onPick }: { campaign: Campaign; selected: number; onPick: (day: number) => void }) {
+  const [briefs, setBriefs] = useStored<Record<string, Brief>>("briefs", {});
+  const ai = useAI();
+  const plan = buildPlan(campaign, briefs);
+  const generate = () => ai.run("plan", async () => {
+    const text = await askAI({ tier: "creative", role: "Creative Strategist", prompt: `Susun ${SLOTS} judul konten untuk akun ${campaign.account}, campaign "${campaign.name}" (${campaign.period}, tujuan: ${campaign.goal}). Campur edukasi, portofolio/before-after, behind the scenes, personal, dan promo jasa. Satu judul per baris dengan format: Reels | judul  atau  Carousel | judul. Tanpa penomoran, tanpa teks lain.`, maxTokens: 6000 });
+    const rows = parseLines(text).map(l => l.split("|").map(x => x.trim())).filter(r => r.length === 2 && r[1]).slice(0, SLOTS);
+    if (rows.length < 5) throw new Error("Jawaban model tidak sesuai format. Coba lagi.");
+    setBriefs(old => { const next = { ...old }; rows.forEach((r, i) => { const k = briefKey(campaign.id, i + 1); next[k] = { ...next[k], title: r[1], format: /carousel/i.test(r[0]) ? "Carousel" : "Reels", hook: "Susun hook utama untuk " + r[1] + ".", status: "Planned" }; }); return next; });
+  });
+  return <div className="x-plan-overview"><div className="x-row"><AiButton className="primary-button" label="Susun 30 judul dengan AI" busyLabel="Menyusun plan…" busy={ai.busy === "plan"} onClick={generate} /><span className="muted-chip">Mengganti judul 30 slot campaign ini</span></div><AiError message={ai.error} />
+    <div className="x-cal">{plan.map(s => <button key={s.day} className={(s.day === selected ? "sel " : "") + (s.status === "Published" || s.status === "Scheduled" ? "ok" : "")} onClick={() => onPick(s.day)}><b>{String(s.day).padStart(2, "0")}</b><span>{s.format} · {s.status}</span><small>{s.title}</small></button>)}</div>
+  </div>;
+}

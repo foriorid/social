@@ -20,9 +20,9 @@ function currentUsage(): Usage {
  */
 export async function askAI({ tier, role, prompt, maxTokens = 4000 }: { tier: Tier; role: string; prompt: string; maxTokens?: number }): Promise<string> {
   const settings = readStored<Settings>("settings", DEFAULT_SETTINGS);
-  if (!settings.apiKey.trim()) throw new AiSetupError("API key belum diisi. Buka Settings → API & Integrasi.");
+  if (!settings.apiKey.trim()) throw new AiSetupError("API key belum diisi. Buka Settings → AI & Models.");
   const usage = currentUsage();
-  if (settings.budgetIdr > 0 && usage.idr >= settings.budgetIdr) throw new AiSetupError("Batas biaya AI bulan ini sudah tercapai. Naikkan batas di Settings → API & Integrasi.");
+  if (settings.budgetIdr > 0 && usage.idr >= settings.budgetIdr) throw new AiSetupError("Batas biaya AI bulan ini sudah tercapai. Naikkan batas di Settings → AI & Models.");
 
   const model = tier === "light" ? settings.lightModel : settings.creativeModel;
   const client = new Anthropic({ apiKey: settings.apiKey.trim(), dangerouslyAllowBrowser: true });
@@ -51,7 +51,7 @@ export async function askAI({ tier, role, prompt, maxTokens = 4000 }: { tier: Ti
     if (!text) throw new Error("Model tidak mengembalikan teks. Coba lagi.");
     return text;
   } catch (error) {
-    if (error instanceof Anthropic.AuthenticationError) throw new AiSetupError("API key ditolak. Periksa kembali di Settings → API & Integrasi.");
+    if (error instanceof Anthropic.AuthenticationError) throw new AiSetupError("API key ditolak. Periksa kembali di Settings → AI & Models.");
     if (error instanceof Anthropic.NotFoundError) throw new AiSetupError(`Model "${model}" tidak ditemukan. Periksa nama model di Settings.`);
     if (error instanceof Anthropic.RateLimitError) throw new Error("Terlalu banyak permintaan. Tunggu sebentar lalu coba lagi.");
     if (error instanceof Anthropic.APIConnectionError) throw new Error("Tidak bisa terhubung ke Anthropic. Periksa koneksi internet.");

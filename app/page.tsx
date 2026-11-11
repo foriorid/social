@@ -12,6 +12,12 @@ import {
   MessageSquareText, ChartLine, Lightbulb as LightbulbIcon, Cloud, Database, UploadCloud, Music2, UserCircle2, UserPlus, History, ShieldCheck, Info, ExternalLink, FolderPlus, AtSign, Zap
 } from "lucide-react";
 
+import { AiButton, AiCostBadge, AiError, ApiSettingsTab, ApprovalList, BriefTools, InboxLeadsPage, ModelRouterPanel, PlanOverview, SharedPlanPage, notify, runAgentTask, useAI } from "./modules";
+import { askAI, fetchInstagramPosts } from "./lib/ai";
+import { parseIdeas, parseLines, parseProfile } from "./lib/logic";
+import { buildPlan, briefKey, pipelineCounts, DEFAULT_ACCOUNTS, DEFAULT_CAMPAIGNS, type Brief, type Campaign } from "./lib/plan";
+import { addApproval, addIdea, useApprovals, useIdeas, useLeads, useSettings, useStored } from "./lib/store";
+
 type Platform = "All channels" | "Instagram" | "TikTok" | "YouTube";
 type Range = "Last 7 Days" | "Last 30 Days" | "Last 90 Days";
 
@@ -31,6 +37,8 @@ const navGroups = [
       { name: "AI Agent Team", icon: Sparkles },
       { name: "Analytics", icon: ChartNoAxesCombined },
       { name: "Asset Library", icon: ImageIcon },
+      { name: "Inbox & Leads", icon: MessageCircle },
+      { name: "Shared Plan", icon: Users },
     ]
   }
 ];
@@ -108,14 +116,23 @@ function ResearchPage() {
   const [profile, setProfile] = useState("https://instagram.com/alvian.indonesia");
   const [analysed, setAnalysed] = useState("@alvian.indonesia");
   const [bankQuery, setBankQuery] = useState("");
-  const [savedHooks, setSavedHooks] = useState<string[]>(["Kenapa foto interior yang bagus bisa mengubah persepsi harga properti?"]);
-  const [addedIdeas, setAddedIdeas] = useState<string[]>([]);
+  const [savedHooks, setSavedHooks] = useStored<string[]>("savedHooks",["Kenapa foto interior yang bagus bisa mengubah persepsi harga properti?"]);
+  const [addedIdeas]=useIdeas();
+  const [platform,setPlatform]=useState("Instagram");
+  const [notes,setNotes]=useState("");
+  const [auditError,setAuditError]=useState("");
+  const [audits,setAudits]=useStored<Record<string,string>>("audits",{});
+  const [watchlist,setWatchlist]=useStored<string[]>("watchlist",["@alvian.indonesia","@kreator.sejenis","@kompetitor.foto"]);
+  const [customHooks,setCustomHooks]=useStored<{category:string;hook:string;format:string}[]>("customHooks",[]);
+  const [trendNote,setTrendNote]=useStored<string>("trendNote","");
+  const ai=useAI();
   const auditIdeas = [
     { title: "Before/after kamar dalam 15 detik", type: "Reels", tag: "pola before/after", desc: "Hook visual di detik pertama, tanpa narasi panjang." },
     { title: "Berapa biaya foto interior profesional?", type: "Carousel", tag: "celah: harga", desc: "Jawab pertanyaan yang sering dicari calon klien." },
     { title: "Listing ini laku 9 hari setelah difoto ulang", type: "TikTok", tag: "celah: hasil bisnis", desc: "Hubungkan kualitas visual dengan hasil pemasaran properti." }
   ];
   const hooks = [
+    ...customHooks,
     { category: "Curiosity", hook: "Kenapa foto interior yang bagus bisa mengubah persepsi harga properti?", format: "Reels" },
     { category: "Problem / Solution", hook: "Jangan lakukan 3 hal ini saat memotret ruangan kecil.", format: "Carousel" },
     { category: "Contrarian", hook: "Lensa wide bukan selalu solusi untuk foto interior.", format: "Reels" },
@@ -125,9 +142,31 @@ function ResearchPage() {
   ];
   const filteredHooks = hooks.filter(x => `${x.hook} ${x.category} ${x.format}`.toLowerCase().includes(bankQuery.toLowerCase()));
   const handleAudit = () => {
-    const match = profile.match(/@([^/?]+)/);
-    setAnalysed(match ? `@${match[1]}` : profile.replace(/^https?:\/\//, ""));
+    const parsed = parseProfile(profile);
+    if (!parsed) { setAuditError("Link belum dikenali. Gunakan link profil instagram.com atau tiktok.com."); return; }
+    setAuditError(""); setAnalysed(parsed.handle); setPlatform(parsed.platform);
+    ai.run("audit", async () => {
+      let data = notes.trim(), source = "catatan yang ditempel pengguna";
+      if (parsed.platform === "Instagram") {
+        try {
+          const result = await fetchInstagramPosts(parsed.handle.slice(1));
+          data = `Followers: ${result.followers}\n` + result.posts.map(x => `[${x.date}] ${x.type} · ${x.likes} suka · ${x.comments} komentar · ${x.caption.slice(0, 300)}`).join("\n") + (data ? `\nCatatan pengguna: ${data}` : "");
+          source = "posting publik terakhir dari Meta API";
+        } catch (error) { if (!data) throw new Error("Belum ada data untuk akun ini. Tempel beberapa caption/catatan di kolom di bawah, atau isi token Meta di Settings → AI & Models. (" + (error instanceof Error ? error.message : String(error)) + ")"); }
+      }
+      if (!data) throw new Error("Tempel beberapa caption atau catatan tentang akun ini agar bisa dianalisis.");
+      const text = await askAI({ tier: "creative", role: "Research Analyst", maxTokens: 6000, prompt: `Bedah akun ${parsed.platform} ${parsed.handle} berdasarkan data berikut (${source}). Tulis: 1) Profil konten (frekuensi, format dominan, topik), 2) 3-6 konten atau pola paling menarik beserta alasannya, 3) Celah & peluang, 4) lima ide konten untuk saya — tiap ide di baris sendiri diawali "IDE: " lalu format (Reels/Carousel/TikTok) dan judul. Jangan mengarang angka yang tidak ada di data.\n\nDATA:\n${data}` });
+      setAudits(old => ({ ...old, [parsed.handle]: text }));
+    });
   };
+  const audit = audits[analysed];
+  const generateHooks = () => ai.run("hooks", async () => {
+    const text = await askAI({ tier: "creative", role: "Content Writer", prompt: "Tulis 6 hook pembuka konten baru tentang fotografi interior & properti untuk audiens agen properti, pemilik unit sewa, dan desainer interior. Satu per baris dengan format: Kategori | Reels atau Carousel | kalimat hook. Tanpa penomoran, tanpa teks lain." });
+    const rows = parseLines(text).map(l => l.split("|").map(x => x.trim())).filter(r => r.length === 3 && r[2]);
+    if (!rows.length) throw new Error("Jawaban model tidak sesuai format. Coba lagi.");
+    setCustomHooks(old => [...rows.map(r => ({ category: r[0], format: r[1], hook: r[2] })), ...old]);
+  });
+  const analyseTrends = () => ai.run("trend", async () => { setTrendNote(await askAI({ tier: "creative", role: "Research Analyst", prompt: "Berdasarkan pengetahuanmu tentang konten media sosial niche fotografi interior dan properti di Indonesia, tulis 5 arah konten yang layak diuji bulan ini. Untuk tiap arah: nama, alasan singkat, dan format yang cocok. Nyatakan dengan jelas bahwa ini rekomendasi dari pengetahuan umum, bukan data tren real-time." })); });
   return (
     <div className="module-page">
       <div className="research-tabs-line">
@@ -138,11 +177,14 @@ function ResearchPage() {
           <h3>Bedah akun Instagram / TikTok</h3>
           <p>Tempel link profil — akun Anda sendiri, kompetitor, atau kreator sejenis. Agen Riset akan merangkum pola posting, konten unggulan, dan peluang ide yang bisa diadaptasi.</p>
           <label>LINK PROFIL</label>
-          <div className="audit-input-row"><input value={profile} onChange={e=>setProfile(e.target.value)} placeholder="https://instagram.com/username"/><button className="primary-button" onClick={handleAudit}><WandSparkles size={15}/> Bedah akun</button></div>
-          <div className="recent-profiles"><span>Terakhir dibedah:</span>{["@alvian.indonesia","@kreator.sejenis","@kompetitor.foto"].map(v=><button key={v} onClick={()=>{setProfile(`https://instagram.com/${v.slice(1)}`);setAnalysed(v);}}>{v}</button>)}</div>
+          <div className="audit-input-row"><input value={profile} onChange={e=>setProfile(e.target.value)} placeholder="https://instagram.com/username"/><AiButton className="primary-button" label="Bedah akun" busyLabel="Membedah…" busy={ai.busy==="audit"} onClick={handleAudit}/></div>
+          <label htmlFor="audit-notes">DATA TAMBAHAN (opsional)</label><textarea id="audit-notes" className="x-textarea" rows={3} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Tempel caption, judul konten, atau catatan pengamatan tentang akun ini. Wajib untuk TikTok dan untuk Instagram tanpa token Meta."/>
+          {auditError&&<p className="x-error" role="alert">{auditError}</p>}<AiError message={ai.error}/>
+          <div className="recent-profiles"><span>Terakhir dibedah:</span>{watchlist.map(v=><button key={v} onClick={()=>{setProfile(`https://instagram.com/${v.slice(1)}`);setAnalysed(v);setPlatform("Instagram");}}>{v}</button>)}</div>
         </section>
-        <div className="audit-result-heading"><div><h3>Hasil bedah: {analysed}</h3><span className="channel-chip">Instagram</span><span className="muted-chip">30 posting terakhir</span></div><span className="audit-cost">Biaya bedah ± Rp 900 <button className="outline-button" onClick={()=>alert("Akun ditambahkan ke watchlist (simulasi).")}>+ Pantau akun ini</button></span></div>
-        <div className="audit-grid">
+        <div className="audit-result-heading"><div><h3>Hasil bedah: {analysed}</h3><span className="channel-chip">{platform}</span><span className="muted-chip">{audit?"Hasil analisis AI":"Contoh tampilan — belum dibedah"}</span></div><span className="audit-cost"><button className="outline-button" onClick={()=>setWatchlist(old=>old.includes(analysed)?old.filter(x=>x!==analysed):[...old,analysed])}>{watchlist.includes(analysed)?"Dipantau ✓":"+ Pantau akun ini"}</button></span></div>
+        {audit&&<section className="panel"><h3>Analisis {analysed}</h3><pre className="x-output">{audit}</pre><div className="x-ideas"><label>IDE DARI ANALISIS INI</label>{parseIdeas(audit).map(idea=><div key={idea}><span>{idea}</span><button className="outline-button" onClick={()=>addIdea(idea)}>{addedIdeas.includes(idea)?"Di inbox ide ✓":"Tambah ke plan"}</button></div>)}</div></section>}
+        {!audit&&<div className="audit-grid">
           <section className="panel profile-analysis">
             <h3>Profil konten</h3>
             <div className="profile-metric"><span>Frekuensi posting</span><b>4,2 / minggu</b></div>
@@ -168,22 +210,22 @@ function ResearchPage() {
           </section>
           <section className="panel audit-ideas-panel">
             <div className="audit-ideas-heading"><h3>Ide konten untuk Anda</h3><span className="insight-badge">Adaptasi</span></div>
-            {auditIdeas.map(idea=><article className="adapt-idea" key={idea.title}><span className="adapt-meta">{idea.type} · {idea.tag}</span><b>{idea.title}</b><p>{idea.desc}</p><button onClick={()=>setAddedIdeas(old=>old.includes(idea.title)?old:[...old,idea.title])}>{addedIdeas.includes(idea.title)?<Check size={13}/>:<Plus size={13}/>} {addedIdeas.includes(idea.title)?"Ditambahkan":"Tambah ke plan"}</button></article>)}
+            {auditIdeas.map(idea=><article className="adapt-idea" key={idea.title}><span className="adapt-meta">{idea.type} · {idea.tag}</span><b>{idea.title}</b><p>{idea.desc}</p><button onClick={()=>addIdea(idea.title)}>{addedIdeas.includes(idea.title)?<Check size={13}/>:<Plus size={13}/>} {addedIdeas.includes(idea.title)?"Ditambahkan":"Tambah ke plan"}</button></article>)}
           </section>
-        </div>
+        </div>}
       </>}
       {tab === "Bank Ide & Hook" && <section className="panel hook-bank-panel">
-        <div className="hook-bank-header"><div><h3>Bank Ide & Hook</h3><p>Kumpulan opening, angle, dan format yang bisa dipakai ulang atau dikembangkan menjadi konten.</p></div><button className="primary-button" onClick={()=>alert("AI Hook Generator dibuka (simulasi).")}><WandSparkles size={15}/> Generate hooks</button></div>
+        <div className="hook-bank-header"><div><h3>Bank Ide & Hook</h3><p>Kumpulan opening, angle, dan format yang bisa dipakai ulang atau dikembangkan menjadi konten.</p></div><AiButton className="primary-button" label="Generate hooks" busyLabel="Menulis hook…" busy={ai.busy==="hooks"} onClick={generateHooks}/></div><AiError message={ai.error}/>
         <div className="hook-tools"><div className="search-field"><Search size={15}/><input value={bankQuery} onChange={e=>setBankQuery(e.target.value)} placeholder="Cari hook, kategori, atau format..."/></div><span className="muted-chip">{filteredHooks.length} hooks</span></div>
-        <div className="hook-bank-grid">{filteredHooks.map((item,i)=><article className="hook-card" key={item.hook}><div><span className="hook-category">{item.category}</span><span className="hook-format">{item.format}</span></div><h4>“{item.hook}”</h4><div className="hook-card-footer"><span>Hook #{String(i+1).padStart(2,"0")}</span><button className={savedHooks.includes(item.hook)?"saved":""} onClick={()=>setSavedHooks(old=>old.includes(item.hook)?old.filter(x=>x!==item.hook):[...old,item.hook])}><Bookmark size={14} fill={savedHooks.includes(item.hook)?"currentColor":"none"}/>{savedHooks.includes(item.hook)?"Saved":"Save hook"}</button><button onClick={()=>alert("Hook disalin ke draft konten (simulasi).")}><CopyIcon/> Use hook</button></div></article>)}</div>
+        <div className="hook-bank-grid">{filteredHooks.map((item,i)=><article className="hook-card" key={item.hook}><div><span className="hook-category">{item.category}</span><span className="hook-format">{item.format}</span></div><h4>“{item.hook}”</h4><div className="hook-card-footer"><span>Hook #{String(i+1).padStart(2,"0")}</span><button className={savedHooks.includes(item.hook)?"saved":""} onClick={()=>setSavedHooks(old=>old.includes(item.hook)?old.filter(x=>x!==item.hook):[...old,item.hook])}><Bookmark size={14} fill={savedHooks.includes(item.hook)?"currentColor":"none"}/>{savedHooks.includes(item.hook)?"Saved":"Save hook"}</button><button onClick={()=>{addIdea(item.hook);notify("Hook masuk ke inbox ide di Content Plan.");}}><CopyIcon/> Use hook</button></div></article>)}</div>
       </section>}
       {(tab === "Radar Tren" || tab === "Kompetitor & Kreator") && <div className="research-placeholder-grid">
         <section className="panel"><div className="panel-heading"><div><TrendingUp size={19}/><h3>{tab === "Radar Tren" ? "Radar tren niche property" : "Creator & competitor watchlist"}</h3></div><span className="insight-badge">Sample data</span></div>
           {(tab === "Radar Tren" ? ["Interior before-after","+42%","Lighting tutorial","+36%","Villa walkthrough","+28%","Property marketing","+19%"] : ["Property Creator ID","+18%","Home Visual Journal","+12%","Interior Lens Studio","+9%"]).reduce((acc:any,v:any,i:any,a:any)=>{if(i%2===0) acc.push([v,a[i+1]]);return acc;},[]).map((r:string[],i:number)=><div className="watch-row" key={r[0]}><span className="watch-number">0{i+1}</span><b>{r[0]}</b><em>{r[1]}</em></div>)}
         </section>
-        <section className="research-tip"><span><LightbulbIcon size={19}/></span><div><b>Researcher recommendation</b><p>Adaptasi pola kreatif, bukan menyalin konten. Cari sudut pandang yang sesuai pengalaman dan positioning Alvian atau brief klien.</p></div></section>
+        <section className="research-tip"><span><LightbulbIcon size={19}/></span><div><b>Researcher recommendation</b><p>Adaptasi pola kreatif, bukan menyalin konten. Cari sudut pandang yang sesuai pengalaman dan positioning Alvian atau brief klien.</p>{tab==="Radar Tren"&&<><AiButton className="outline-button" label="Minta rekomendasi arah konten" busy={ai.busy==="trend"} onClick={analyseTrends}/><AiError message={ai.error}/>{trendNote&&<pre className="x-output">{trendNote}</pre>}</>}</div></section>
       </div>}
-      <div className="module-footer">Data ilustrasi untuk UI preview · Analisis akun live memerlukan koneksi sumber data/API yang sesuai.</div>
+      <div className="module-footer">Daftar tren dan contoh tampilan adalah ilustrasi. Hasil bedah akun dan hook buatan AI tersimpan di browser ini.</div>
     </div>
   );
 }
@@ -191,22 +233,20 @@ function ResearchPage() {
 function CopyIcon() { return <FileText size={13}/>; }
 
 
-function ContentPlanPage({ onOpenProduction, initialIdea="" }: { onOpenProduction:(brief:{title:string;account:string;campaign:string;format:string;hook:string})=>void; initialIdea?:string }) {
-  const [accounts,setAccounts]=useState(["Alvian","FORIOR","Intragama Villa"]);
+function ContentPlanPage({ onOpenProduction }: { onOpenProduction:(brief:{title:string;account:string;campaign:string;format:string;hook:string})=>void }) {
+  const [accounts,setAccounts]=useStored<string[]>("accounts",DEFAULT_ACCOUNTS);
   const [account,setAccount]=useState("Alvian");
-  const [campaigns,setCampaigns]=useState([{id:1,account:"Alvian",name:"Christmas & New Year 2026",period:"Dec 2026",goal:"Awareness & engagement"},{id:2,account:"Alvian",name:"Valentine's Day 2027",period:"Feb 2027",goal:"Engagement"},{id:3,account:"FORIOR",name:"Year-end Portfolio Campaign",period:"Dec 2026",goal:"Lead generation"},{id:4,account:"Intragama Villa",name:"Festive Season Escape",period:"Dec 2026",goal:"Bookings"}]);
+  const [campaigns,setCampaigns]=useStored<Campaign[]>("campaigns",DEFAULT_CAMPAIGNS);
   const [campaignId,setCampaignId]=useState<number|null>(null);
   const [selected,setSelected]=useState(0);
   const [filter,setFilter]=useState("All");
   const [showAccount,setShowAccount]=useState(false),[showCampaign,setShowCampaign]=useState(false),[showDetail,setShowDetail]=useState(false);
   const [accountName,setAccountName]=useState(""),[campaignName,setCampaignName]=useState(""),[campaignPeriod,setCampaignPeriod]=useState("Dec 2026"),[campaignGoal,setCampaignGoal]=useState("Awareness & engagement");
-  const [briefOverrides,setBriefOverrides]=useState<Record<number,{title?:string;hook?:string;format?:string}>>({});
+  const [briefs,setBriefs]=useStored<Record<string,Brief>>("briefs",{});
   const [briefDraft,setBriefDraft]=useState({title:"",hook:"",format:"Reels"});
   const activeCampaign=campaigns.find(c=>c.id===campaignId);
   const visibleCampaigns=campaigns.filter(c=>c.account===account);
-  const titles=["Holiday home tour: festive edition","5 reasons to celebrate here","A cozy Christmas morning","New Year, new memories","Behind the scenes: festive setup","The perfect group getaway"];
-  const baseContent=Array.from({length:30},(_,i)=>({day:i+1,title:i===0&&initialIdea?initialIdea:(titles[i%6]+(i>=6?" · Part "+(Math.floor(i/6)+1):"")),format:i%3===1?"Carousel":"Reels",pillar:["Brand story","Education","Property highlight","Lifestyle"][i%4],status:i<4?"Brief ready":"Planned",hook:i===0&&initialIdea?"Follow up dari komentar/mention audiens: "+initialIdea:"Susun hook utama untuk "+titles[i%6].toLowerCase()+".",objective:activeCampaign?.goal||"Awareness",publish:"Dec "+String(i+1).padStart(2,"0")}));
-  const content=baseContent.map(item=>({...item,...(briefOverrides[item.day]||{})}));
+  const content=activeCampaign?buildPlan(activeCampaign,briefs):[];
   const current=content[selected]||content[0];
   const filtered=content.filter(x=>filter==="All"||x.format===filter);
   return <div className="module-page content-plan-v2">
@@ -216,18 +256,18 @@ function ContentPlanPage({ onOpenProduction, initialIdea="" }: { onOpenProductio
       <div className="plan-v2-breadcrumb"><button onClick={()=>setCampaignId(null)}>{account} / Campaigns</button><ChevronRight size={13}/><b>{activeCampaign.name}</b></div>
       <section className="plan-v2-campaign-hero"><div><span>CAMPAIGN · {activeCampaign.period}</span><h2>{activeCampaign.name}</h2><p>{activeCampaign.goal} · 30 content plans</p></div><div className="plan-v2-progress"><b>30</b><span>content slots</span><i><em/></i></div></section>
       <section className="panel plan-v2-content-panel"><div className="plan-v2-section-head"><div><h2>Content plan</h2><p>Setiap item memiliki brief sendiri dan bisa diteruskan ke Production Studio.</p></div><button className="outline-button" onClick={()=>{setSelected(0);setBriefDraft({title:"",hook:"",format:"Reels"});setShowDetail(true);}}><Plus size={13}/> Edit first brief</button></div>
-        <div className="plan-v2-content-tools"><div>{["All","Reels","Carousel"].map(v=><button key={v} className={filter===v?"active":""} onClick={()=>setFilter(v)}>{v}</button>)}</div><span>{filtered.length} of 30 content slots</span></div>
+        <PlanOverview campaign={activeCampaign} selected={selected+1} onPick={d=>setSelected(d-1)}/><div className="plan-v2-content-tools"><div>{["All","Reels","Carousel"].map(v=><button key={v} className={filter===v?"active":""} onClick={()=>setFilter(v)}>{v}</button>)}</div><span>{filtered.length} of 30 content slots</span></div>
         <div className="plan-v2-content-layout"><div className="plan-v2-content-list">{filtered.map(item=><button key={item.day} className={selected===item.day-1?"active":""} onClick={()=>setSelected(item.day-1)}><span>{String(item.day).padStart(2,"0")}</span><div><b>{item.title}</b><small>{item.format} · {item.pillar}</small><em>{item.status}</em></div><ChevronRight size={14}/></button>)}</div>
-          <div className="plan-v2-brief"><div className="plan-v2-brief-head"><div><span>CONTENT BRIEF · {String(current.day).padStart(2,"0")}/30</span><h3>{current.title}</h3><small>{current.format} · {current.pillar} · {current.publish}</small></div><button className="outline-button" onClick={()=>{setBriefDraft({title:current.title,hook:current.hook,format:current.format});setShowDetail(true);}}><FileText size={13}/> Edit brief</button></div>
-            <div className="plan-v2-brief-fields"><div><label>OBJECTIVE</label><b>{current.objective}</b></div><div><label>FORMAT</label><b>{current.format}</b></div><div><label>STATUS</label><b>{current.status}</b></div></div><div className="plan-v2-hook"><label>HOOK / CORE MESSAGE</label><p>{current.hook}</p></div>
-            <div className="plan-v2-mapping"><Sparkles size={15}/><div><b>Production Studio mapping</b><small>Account, campaign, title, format, objective, and hook are passed as the production brief.</small></div></div><button className="primary-button plan-v2-open-production" onClick={()=>onOpenProduction({title:current.title,account,campaign:activeCampaign.name,format:current.format,hook:current.hook})}>Open in Production Studio <ArrowRight size={14}/></button>
+          <div className="plan-v2-brief"><div className="plan-v2-brief-head"><div><span>CONTENT BRIEF · {String(current.day).padStart(2,"0")}/30</span><h3>{current.title}</h3><small>{current.format} · {current.pillar} · Hari {current.day}</small></div><button className="outline-button" onClick={()=>{setBriefDraft({title:current.title,hook:current.hook,format:current.format});setShowDetail(true);}}><FileText size={13}/> Edit brief</button></div>
+            <div className="plan-v2-brief-fields"><div><label>OBJECTIVE</label><b>{current.objective}</b></div><div><label>FORMAT</label><b>{current.format}</b></div><div><label>STATUS</label><b>{current.status}</b></div></div><div className="plan-v2-hook"><label>HOOK / BRIEF</label><p className="x-pre">{current.hook}</p></div>
+            <div className="plan-v2-mapping"><Sparkles size={15}/><div><b>Production Studio mapping</b><small>Account, campaign, title, format, objective, and hook are passed as the production brief.</small></div></div><BriefTools campaign={activeCampaign} slot={current}/><button className="primary-button plan-v2-open-production" onClick={()=>onOpenProduction({title:current.title,account,campaign:activeCampaign.name,format:current.format,hook:current.hook})}>Open in Production Studio <ArrowRight size={14}/></button>
           </div>
         </div>
       </section></>}
     {showAccount&&<div className="modal-backdrop" onClick={()=>setShowAccount(false)}><div className="quick-modal plan-v2-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setShowAccount(false)}><X size={18}/></button><span className="modal-icon"><Users size={21}/></span><h2>Add account</h2><p>Tambahkan brand atau akun baru.</p><label>ACCOUNT NAME</label><input value={accountName} onChange={e=>setAccountName(e.target.value)} placeholder="Contoh: Pawon Cabin"/><button className="primary-button" onClick={()=>{if(accountName.trim()&&!accounts.includes(accountName.trim())){setAccounts(v=>[...v,accountName.trim()]);setAccount(accountName.trim());setAccountName("");setShowAccount(false);}}}>Add account</button></div></div>}
     {showCampaign&&<div className="modal-backdrop" onClick={()=>setShowCampaign(false)}><div className="quick-modal plan-v2-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setShowCampaign(false)}><X size={18}/></button><span className="modal-icon"><CalendarDays size={21}/></span><h2>Create campaign</h2><p>Campaign dibuat di dalam akun yang dipilih.</p><label>ACCOUNT</label><select value={account} onChange={e=>setAccount(e.target.value)}>{accounts.map(a=><option key={a}>{a}</option>)}</select><label>CAMPAIGN NAME</label><input value={campaignName} onChange={e=>setCampaignName(e.target.value)} placeholder="Contoh: Ramadan Campaign"/><label>PERIOD</label><input value={campaignPeriod} onChange={e=>setCampaignPeriod(e.target.value)}/><label>OBJECTIVE</label><select value={campaignGoal} onChange={e=>setCampaignGoal(e.target.value)}><option>Awareness & engagement</option><option>Lead generation</option><option>Bookings</option><option>Sales conversion</option></select><button className="primary-button" onClick={()=>{if(campaignName.trim()){const id=Math.max(0,...campaigns.map(c=>c.id))+1;setCampaigns(v=>[...v,{id,account,name:campaignName.trim(),period:campaignPeriod,goal:campaignGoal}]);setCampaignId(id);setCampaignName("");setShowCampaign(false);}}}>Create campaign · 30 content slots</button></div></div>}
-    {showDetail&&<div className="modal-backdrop" onClick={()=>setShowDetail(false)}><div className="quick-modal plan-v2-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setShowDetail(false)}><X size={18}/></button><span className="modal-icon"><FileText size={21}/></span><h2>Content brief</h2><p>Brief akan menjadi sumber field untuk Production Studio.</p><label>CONTENT TITLE</label><input value={briefDraft.title} onChange={e=>setBriefDraft(v=>({...v,title:e.target.value}))}/><label>HOOK / CORE MESSAGE</label><textarea value={briefDraft.hook} onChange={e=>setBriefDraft(v=>({...v,hook:e.target.value}))} rows={3}/><label>FORMAT</label><select value={briefDraft.format} onChange={e=>setBriefDraft(v=>({...v,format:e.target.value}))}><option>Reels</option><option>Carousel</option><option>Feed</option></select><button className="primary-button" onClick={()=>{setBriefOverrides(v=>({...v,[current.day]:{title:briefDraft.title,hook:briefDraft.hook,format:briefDraft.format}}));setShowDetail(false);}}>Save brief</button></div></div>}
-    <div className="module-footer">Account, campaign, and brief interactions are frontend prototype state. Persistent storage will be connected in the backend phase.</div>
+    {showDetail&&<div className="modal-backdrop" onClick={()=>setShowDetail(false)}><div className="quick-modal plan-v2-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setShowDetail(false)}><X size={18}/></button><span className="modal-icon"><FileText size={21}/></span><h2>Content brief</h2><p>Brief akan menjadi sumber field untuk Production Studio.</p><label>CONTENT TITLE</label><input value={briefDraft.title} onChange={e=>setBriefDraft(v=>({...v,title:e.target.value}))}/><label>HOOK / CORE MESSAGE</label><textarea value={briefDraft.hook} onChange={e=>setBriefDraft(v=>({...v,hook:e.target.value}))} rows={3}/><label>FORMAT</label><select value={briefDraft.format} onChange={e=>setBriefDraft(v=>({...v,format:e.target.value}))}><option>Reels</option><option>Carousel</option><option>Feed</option></select><button className="primary-button" onClick={()=>{if(activeCampaign){const k=briefKey(activeCampaign.id,current.day);setBriefs(v=>({...v,[k]:{...v[k],title:briefDraft.title,hook:briefDraft.hook,format:briefDraft.format,status:"Brief ready"}}));}setShowDetail(false);}}>Save brief</button></div></div>}
+    <div className="module-footer">Akun, campaign, dan brief tersimpan otomatis di browser ini.</div>
   </div>;
 }
 
@@ -235,8 +275,11 @@ function ProductionStudioPage({ initialTab="Feed & Carousel", brief }: {initialT
   const [tab,setTab]=useState(initialTab);
   const [selectedSlide,setSelectedSlide]=useState(0);
   const [format,setFormat]=useState("Carousel 4:5");
-  const [headline,setHeadline]=useState(brief?.title||"5 Hal yang Membuat Foto Interior Terlihat Profesional");
-  const [caption,setCaption]=useState(brief?.hook||"Visual yang baik dimulai dari detail yang tepat.");
+  const [headline,setHeadline]=useStored<string>("studio:headline:"+(brief?.title||""),brief?.title||"5 Hal yang Membuat Foto Interior Terlihat Profesional");
+  const [caption,setCaption]=useStored<string>("studio:caption:"+(brief?.title||""),(brief?.hook||"Visual yang baik dimulai dari detail yang tepat.").slice(0,160));
+  const [zoom,setZoom]=useState(100);
+  const [videoNote,setVideoNote]=useState("");
+  const ai=useAI();
   const [assetTab,setAssetTab]=useState("Project assets");
   const [saved,setSaved]=useState(false);
   const slideTitles=["Cover","The right angle","Lighting matters","Details tell stories","Final result","Call to action"];
@@ -250,20 +293,20 @@ function ProductionStudioPage({ initialTab="Feed & Carousel", brief }: {initialT
     ["Call to action","Simpan tips ini dan follow untuk insight berikutnya."]
   ];
   return <div className="module-page production-page">
-    <div className="studio-nav-row"><div className="studio-tabs">{["Feed & Carousel","Reels & Video","Templates","Asset Library"].map(v=><button key={v} className={tab===v?"active":""} onClick={()=>setTab(v)}>{v==="Feed & Carousel"?<Layers3 size={15}/>:v==="Reels & Video"?<Film size={15}/>:v==="Templates"?<ImageIcon size={15}/>:<FolderOpen size={15}/>} {v}</button>)}</div><div className="production-top-actions"><span className="agent-badge"><i/> Creative agents ready</span><button className="primary-button module-action" onClick={()=>alert("New production project dibuat (simulasi).")}><Plus size={15}/> New project</button></div></div>
+    <div className="studio-nav-row"><div className="studio-tabs">{["Feed & Carousel","Reels & Video","Templates","Asset Library"].map(v=><button key={v} className={tab===v?"active":""} onClick={()=>setTab(v)}>{v==="Feed & Carousel"?<Layers3 size={15}/>:v==="Reels & Video"?<Film size={15}/>:v==="Templates"?<ImageIcon size={15}/>:<FolderOpen size={15}/>} {v}</button>)}</div><div className="production-top-actions"><span className="agent-badge"><i/> Creative agents ready</span><button className="primary-button module-action" onClick={()=>{setHeadline("Judul konten baru");setCaption("Tulis pesan pendukung di sini.");setSelectedSlide(0);setSaved(false);setTab("Feed & Carousel");}}><Plus size={15}/> New project</button></div></div>
     {tab==="Feed & Carousel" && <>
-      <div className="studio-project-bar"><div><span>PROJECT</span><b>{brief?`${brief.account} · ${brief.title}`:"Alvian · Interior Photography Tips"}</b><small>{brief?`${brief.campaign} · ${brief.format} · mapped from Content Plan`:"Instagram carousel · Draft saved 2 minutes ago"}</small></div><div><span className="studio-save-state">{saved?"All changes saved":"Unsaved changes"}</span><button className="outline-button" onClick={()=>setSaved(true)}><Check size={13}/> Save draft</button><button className="primary-button" onClick={()=>alert("Konten diajukan ke approval (simulasi).")}>Submit for review <ArrowRight size={14}/></button></div></div>
+      <div className="studio-project-bar"><div><span>PROJECT</span><b>{brief?`${brief.account} · ${brief.title}`:"Alvian · Interior Photography Tips"}</b><small>{brief?`${brief.campaign} · ${brief.format} · mapped from Content Plan`:"Instagram carousel · Draft saved 2 minutes ago"}</small></div><div><span className="studio-save-state">{saved?"All changes saved":"Unsaved changes"}</span><button className="outline-button" onClick={()=>setSaved(true)}><Check size={13}/> Save draft</button><button className="primary-button" onClick={()=>{addApproval({title:`Carousel — ${headline}`,by:"Graphic Designer",type:"Visual review",body:`Headline: ${headline}\nPesan pendukung: ${caption}\n\nSlide:\n`+slides.map((x,i)=>`${i+1}. ${x[0]} — ${x[1]}`).join("\n")});setSaved(true);notify("Konten masuk ke antrean approval.");}}>Submit for review <ArrowRight size={14}/></button></div></div>
       <div className="creative-workspace">
         <aside className="slide-manager panel"><div className="studio-panel-head"><div><b>Slides</b><small>6 slides · 4:5 format</small></div><button onClick={()=>setSelectedSlide(0)}><Plus size={15}/></button></div>
           {slideTitles.map((title,i)=><button className={`slide-thumb ${selectedSlide===i?"active":""}`} key={title} onClick={()=>setSelectedSlide(i)}><span className="thumb-number">{String(i+1).padStart(2,"0")}</span><span className="thumb-preview"><span>{i===0?"FORIOR":i===5?"SAVE & SHARE":`0${i} / INTERIOR`}</span><b>{title}</b></span><MoreHorizontal size={14}/></button>)}
           <button className="add-slide-button" onClick={()=>setSelectedSlide(slideTitles.length-1)}><Plus size={14}/> Add new slide</button>
         </aside>
-        <section className="canvas-area panel"><div className="canvas-toolbar"><div><span>CANVAS</span><b>{format}</b></div><div><button onClick={()=>setFormat(format==="Carousel 4:5"?"Square 1:1":"Carousel 4:5")}>{format==="Carousel 4:5"?"4:5":"1:1"} <ChevronDown size={13}/></button><button onClick={()=>alert("Zoom control (simulasi).")}>−</button><span>75%</span><button onClick={()=>alert("Zoom control (simulasi).")}>+</button></div></div>
-          <div className={`design-canvas ${format==="Square 1:1"?"square":""}`}><ImageTile kind={selectedSlide===2?"camera":selectedSlide===3?"bedroom":"living"} className="design-canvas-photo"/><div className="design-canvas-shade"/><div className="design-canvas-brand">FORIOR <span>INTERIOR PHOTOGRAPHY</span></div><div className="design-canvas-copy"><small>PHOTOGRAPHY NOTES · 0{selectedSlide+1}</small><h2>{selectedSlide===0?headline:slides[selectedSlide][0]}</h2><p>{selectedSlide===0?caption:slides[selectedSlide][1]}</p></div><div className="design-canvas-footer"><span>ALVIAN · FORIOR</span><b>{String(selectedSlide+1).padStart(2,"0")} / 06</b></div></div>
+        <section className="canvas-area panel"><div className="canvas-toolbar"><div><span>CANVAS</span><b>{format}</b></div><div><button onClick={()=>setFormat(format==="Carousel 4:5"?"Square 1:1":"Carousel 4:5")}>{format==="Carousel 4:5"?"4:5":"1:1"} <ChevronDown size={13}/></button><button aria-label="Perkecil" onClick={()=>setZoom(z=>Math.max(60,z-10))}>−</button><span>{zoom}%</span><button aria-label="Perbesar" onClick={()=>setZoom(z=>Math.min(120,z+10))}>+</button></div></div>
+          <div className={`design-canvas ${format==="Square 1:1"?"square":""}`} style={{transform:`scale(${zoom/100})`,transformOrigin:"top center"}}><ImageTile kind={selectedSlide===2?"camera":selectedSlide===3?"bedroom":"living"} className="design-canvas-photo"/><div className="design-canvas-shade"/><div className="design-canvas-brand">FORIOR <span>INTERIOR PHOTOGRAPHY</span></div><div className="design-canvas-copy"><small>PHOTOGRAPHY NOTES · 0{selectedSlide+1}</small><h2>{selectedSlide===0?headline:slides[selectedSlide][0]}</h2><p>{selectedSlide===0?caption:slides[selectedSlide][1]}</p></div><div className="design-canvas-footer"><span>ALVIAN · FORIOR</span><b>{String(selectedSlide+1).padStart(2,"0")} / 06</b></div></div>
           <div className="canvas-pagination"><button onClick={()=>setSelectedSlide(Math.max(0,selectedSlide-1))} disabled={selectedSlide===0}>Previous slide</button><span>Slide {selectedSlide+1} of 6</span><button onClick={()=>setSelectedSlide(Math.min(5,selectedSlide+1))} disabled={selectedSlide===5}>Next slide <ArrowRight size={13}/></button></div>
         </section>
         <aside className="creative-assistant panel"><div className="assistant-heading"><span><WandSparkles size={17}/></span><div><b>AI Creative Assistant</b><small>Design & copy partner</small></div></div>
-          <div className="assistant-section"><label>CONTENT COPY</label><span>Headline</span><textarea value={headline} onChange={e=>setHeadline(e.target.value)} rows={3}/><span>Supporting text</span><textarea value={caption} onChange={e=>setCaption(e.target.value)} rows={2}/><button className="assistant-action" onClick={()=>setHeadline("Jangan Abaikan 5 Detail Ini Saat Memotret Interior")}><Sparkles size={13}/> Generate headline</button></div>
+          <div className="assistant-section"><label>CONTENT COPY</label><span>Headline</span><textarea value={headline} onChange={e=>setHeadline(e.target.value)} rows={3}/><span>Supporting text</span><textarea value={caption} onChange={e=>setCaption(e.target.value)} rows={2}/><AiButton label="Generate headline" busy={ai.busy==="headline"} onClick={()=>ai.run("headline",async()=>{const t=await askAI({tier:"creative",role:"Content Writer",maxTokens:1500,prompt:`Tulis 1 headline cover carousel Instagram, maksimal 9 kata, untuk konten ini. Hanya headline, tanpa tanda kutip.\nHeadline sekarang: ${headline}\nPesan: ${caption}`});setHeadline(parseLines(t)[0]||headline);setSaved(false);})}/><AiButton label="Tulis pesan pendukung" busy={ai.busy==="caption"} onClick={()=>ai.run("caption",async()=>{const t=await askAI({tier:"light",role:"Content Writer",maxTokens:1500,prompt:`Tulis 1 kalimat pendukung (maksimal 18 kata) untuk cover carousel dengan headline: ${headline}. Hanya kalimatnya.`});setCaption(parseLines(t)[0]||caption);setSaved(false);})}/><AiError message={ai.error}/></div>
           <div className="assistant-section"><label>DESIGN SUGGESTIONS</label><div className="suggestion-item"><span className="suggestion-dot"/> Use a stronger visual hook on cover</div><div className="suggestion-item"><span className="suggestion-dot"/> Keep headline within 2 lines</div><div className="suggestion-item"><span className="suggestion-dot"/> Increase contrast on slide 03</div></div>
           <div className="assistant-section"><label>ASSET LIBRARY</label><div className="asset-switch"><button className={assetTab==="Project assets"?"active":""} onClick={()=>setAssetTab("Project assets")}>Project</button><button className={assetTab==="Brand kit"?"active":""} onClick={()=>setAssetTab("Brand kit")}>Brand kit</button></div><div className="asset-mini-grid"><ImageTile kind="living"/><ImageTile kind="bedroom"/><ImageTile kind="camera"/></div><small className="asset-note">{assetTab==="Project assets"?"24 project photos available":"FORIOR brand colors, logo & typography"}</small></div>
         </aside>
@@ -271,12 +314,12 @@ function ProductionStudioPage({ initialTab="Feed & Carousel", brief }: {initialT
     </>}
     {isVideo && <div className="video-editor-layout">
       <aside className="video-workflow panel"><b>VIDEO WORKFLOW</b>{["Script & hook","Scene planning","Footage selection","Timeline editor","Subtitles & audio","Thumbnail & export"].map((v,i)=><button className={i===selectedSlide?"active":""} key={v} onClick={()=>setSelectedSlide(i)}><span>{String(i+1).padStart(2,"0")}</span>{v}<ChevronRight size={13}/></button>)}</aside>
-      <section className="video-main panel"><div className="video-project-head"><div><span>REELS PROJECT</span><h3>Behind the Shoot — Villa Puncak</h3><small>Instagram Reels · 9:16 · 00:32</small></div><span className="status-production">Editing</span></div><div className="video-preview-wrap"><div className="video-preview"><ImageTile kind="villa"/><div className="video-preview-overlay"><span>FORIOR FILMS</span><b>Behind the<br/>Shoot.</b><small>VILLA PUNCAK · 2026</small></div><button><Play size={22} fill="currentColor"/></button></div></div><div className="timeline-head"><b>Timeline</b><span>00:00 / 00:32</span></div><div className="timeline-ruler"><span>00:00</span><span>00:08</span><span>00:16</span><span>00:24</span><span>00:32</span></div><div className="timeline-track"><span className="track-label">VIDEO</span><div className="track-blocks"><i/><i/><i/><i/></div></div><div className="timeline-track audio"><span className="track-label">AUDIO</span><div className="audio-wave"><i/></div></div><div className="timeline-track"><span className="track-label">TEXT</span><div className="text-block">Behind the Shoot · Villa Puncak</div></div></section>
-      <aside className="video-ai panel"><div className="assistant-heading"><span><WandSparkles size={17}/></span><div><b>AI Video Editor</b><small>Editing co-pilot</small></div></div><label>SELECTED STEP</label><h4>{["Script & hook","Scene planning","Footage selection","Timeline editor","Subtitles & audio","Thumbnail & export"][selectedSlide]}</h4><p>AI dapat membantu merapikan alur cerita, memilih footage, menyusun subtitle, dan menyarankan pacing video.</p><button className="assistant-action" onClick={()=>alert("AI menyusun rekomendasi untuk tahap ini (simulasi).")}><Sparkles size={13}/> Generate suggestion</button><div className="assistant-section"><label>QUICK TOOLS</label>{["Auto captions","Remove silence","Suggest B-roll","Generate thumbnail"].map(v=><button className="quick-tool" key={v} onClick={()=>alert(`${v} (simulasi).`)}>{v}<ArrowRight size={13}/></button>)}</div><button className="primary-button export-button" onClick={()=>alert("Export preview (simulasi).")}>Export video <ArrowRight size={14}/></button></aside>
+      <section className="video-main panel"><div className="video-project-head"><div><span>REELS PROJECT</span><h3>{brief?.title||"Behind the Shoot — Villa Puncak"}</h3><small>Instagram Reels · 9:16 · 00:32</small></div><span className="status-production">Editing</span></div><div className="video-preview-wrap"><div className="video-preview"><ImageTile kind="villa"/><div className="video-preview-overlay"><span>FORIOR FILMS</span><b>Behind the<br/>Shoot.</b><small>VILLA PUNCAK · 2026</small></div><button><Play size={22} fill="currentColor"/></button></div></div><div className="timeline-head"><b>Timeline</b><span>00:00 / 00:32</span></div><div className="timeline-ruler"><span>00:00</span><span>00:08</span><span>00:16</span><span>00:24</span><span>00:32</span></div><div className="timeline-track"><span className="track-label">VIDEO</span><div className="track-blocks"><i/><i/><i/><i/></div></div><div className="timeline-track audio"><span className="track-label">AUDIO</span><div className="audio-wave"><i/></div></div><div className="timeline-track"><span className="track-label">TEXT</span><div className="text-block">Behind the Shoot · Villa Puncak</div></div></section>
+      <aside className="video-ai panel"><div className="assistant-heading"><span><WandSparkles size={17}/></span><div><b>AI Video Editor</b><small>Editing co-pilot</small></div></div><label>SELECTED STEP</label><h4>{["Script & hook","Scene planning","Footage selection","Timeline editor","Subtitles & audio","Thumbnail & export"][selectedSlide]}</h4><p>AI dapat membantu merapikan alur cerita, memilih footage, menyusun subtitle, dan menyarankan pacing video.</p><AiButton label="Generate suggestion" busy={ai.busy==="video"} onClick={()=>ai.run("video",async()=>setVideoNote(await askAI({tier:"creative",role:"Video Editor",prompt:`Proyek Reels: ${brief?.title||"Behind the Shoot — Villa Puncak"} (9:16, ±30 detik). ${brief?.hook?"Brief: "+brief.hook:""}\nBeri saran konkret untuk tahap "${["Script & hook","Scene planning","Footage selection","Timeline editor","Subtitles & audio","Thumbnail & export"][selectedSlide]}" dalam poin singkat.`})))}/><AiError message={ai.error}/>{videoNote&&<pre className="x-output">{videoNote}</pre>}<div className="assistant-section"><label>QUICK TOOLS</label>{["Auto captions","Remove silence","Suggest B-roll","Generate thumbnail"].map(v=><button className="quick-tool" key={v} onClick={()=>ai.run("video",async()=>setVideoNote(await askAI({tier:"creative",role:"Video Editor",prompt:`Proyek Reels: ${brief?.title||"Behind the Shoot — Villa Puncak"}. Buat rencana "${v}" yang bisa langsung saya kerjakan di aplikasi editing: langkah, timestamp, dan teks yang dipakai.`})))}>{v}<ArrowRight size={13}/></button>)}</div><button className="primary-button export-button" onClick={()=>notify("Render video butuh layanan media di server — belum tersedia di versi statis ini. Gunakan saran AI di atas sebagai panduan edit.")}>Export video <ArrowRight size={14}/></button></aside>
     </div>}
     {tab==="Templates"&&<section className="template-gallery">{["Editorial Minimal","Property Showcase","Educational Carousel","Before / After","Luxury Villa Reel","Photography Tips"].map((v,i)=><article className="panel template-card" key={v}><div className={`template-art template-art-${i+1}`}><span>FORIOR</span><b>{v}</b><small>CREATIVE TEMPLATE</small></div><h3>{v}</h3><p>{i%2===0?"Carousel · 6 slides":"Reels · 9:16"}</p><button className="outline-button" onClick={()=>setTab(i%2===0?"Feed & Carousel":"Reels & Video")}>Use template <ArrowRight size={13}/></button></article>)}</section>}
-    {tab==="Asset Library"&&<section className="panel asset-library-page"><div className="panel-heading"><div><FolderOpen size={19}/><h3>Asset Library</h3></div><button className="primary-button" onClick={()=>alert("Upload asset (simulasi).")}><Plus size={14}/> Upload assets</button></div><p className="panel-subtitle">Kelola foto, footage, logo, dan materi brand untuk produksi konten.</p><div className="asset-library-grid">{["living","bedroom","camera","villa","living","bedroom","camera","villa"].map((v,i)=><article key={i}><ImageTile kind={v}/><b>{["Living room wide","Master bedroom","Camera setup","Villa exterior"][i%4]}</b><small>{i%2===0?"Photo · JPG":"Project asset · JPG"}</small></article>)}</div></section>}
-    <div className="module-footer">Production workspace preview · AI generation, rendering, media processing, and export require backend services.</div>
+    {tab==="Asset Library"&&<section className="panel asset-library-page"><div className="panel-heading"><div><FolderOpen size={19}/><h3>Asset Library</h3></div><button className="primary-button" onClick={()=>notify("Upload file butuh penyimpanan server. Daftarkan folder Google Drive di menu Asset Library.")}><Plus size={14}/> Upload assets</button></div><p className="panel-subtitle">Kelola foto, footage, logo, dan materi brand untuk produksi konten.</p><div className="asset-library-grid">{["living","bedroom","camera","villa","living","bedroom","camera","villa"].map((v,i)=><article key={i}><ImageTile kind={v}/><b>{["Living room wide","Master bedroom","Camera setup","Villa exterior"][i%4]}</b><small>{i%2===0?"Photo · JPG":"Project asset · JPG"}</small></article>)}</div></section>}
+    <div className="module-footer">Teks dan draf tersimpan di browser ini. Render gambar/video dan upload file butuh layanan server.</div>
   </div>;
 }
 
@@ -287,8 +330,10 @@ function AIAgentTeamPage() {
   const [showAssign,setShowAssign]=useState(false);
   const [task,setTask]=useState("Create a 30-day content plan for Intragama Villa");
   const [agentMode,setAgentMode]=useState("Approval required");
-  const [running,setRunning]=useState(false);
-  const [approved,setApproved]=useState<string[]>([]);
+  const [approvals]=useApprovals();
+  const pendingCount=approvals.filter(a=>a.status==="pending").length;
+  const [workspace,setWorkspace]=useState("Alvian · Personal Brand");
+  const ai=useAI();
   const agentList=[
     {name:"Research Analyst",role:"Riset akun, tren, kompetitor",group:"Strategy",icon:Search,status:"Working",task:"Menganalisis 3 akun kreator properti",load:"78%",color:"purple",desc:"Mengumpulkan insight dari akun publik, membaca pola format, engagement, topik, dan peluang konten yang relevan."},
     {name:"Creative Strategist",role:"Positioning, content pillars & campaign",group:"Strategy",icon:Target,status:"Ready",task:"Menyiapkan arah campaign bulanan",load:"42%",color:"purple",desc:"Menerjemahkan tujuan bisnis menjadi strategi konten, content pillars, campaign angle, dan brief yang bisa dieksekusi tim."},
@@ -302,19 +347,14 @@ function AIAgentTeamPage() {
   const selected=agentList.find(a=>a.name===selectedAgent)||agentList[1];
   const SelectedAgentIcon=selected.icon;
   const filtered=agentList.filter(a=>teamFilter==="All agents"||a.group===teamFilter);
-  const approvals=[
-    {title:"Carousel — 5 Tips Foto Interior",by:"Graphic Designer",time:"10 min ago",type:"Visual review"},
-    {title:"Reels — Behind the Shoot Villa",by:"Video Editor",time:"32 min ago",type:"Final cut"},
-    {title:"Caption — Intragama Weekend Escape",by:"Content Writer",time:"1 hour ago",type:"Copy review"},
-    {title:"November content calendar",by:"Social Media Manager",time:"Yesterday",type:"Plan approval"}
-  ];
   return <div className="module-page agent-team-page">
     <div className="agent-team-topline"><div><span className="agent-badge"><i/> 8 agents available</span><span className="muted-chip">Human approval enabled</span></div><button className="primary-button" onClick={()=>setShowAssign(true)}><Plus size={15}/> Assign new task</button></div>
     <section className="agent-command-panel">
       <div className="agent-command-copy"><span className="module-eyebrow"><Sparkles size={14}/> AI WORKFORCE COMMAND</span><h2>Your creative team, ready to work.</h2><p>Berikan objective. Agent akan membagi pekerjaan sesuai peran, menggunakan aset yang relevan, lalu mengirim hasil untuk approval Anda.</p><div className="agent-command-controls"><select value={agentMode} onChange={e=>setAgentMode(e.target.value)}><option>Approval required</option><option>Draft only</option><option>Auto-run internal tasks</option></select><button onClick={()=>setShowAssign(true)}><Sparkles size={14}/> Create task</button></div></div>
       <div className="agent-command-orbit"><div className="orbit-ring orbit-one"/><div className="orbit-ring orbit-two"/><div className="orbit-core"><Sparkles size={27}/><b>FORIOR</b><small>AGENT OS</small></div>{agentList.slice(0,6).map((a,i)=><span className={`orbit-node node-${i+1}`} key={a.name}>{i===0?<Search size={15}/>:i===1?<Target size={15}/>:i===2?<FileText size={15}/>:i===3?<Layers3 size={15}/>:i===4?<Film size={15}/>:<CalendarDays size={15}/>}</span>)}</div>
     </section>
-    <div className="agent-overview-grid"><div className="agent-overview-card"><span>Active agents</span><b>8</b><small>All roles online</small></div><div className="agent-overview-card"><span>Tasks in progress</span><b>5</b><small>Across 3 workspaces</small></div><div className="agent-overview-card"><span>Waiting approval</span><b>{approvals.length-approved.length}</b><small>Human review queue</small></div><div className="agent-overview-card"><span>Completed this week</span><b>24</b><small>+18% from last week</small></div></div>
+    <div className="agent-overview-grid"><div className="agent-overview-card"><span>Active agents</span><b>8</b><small>All roles online</small></div><div className="agent-overview-card"><span>Total output</span><b>{approvals.length}</b><small>Hasil agent tersimpan</small></div><div className="agent-overview-card"><span>Waiting approval</span><b>{pendingCount}</b><small>Human review queue</small></div><div className="agent-overview-card"><span>Approved</span><b>{approvals.filter(a=>a.status==="approved").length}</b><small>Disetujui Anda</small></div></div>
+    <ModelRouterPanel/>
     <div className="agent-main-grid">
       <section className="panel agent-roster-panel"><div className="agent-section-heading"><div><h3>AI Agent Team</h3><p>Spesialis virtual yang bekerja sebagai satu social media agency.</p></div><button className="quiet-action" onClick={()=>setTeamFilter("All agents")}>View all <ArrowRight size={13}/></button></div>
         <div className="agent-filter-tabs">{["All agents","Strategy","Creative","Publishing","Operations"].map(v=><button key={v} className={teamFilter===v?"active":""} onClick={()=>setTeamFilter(v)}>{v}</button>)}</div>
@@ -322,9 +362,9 @@ function AIAgentTeamPage() {
       </section>
       <section className="panel agent-detail-panel"><div className="agent-section-heading"><div><h3>Agent profile</h3><p>Role, responsibility & current activity.</p></div><span className="agent-ready"><i/> Online</span></div><div className={`agent-detail-avatar ${selected.color}`}><SelectedAgentIcon size={25}/></div><h2>{selected.name}</h2><span className="agent-role-label">{selected.role}</span><p className="agent-description">{selected.desc}</p><div className="agent-detail-stats"><div><span>Current workload</span><b>{selected.load}</b></div><div className="agent-load-track"><i style={{width:selected.load}}/></div></div><div className="agent-current-task"><label>CURRENT TASK</label><b>{selected.task}</b><span>{selected.status==="Working"?"In progress":"Ready for assignment"}</span></div><button className="agent-assign-button" onClick={()=>setShowAssign(true)}><Plus size={14}/> Assign task to this agent</button></section>
     </div>
-    <section className="panel approval-queue-panel"><div className="agent-section-heading"><div><h3>Approval queue</h3><p>Semua output AI perlu persetujuan manusia sebelum dipublikasikan.</p></div><span className="approval-count">{approvals.length-approved.length} pending</span></div><div className="approval-list">{approvals.map(item=><div className="approval-row" key={item.title}><span className="approval-file-icon"><FileText size={16}/></span><div className="approval-item-copy"><b>{item.title}</b><small>{item.by} · {item.type}</small></div><span className="approval-time">{item.time}</span>{approved.includes(item.title)?<span className="approved-label"><Check size={13}/> Approved</span>:<button onClick={()=>setApproved(old=>[...old,item.title])}>Review <ArrowRight size={13}/></button>}</div>)}</div></section>
-    {showAssign&&<div className="modal-backdrop" onClick={()=>setShowAssign(false)}><div className="quick-modal assign-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setShowAssign(false)}><X size={18}/></button><span className="modal-icon"><Sparkles size={22}/></span><h2>Assign a task</h2><p>Task akan masuk ke workflow agent dan hasilnya tetap menunggu approval.</p><label>OBJECTIVE / TASK</label><textarea value={task} onChange={e=>setTask(e.target.value)} rows={3}/><label>ASSIGN TO</label><select value={selectedAgent} onChange={e=>setSelectedAgent(e.target.value)}>{agentList.map(a=><option key={a.name}>{a.name}</option>)}</select><label>WORKSPACE</label><select><option>Intragama Villa · Client Project</option><option>Alvian · Personal Brand</option><option>FORIOR · Brand Account</option></select><button className="primary-button" onClick={()=>{setRunning(true);setTimeout(()=>{setRunning(false);setShowAssign(false);},500);}} disabled={running}>{running?"Assigning…":"Assign task to agent"}</button></div></div>}
-    <div className="module-footer">Agent team preview · Actual model routing, tools, memory, usage limits, and execution permissions will be configured in the backend.</div>
+    <section className="panel approval-queue-panel"><div className="agent-section-heading"><div><h3>Approval queue</h3><p>Semua output AI perlu persetujuan manusia sebelum dipublikasikan.</p></div><span className="approval-count">{pendingCount} pending</span></div><ApprovalList empty="Belum ada hasil agent. Beri tugas lewat tombol Assign new task."/></section>
+    {showAssign&&<div className="modal-backdrop" onClick={()=>setShowAssign(false)}><div className="quick-modal assign-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setShowAssign(false)}><X size={18}/></button><span className="modal-icon"><Sparkles size={22}/></span><h2>Assign a task</h2><p>Task akan masuk ke workflow agent dan hasilnya tetap menunggu approval.</p><label>OBJECTIVE / TASK</label><textarea value={task} onChange={e=>setTask(e.target.value)} rows={3}/><label>ASSIGN TO</label><select value={selectedAgent} onChange={e=>setSelectedAgent(e.target.value)}>{agentList.map(a=><option key={a.name}>{a.name}</option>)}</select><label>WORKSPACE</label><select value={workspace} onChange={e=>setWorkspace(e.target.value)}><option>Alvian · Personal Brand</option><option>FORIOR · Brand Account</option><option>Intragama Villa · Client Project</option></select><AiError message={ai.error}/><button className="primary-button" onClick={()=>ai.run("assign",async()=>{const out=await runAgentTask(selected,task,workspace);addApproval({title:task.slice(0,90),by:selected.name,type:"Hasil tugas agent",body:out});setShowAssign(false);notify("Hasil agent masuk ke antrean approval.");})} disabled={ai.busy==="assign"}>{ai.busy==="assign"?`${selected.name} sedang bekerja…`:"Assign task to agent"}</button></div></div>}
+    <div className="module-footer">Status "Working/Ready" dan workload adalah ilustrasi. Tugas yang Anda berikan dijalankan sungguhan oleh model AI dan hasilnya menunggu approval.</div>
   </div>;
 }
 
@@ -358,7 +398,7 @@ function AnalyticsPage({ onAddToPlan }: {onAddToPlan:(idea:string)=>void}) {
     {title:"How I Light a Small Bedroom",format:"Carousel",reach:"76.5K",eng:"7.1%",saves:"1.2K",change:"+18%",type:"carousel"}
   ];
   return <div className="module-page analytics-page">
-    <div className="analytics-toolbar"><div><span className="agent-badge"><i/> Performance overview</span><span className="muted-chip">Illustrative data</span></div><div><select value={channel} onChange={e=>setChannel(e.target.value)}><option>All channels</option><option>Instagram</option><option>TikTok</option><option>YouTube</option></select><select value={period} onChange={e=>setPeriod(e.target.value)}><option>Last 7 days</option><option>Last 30 days</option><option>Last 90 days</option></select><button className="outline-button" onClick={()=>alert("Report export akan tersedia setelah analytics provider terhubung.")}><FileText size={14}/> Export report</button></div></div>
+    <div className="analytics-toolbar"><div><span className="agent-badge"><i/> Performance overview</span><span className="muted-chip">Illustrative data</span></div><div><select value={channel} onChange={e=>setChannel(e.target.value)}><option>All channels</option><option>Instagram</option><option>TikTok</option><option>YouTube</option></select><select value={period} onChange={e=>setPeriod(e.target.value)}><option>Last 7 days</option><option>Last 30 days</option><option>Last 90 days</option></select><button className="outline-button" onClick={()=>window.print()}><FileText size={14}/> Export report</button></div></div>
     <section className="analytics-highlight"><div><span className="module-eyebrow"><ChartNoAxesCombined size={14}/> PERSONAL BRAND PERFORMANCE</span><h2>Make every post count.</h2><p>Ringkasan performa konten Alvian lintas platform untuk membantu menentukan apa yang perlu dibuat berikutnya.</p></div><div className="analytics-highlight-stat"><span>Total reach</span><b>1.24M</b><small><ArrowUpRight size={13}/> 32% vs previous period</small></div></section>
     <div className="analytics-kpi-grid">
       {[{name:"Reach",value:channel==="TikTok"?"842K":"1.24M",delta:"+32%",note:"Unique accounts reached",icon:Eye},{name:"Engagement rate",value:"6.8%",delta:"+1.9 pp",note:"Interactions per reach",icon:Activity},{name:"Followers",value:channel==="Instagram"?"80.2K":"128.4K",delta:"+24%",note:"Net audience growth",icon:Users},{name:"Profile visits",value:"42.6K",delta:"+18%",note:"Visits from content",icon:UserCircle2}].map(k=>{const Icon=k.icon;return <div className="analytics-kpi" key={k.name}><span className="analytics-kpi-icon"><Icon size={17}/></span><small>{k.name}</small><b>{k.value}</b><em><ArrowUpRight size={12}/>{k.delta}</em><span>{k.note}</span></div>})}
@@ -369,17 +409,18 @@ function AnalyticsPage({ onAddToPlan }: {onAddToPlan:(idea:string)=>void}) {
     </section>
     <section className="panel analytics-content-panel"><div className="analytics-section-head"><div><h3>Content performance</h3><p>Understand which creative formats deserve more focus.</p></div><div className="analytics-tab-switch">{["Top content","Insights"].map(t=><button className={reportTab===t?"active":""} key={t} onClick={()=>setReportTab(t)}>{t}</button>)}</div></div>{reportTab==="Top content"? <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr><th>Content</th><th>Format</th><th>Reach</th><th>Engagement</th><th>Saves</th><th>Growth</th></tr></thead><tbody>{topContent.map((item,i)=><tr key={item.title}><td><span className="rank-number">0{i+1}</span><b>{item.title}</b></td><td><span className="content-format-pill">{item.format}</span></td><td>{item.reach}</td><td>{item.eng}</td><td>{item.saves}</td><td className="positive">{item.change}</td></tr>)}</tbody></table></div>:<div className="analytics-insight-grid"><article><span><Flame size={16}/></span><b>Behind the scenes wins</b><p>Konten proses pemotretan dan BTS memiliki retention lebih baik daripada konten promosi langsung.</p></article><article><span><Bookmark size={16}/></span><b>Carousel drives saves</b><p>Konten edukasi dengan 5–7 slide menghasilkan save rate yang lebih tinggi.</p></article><article><span><Clock3 size={16}/></span><b>Test posting windows</b><p>Uji konsistensi slot 18.00–20.00 WIB dan bandingkan hasil per format.</p></article></div>}</section>
     <section className="panel analytics-community-panel"><div className="analytics-section-head"><div><h3>Comments & mentions to follow up</h3><p>Conversation signals that may deserve a dedicated content response.</p></div><span className="muted-chip">Community inbox · sample data</span></div><div className="analytics-community-list">{[{from:"@interiorlover",channel:"Instagram comment",text:"Bisa bahas bagaimana foto ruangan kecil tetap terlihat luas?",idea:"Tips foto ruangan kecil agar terlihat luas"},{from:"@propertyhunter",channel:"Instagram mention",text:"Ada tips memilih angle untuk foto villa dengan banyak area?",idea:"Cara memilih angle foto villa dengan banyak area"},{from:"@designjournal",channel:"TikTok comment",text:"Boleh buat breakdown lighting untuk interior yang minim cahaya?",idea:"Lighting setup untuk interior minim cahaya"}].map((item,i)=><article className="analytics-community-item" key={item.from}><span className="analytics-community-icon">{i===1?<AtSign size={16}/>:<MessageCircle size={16}/>}</span><div><b>{item.from} <small>{item.channel}</small></b><p>{item.text}</p><em>Content request</em></div><button className="outline-button" onClick={()=>onAddToPlan(item.idea)}><Plus size={12}/> Add to content plan</button></article>)}</div></section>
-    <div className="module-footer">Analytics preview · Metrics are illustrative. Live platform metrics require authorized Instagram, TikTok, and YouTube data connections.</div>
+    <div className="module-footer">Angka di halaman ini masih ilustrasi. Metrik asli membutuhkan koneksi resmi ke API Instagram, TikTok, dan YouTube.</div>
   </div>;
 }
 
 function SettingsPage() {
   const [tab,setTab]=useState("Workspace");
   const [workspaceName,setWorkspaceName]=useState("Alvian · Personal Brand");
-  const [brandName,setBrandName]=useState("Alvian Indonesia");
-  const [handle,setHandle]=useState("@alvian.indonesia");
+  const [settings,setSettings]=useSettings();
+  const brandName=settings.brandName,handle=settings.handle;
+  const setBrandName=(v:string)=>setSettings(o=>({...o,brandName:v})),setHandle=(v:string)=>setSettings(o=>({...o,handle:v}));
   const [tone,setTone]=useState("Educative, warm & confident");
-  const [defaultApproval,setDefaultApproval]=useState(true);
+  const defaultApproval=settings.requireApproval,setDefaultApproval=(v:boolean)=>setSettings(o=>({...o,requireApproval:v}));
   const [emailNotif,setEmailNotif]=useState(true);
   const [approvalNotif,setApprovalNotif]=useState(true);
   const [weeklyReport,setWeeklyReport]=useState(false);
@@ -389,18 +430,18 @@ function SettingsPage() {
   const tabs=["Workspace","Brand identity","Social accounts","AI & Models","Notifications","Security"];
   const Toggle=({checked,onChange}:{checked:boolean;onChange:(v:boolean)=>void})=><button className={`settings-toggle ${checked?"on":""}`} onClick={()=>onChange(!checked)} aria-pressed={checked}><i/></button>;
   return <div className="module-page settings-page">
-    <div className="settings-toolbar"><div><span className="agent-badge"><i/> Workspace configuration</span><span className="muted-chip">Owner access</span></div><button className="primary-button" onClick={()=>{setSaved(true);setTimeout(()=>setSaved(false),1800);}}><Check size={14}/>{saved?"Saved (preview)":"Save changes"}</button></div>
+    <div className="settings-toolbar"><div><span className="agent-badge"><i/> Workspace configuration</span><span className="muted-chip">Owner access</span></div><button className="primary-button" onClick={()=>{setSaved(true);setTimeout(()=>setSaved(false),1800);}}><Check size={14}/>{saved?"Tersimpan":"Save changes"}</button></div>
     <div className="settings-layout"><aside className="panel settings-nav"><div className="settings-profile"><span className="avatar avatar-main">A</span><div><b>Alvian</b><small>Owner · Personal Brand</small></div></div>{tabs.map(t=><button key={t} className={tab===t?"active":""} onClick={()=>setTab(t)}>{t==="Workspace"?<BriefcaseBusiness size={15}/>:t==="Brand identity"?<Sparkles size={15}/>:t==="Social accounts"?<Instagram size={15}/>:t==="AI & Models"?<WandSparkles size={15}/>:t==="Notifications"?<Bell size={15}/>:<ShieldCheck size={15}/>}{t}<ChevronRight size={13}/></button>)}</aside>
-      <section className="panel settings-content"><div className="settings-content-heading"><div><h3>{tab}</h3><p>Configure how FORIOR Creator OS works for your team.</p></div><span className="muted-chip">Changes are local preview</span></div>
+      <section className="panel settings-content"><div className="settings-content-heading"><div><h3>{tab}</h3><p>Configure how FORIOR Creator OS works for your team.</p></div><span className="muted-chip">Tersimpan otomatis di browser ini</span></div>
         {tab==="Workspace"&&<><div className="settings-field"><label>WORKSPACE NAME</label><input value={workspaceName} onChange={e=>setWorkspaceName(e.target.value)}/><small>This name appears in the workspace switcher.</small></div><div className="settings-field"><label>WORKSPACE TYPE</label><select><option>Personal Brand</option><option>Business Workspace</option><option>Client Project</option></select></div><div className="settings-field"><label>DEFAULT TIMEZONE</label><select><option>Asia/Jakarta (GMT+7)</option><option>Asia/Makassar (GMT+8)</option><option>Asia/Jayapura (GMT+9)</option></select></div><div className="settings-divider"/><div className="settings-option-row"><div><b>Require approval before publishing</b><small>Content must be approved by workspace owner before scheduling or publishing.</small></div><Toggle checked={defaultApproval} onChange={setDefaultApproval}/></div></>}
-        {tab==="Brand identity"&&<><div className="settings-field"><label>BRAND / CREATOR NAME</label><input value={brandName} onChange={e=>setBrandName(e.target.value)}/></div><div className="settings-field"><label>PRIMARY SOCIAL HANDLE</label><input value={handle} onChange={e=>setHandle(e.target.value)}/></div><div className="settings-field"><label>BRAND VOICE</label><select value={tone} onChange={e=>setTone(e.target.value)}><option>Educative, warm & confident</option><option>Premium, minimal & aspirational</option><option>Friendly, conversational & witty</option><option>Professional & informative</option></select></div><div className="settings-field"><label>BRAND GUIDELINES</label><textarea rows={4} defaultValue="Educative but not patronizing. Confident without overclaiming. Friendly and helpful. Keep visual communication premium, minimal, and authentic."/></div><div className="settings-option-row"><div><b>Use workspace brand kit in production</b><small>Apply approved logo, colors, and typography to generated assets.</small></div><Toggle checked={true} onChange={()=>{}}/></div></>}
-        {tab==="Social accounts"&&<div className="connected-accounts">{[{name:"Instagram",user:"@alvian.indonesia",icon:Instagram},{name:"TikTok",user:"@alvian.indonesia",icon:Music2},{name:"YouTube",user:"Alvian Indonesia",icon:Youtube}].map(a=>{const Icon=a.icon;return <div className="connected-account-row" key={a.name}><span><Icon size={18}/></span><div><b>{a.name}</b><small>{a.user}</small></div><em>Not connected</em><button className="outline-button" onClick={()=>alert("OAuth connection will be configured in backend.")}>Connect</button></div>})}<p>Social account connections will use official OAuth permissions. Passwords are never stored in this workspace.</p></div>}
-        {tab==="AI & Models"&&<><div className="settings-field"><label>AI PROVIDER</label><select value={provider} onChange={e=>setProvider(e.target.value)}><option>OpenAI</option><option>Anthropic</option><option>Google Gemini</option><option>Multi-provider routing</option></select></div><div className="settings-field"><label>MODEL ROUTING PRESET</label><select value={model} onChange={e=>setModel(e.target.value)}><option>Auto · Cost efficient</option><option>Balanced · Quality & cost</option><option>Premium · Best quality</option><option>Manual per agent</option></select></div><div className="model-routing-cards"><article><span>LIGHT TASKS</span><b>Classification, tagging, summaries</b><small>Use smaller, low-cost models.</small></article><article><span>CREATIVE TASKS</span><b>Hooks, scripts, content strategy</b><small>Use capable text models only when needed.</small></article><article><span>VISUAL TASKS</span><b>Image and video production</b><small>Call specialized media tools on demand.</small></article></div><div className="settings-option-row"><div><b>Fallback to a lower-cost model</b><small>Retry eligible tasks with an efficient model when limits are reached.</small></div><Toggle checked={true} onChange={()=>{}}/></div><p className="settings-security-note"><ShieldCheck size={15}/> API keys will be stored server-side in encrypted secrets, never in the browser.</p></>}
+        {tab==="Brand identity"&&<><div className="settings-field"><label>BRAND / CREATOR NAME</label><input value={brandName} onChange={e=>setBrandName(e.target.value)}/></div><div className="settings-field"><label>PRIMARY SOCIAL HANDLE</label><input value={handle} onChange={e=>setHandle(e.target.value)}/></div><div className="settings-field"><label>BRAND VOICE</label><select value={tone} onChange={e=>setTone(e.target.value)}><option>Educative, warm & confident</option><option>Premium, minimal & aspirational</option><option>Friendly, conversational & witty</option><option>Professional & informative</option></select></div><div className="settings-field"><label>BRAND GUIDELINES</label><textarea rows={4} value={settings.brandVoice} onChange={e=>setSettings(o=>({...o,brandVoice:e.target.value}))}/><small>Dipakai sebagai gaya bahasa di setiap permintaan AI.</small></div><div className="settings-option-row"><div><b>Use workspace brand kit in production</b><small>Apply approved logo, colors, and typography to generated assets.</small></div><Toggle checked={true} onChange={()=>{}}/></div></>}
+        {tab==="Social accounts"&&<div className="connected-accounts">{[{name:"Instagram",user:"@alvian.indonesia",icon:Instagram},{name:"TikTok",user:"@alvian.indonesia",icon:Music2},{name:"YouTube",user:"Alvian Indonesia",icon:Youtube}].map(a=>{const Icon=a.icon;return <div className="connected-account-row" key={a.name}><span><Icon size={18}/></span><div><b>{a.name}</b><small>{a.user}</small></div><em>Not connected</em><button className="outline-button" onClick={()=>notify("Koneksi akun lewat OAuth resmi membutuhkan server. Untuk bedah akun Instagram, isi token Meta di tab AI & Models.")}>Connect</button></div>})}<p>Social account connections will use official OAuth permissions. Passwords are never stored in this workspace.</p></div>}
+        {tab==="AI & Models"&&<ApiSettingsTab/>}
         {tab==="Notifications"&&<>{[{title:"Email notifications",desc:"Important workspace activity and invitations.",value:emailNotif,change:setEmailNotif},{title:"Approval reminders",desc:"Notify reviewers when content needs their attention.",value:approvalNotif,change:setApprovalNotif},{title:"Weekly performance report",desc:"Receive a summary of content and channel performance.",value:weeklyReport,change:setWeeklyReport}].map(n=><div className="settings-option-row" key={n.title}><div><b>{n.title}</b><small>{n.desc}</small></div><Toggle checked={n.value} onChange={n.change}/></div>)}</>}
         {tab==="Security"&&<><div className="security-summary"><ShieldCheck size={22}/><div><b>Workspace security</b><small>Security controls will be enforced by the backend.</small></div></div>{[{t:"Role-based access control",d:"Restrict projects, assets, and settings by team role."},{t:"Session management",d:"Review active sessions and revoke access."},{t:"Activity audit log",d:"Track approvals, edits, exports, and integration changes."},{t:"Two-factor authentication",d:"Require an additional verification step for team members."}].map(item=><div className="settings-option-row" key={item.t}><div><b>{item.t}</b><small>{item.d}</small></div><span className="muted-chip">Planned</span></div>)}</>}
       </section>
     </div>
-    <div className="module-footer">Settings preview · Controls are interactive UI state only. Persistence, encrypted secrets, OAuth, and access enforcement are backend tasks.</div>
+    <div className="module-footer">Brand, approval, dan API key tersimpan di browser ini. OAuth akun sosial, tim, dan keamanan berbasis peran membutuhkan server.</div>
   </div>;
 }
 
@@ -417,7 +458,15 @@ export default function DashboardPage() {
   const [quickAction, setQuickAction] = useState("");
   const [showAllAgents, setShowAllAgents] = useState(false);
   const [studioBrief,setStudioBrief] = useState<{title:string;account:string;campaign:string;format:string;hook:string}|null>(null);
-  const [pendingIdea,setPendingIdea] = useState("");
+  const [toast,setToast] = useStored<string>("toast","");
+  const [approvals] = useApprovals();
+  const [ideas] = useIdeas();
+  const [leads] = useLeads();
+  const [campaigns] = useStored<Campaign[]>("campaigns",DEFAULT_CAMPAIGNS);
+  const [briefs] = useStored<Record<string,Brief>>("briefs",{});
+  const counts = pipelineCounts(campaigns,briefs);
+  const pendingApprovals = approvals.filter(a=>a.status==="pending").length;
+  const liveCounts: Record<string,number> = { "Ide": ideas.length, "Produksi": counts["Brief ready"]+counts["In production"], "Review": counts["In review"]+pendingApprovals, "Terjadwal": counts["Scheduled"], "Published": counts["Published"] };
 
   const metrics = useMemo(() => {
     if (platform === "TikTok") return [
@@ -493,8 +542,8 @@ export default function DashboardPage() {
         </nav>
 
         <div className="sidebar-bottom">
-          <button className={`nav-item ${activeNav==="Automation"?"active":""}`} onClick={() => setActiveNav("Automation")}><Zap size={18} /><span>Automation</span></button>
-          <button className="nav-item" onClick={() => setActiveNav("Settings")}><Settings size={18} /><span>Settings</span></button>
+          <button className={`nav-item ${activeNav==="Automation"?"active":""}`} onClick={() => { setActiveNav("Automation"); setMobileNav(false); }}><Zap size={18} /><span>Automation</span></button>
+          <button className={`nav-item ${activeNav==="Settings"?"active":""}`} onClick={() => { setActiveNav("Settings"); setMobileNav(false); }}><Settings size={18} /><span>Settings</span></button>
           <div className="sidebar-version">
             <div className="brand-symbol small"><span /><span /></div>
             <span><b>FORIOR Creator OS</b><small>Dashboard Preview · V5</small></span>
@@ -544,14 +593,7 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {activeNav !== "Dashboard" && activeNav !== "Research & Insight" && activeNav !== "Content Plan" && activeNav !== "Production Studio" && activeNav !== "Feed & Carousel" && activeNav !== "Reels & Video" && activeNav !== "Templates" && activeNav !== "Asset Library" && activeNav !== "AI Agent Team" && activeNav !== "Analytics" && activeNav !== "Asset Library" && activeNav !== "Settings" && activeNav !== "Automation" && (
-          <div className="section-notice">
-            <div><b>{activeNav}</b><span>Preview navigasi — modul ini akan dikembangkan pada tahap berikutnya.</span></div>
-            <button onClick={() => setActiveNav("Dashboard")}>Kembali ke Dashboard <ArrowRight size={15} /></button>
-          </div>
-        )}
-
-        {activeNav === "Research & Insight" ? <ResearchPage /> : activeNav === "Content Plan" ? <ContentPlanPage initialIdea={pendingIdea} onOpenProduction={(brief)=>{setStudioBrief(brief);setActiveNav(brief.format==="Reels"?"Reels & Video":"Feed & Carousel");}} /> : activeNav === "AI Agent Team" ? <AIAgentTeamPage /> : activeNav === "Asset Library" ? <AssetLibraryPage /> : activeNav === "Analytics" ? <AnalyticsPage onAddToPlan={(idea)=>{setPendingIdea(idea);setActiveNav("Content Plan");}} /> : activeNav === "Automation" ? <div className="module-page automation-simple"><section className="panel automation-simple-card"><span className="automation-simple-icon"><Zap size={24}/></span><div><h2>Automation</h2><p>Atur pengingat dan workflow sederhana. Trigger otomatis akan diaktifkan setelah backend tersedia.</p></div><button className="primary-button" onClick={()=>setQuickAction("Create automation")}><Plus size={14}/> New automation</button></section><div className="automation-simple-grid"><article><Clock3 size={18}/><b>Content reminder</b><p>Pengingat jadwal konten yang akan tayang.</p><span>Coming soon</span></article><article><MessageCircle size={18}/><b>Approval reminder</b><p>Pengingat untuk brief yang menunggu review.</p><span>Coming soon</span></article></div></div> : activeNav === "Settings" ? <SettingsPage /> : ["Production Studio","Feed & Carousel","Reels & Video","Templates"].includes(activeNav) ? <ProductionStudioPage key={activeNav} brief={studioBrief} initialTab={activeNav === "Reels & Video" ? "Reels & Video" : activeNav === "Templates" ? "Templates" : "Feed & Carousel"} /> : <div className="dashboard-content">
+        {activeNav === "Research & Insight" ? <ResearchPage /> : activeNav === "Content Plan" ? <ContentPlanPage onOpenProduction={(brief)=>{setStudioBrief(brief);setActiveNav(brief.format==="Reels"?"Reels & Video":"Feed & Carousel");}} /> : activeNav === "AI Agent Team" ? <AIAgentTeamPage /> : activeNav === "Asset Library" ? <AssetLibraryPage /> : activeNav === "Analytics" ? <AnalyticsPage onAddToPlan={(idea)=>{addIdea(idea);notify("Ide masuk ke inbox ide. Buka campaign lalu pilih slot.");setActiveNav("Content Plan");}} /> : activeNav === "Inbox & Leads" ? <InboxLeadsPage /> : activeNav === "Shared Plan" ? <SharedPlanPage /> : activeNav === "Automation" ? <div className="module-page automation-simple"><section className="panel automation-simple-card"><span className="automation-simple-icon"><Zap size={24}/></span><div><h2>Automation</h2><p>Atur pengingat dan workflow sederhana. Trigger otomatis akan diaktifkan setelah backend tersedia.</p></div><button className="primary-button" onClick={()=>notify("Otomasi terjadwal membutuhkan server yang selalu aktif — belum tersedia di versi statis ini.")}><Plus size={14}/> New automation</button></section><div className="automation-simple-grid"><article><Clock3 size={18}/><b>Content reminder</b><p>Pengingat jadwal konten yang akan tayang.</p><span>Coming soon</span></article><article><MessageCircle size={18}/><b>Approval reminder</b><p>Pengingat untuk brief yang menunggu review.</p><span>Coming soon</span></article></div></div> : activeNav === "Settings" ? <SettingsPage /> : ["Production Studio","Feed & Carousel","Reels & Video","Templates"].includes(activeNav) ? <ProductionStudioPage key={activeNav} brief={studioBrief} initialTab={activeNav === "Reels & Video" ? "Reels & Video" : activeNav === "Templates" ? "Templates" : "Feed & Carousel"} /> : <div className="dashboard-content">
           <section className="metrics-row">
             {metrics.map((metric) => {
               const Icon = metric.icon;
@@ -579,7 +621,7 @@ export default function DashboardPage() {
                 <span className="pill pill-light">Next Content</span>
                 <h2>Behind the Shoot:<br />Villa Puncak</h2>
                 <p>Proses pemotretan &<br />setup lighting</p>
-                <button onClick={() => setQuickAction("Brief konten Behind the Shoot: Villa Puncak")}>Lihat Brief <ArrowRight size={15} /></button>
+                <button onClick={() => setActiveNav("Content Plan")}>Lihat Brief <ArrowRight size={15} /></button>
               </div>
             </article>
 
@@ -590,14 +632,19 @@ export default function DashboardPage() {
                   const Icon = step.icon;
                   return <div className="pipeline-step-wrap" key={step.label}>
                     <div className={`pipeline-step ${step.current ? "current" : ""} ${step.done ? "done" : ""}`}>
-                      <Icon size={19} /><span>{step.label}</span><b>{step.count}</b>
+                      <Icon size={19} /><span>{step.label}</span><b>{liveCounts[step.label]}</b>
                     </div>
                     {i < 4 && <ArrowRight className="step-arrow" size={14} />}
                   </div>;
                 })}
               </div>
-              <div className="pipeline-foot"><span><i className="dot purple-dot" /> 6 konten sedang dikerjakan</span><span>4 menunggu approval</span></div>
+              <div className="pipeline-foot"><span><i className="dot purple-dot" /> {liveCounts["Produksi"]} konten sedang dikerjakan</span><span>{pendingApprovals} menunggu approval</span></div>
             </article>
+          </section>
+
+          <section className="x-dash-row">
+            <article className="panel"><div className="panel-heading"><div><CheckCircle2 size={19} /><h3>Butuh keputusan Anda</h3></div><button className="text-link" onClick={() => setActiveNav("AI Agent Team")}>Semua approval <ArrowRight size={15} /></button></div><ApprovalList limit={3} empty="Tidak ada yang menunggu. Hasil agent dan konten yang diajukan akan muncul di sini." /></article>
+            <article className="panel"><div className="panel-heading"><div><MessageCircle size={19} /><h3>Leads FORIOR dari sosmed</h3></div><button className="text-link" onClick={() => setActiveNav("Inbox & Leads")}>Buka inbox <ArrowRight size={15} /></button></div><div className="x-leads"><div><b>{leads.length}</b><span>total lead</span></div><div><b>{leads.filter(l=>l.status==="Baru").length}</b><span>belum dibalas</span></div><div><b>{leads.filter(l=>l.status==="Deal").length}</b><span>deal</span></div></div><AiCostBadge /></article>
           </section>
 
           <section className="bottom-row">
@@ -630,16 +677,18 @@ export default function DashboardPage() {
             <article className="panel insight-panel">
               <div className="panel-heading"><div><ChartNoAxesCombined size={19} /><h3>Key Insight</h3></div><span className="insight-badge">AI Insight</span></div>
               <div className="insight-body"><span className="bulb"><Lightbulb size={24} /></span><div><b>Behind the Scene</b><p>Reels dengan tema behind the scene memiliki engagement <strong>+68%</strong> lebih tinggi.</p></div></div>
-              <button className="insight-link" onClick={() => setQuickAction("Analisis insight Behind the Scene")}>Lihat rekomendasi <ArrowRight size={14} /></button>
+              <button className="insight-link" onClick={() => setActiveNav("Analytics")}>Lihat rekomendasi <ArrowRight size={14} /></button>
             </article>
           </section>
 
           <footer className="dashboard-footer">
             <span>FORIOR Creator OS <i>·</i> Dashboard Preview</span>
-            <span>Data ilustrasi untuk UI preview <i>·</i> Last synced just now</span>
+            <span>Reach, engagement, dan followers masih ilustrasi <i>·</i> pipeline, approval, dan leads adalah data Anda</span>
           </footer>
         </div>}
       </section>
+
+      {toast && <div className="x-toast" role="status"><span>{toast}</span><button onClick={() => setToast("")} aria-label="Tutup pesan"><X size={16} /></button></div>}
 
       {quickAction && (
         <div className="modal-backdrop" onClick={() => setQuickAction("")}>
