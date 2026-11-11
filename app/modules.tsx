@@ -5,7 +5,7 @@ import { Check, Copy, Eye, EyeOff, FileText, Loader2, MessageCircle, Plus, Shiel
 import { askAI, type Tier } from "./lib/ai";
 import { monthKey, rupiah } from "./lib/logic";
 import { parseLines } from "./lib/logic";
-import { aiReady, CLOUD_OFF, saveSecret, signInWithEmail, signOut, type Cloud } from "./lib/cloud";
+import { aiReady, CLOUD_OFF, saveSecret, signInWithEmail, signInWithPassword, signOut, signUpWithPassword, type Cloud } from "./lib/cloud";
 import { addApproval, useApprovals, useIdeas, useLeads, useSettings, useStored, useUsage, writeStored, type Lead } from "./lib/store";
 
 /** Runs an AI action and tracks busy/error state for the button that triggered it. */
@@ -66,12 +66,25 @@ export function useAiReady() { const [cloud] = useCloud(); const [settings] = us
 
 export function AccountPanel() {
   const [cloud] = useCloud();
-  const [email, setEmail] = useState(""), [sent, setSent] = useState(false);
+  const [mode, setMode] = useState<"password" | "signup" | "link">("password");
+  const [email, setEmail] = useState(""), [password, setPassword] = useState(""), [notice, setNotice] = useState("");
   const ai = useAI();
   if (cloud.email) return <section className="f-account"><div><b>Masuk sebagai {cloud.email}</b><small>{cloud.sync === "syncing" ? "Menyinkronkan…" : cloud.sync === "error" ? `Sinkronisasi gagal: ${cloud.error}` : "Data tersinkron ke database. Bisa dibuka dari perangkat lain."}</small></div><button className="outline-button" onClick={() => signOut()}>Keluar</button></section>;
+  const validEmail = () => { if (!/^\S+@\S+\.\S+$/.test(email.trim())) throw new Error("Email belum valid."); };
+  const submit = () => ai.run("login", async () => {
+    validEmail(); setNotice("");
+    if (mode === "link") { await signInWithEmail(email.trim()); setNotice(`Link masuk dikirim ke ${email.trim()}. Buka email itu di perangkat ini.`); return; }
+    if (password.length < 8) throw new Error("Kata sandi minimal 8 karakter.");
+    if (mode === "password") { await signInWithPassword(email.trim(), password); return; }
+    const needsConfirm = await signUpWithPassword(email.trim(), password);
+    if (needsConfirm) { setNotice("Akun dibuat. Klik link konfirmasi di email Anda — kalau halaman tujuannya error, abaikan saja, akun tetap terkonfirmasi. Lalu kembali ke sini dan pilih “Masuk”."); setMode("password"); }
+  });
   return <section className="f-account"><div><b>Masuk untuk menyimpan ke database</b><small>Data dan API key tersimpan aman di server, dan sama di ponsel maupun laptop. Tanpa masuk, data hanya ada di browser ini.</small></div>
-    {sent ? <p className="x-ok">Link masuk dikirim ke {email}. Buka email itu di perangkat ini.</p> : <div className="x-row"><input type="email" aria-label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="nama@email.com" autoComplete="email" /><AiButton className="primary-button" label="Kirim link masuk" busyLabel="Mengirim…" busy={ai.busy === "login"} onClick={() => ai.run("login", async () => { if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Email belum valid."); await signInWithEmail(email.trim()); setSent(true); })} /></div>}
-    <AiError message={ai.error} /></section>;
+    <div className="f-chips f-account-modes" role="tablist">{([["password", "Masuk"], ["signup", "Buat akun"], ["link", "Link email"]] as const).map(([m, label]) => <button key={m} role="tab" aria-selected={mode === m} className={mode === m ? "active" : ""} onClick={() => { setMode(m); setNotice(""); }}>{label}</button>)}</div>
+    <div className="f-account-form"><input type="email" aria-label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="nama@email.com" autoComplete="email" />
+      {mode !== "link" && <input type="password" aria-label="Kata sandi" value={password} onChange={e => setPassword(e.target.value)} placeholder="Kata sandi (min. 8 karakter)" autoComplete={mode === "signup" ? "new-password" : "current-password"} onKeyDown={e => { if (e.key === "Enter") submit(); }} />}
+      <AiButton className="primary-button" label={mode === "password" ? "Masuk" : mode === "signup" ? "Buat akun" : "Kirim link masuk"} busyLabel="Memproses…" busy={ai.busy === "login"} onClick={submit} /></div>
+    {notice && <p className="x-ok">{notice}</p>}<AiError message={ai.error} /></section>;
 }
 
 /** A key field: saved encrypted on the server when signed in, otherwise kept in this browser. */

@@ -1977,3 +1977,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .f-account { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; padding:14px; margin-bottom:16px; border-radius:14px; background:#f3eeff; border:1px solid #dccff7; }
 .f-account > div:first-child { flex:1 1 260px; } .f-account b { display:block; font-size:15px; } .f-account small { display:block; margin-top:2px; font-size:13px; color:#55496f; line-height:1.45; }
 .f-account .x-row { flex:1 1 320px; } .f-account .x-ok, .f-account .x-error { flex-basis:100%; margin:0; }
+
+.f-account-modes { flex-basis:100%; }
+.f-account-form { flex-basis:100%; display:flex; flex-wrap:wrap; gap:10px; }
+.f-account-form input { flex:1 1 220px; min-height:44px; padding:0 12px; border:1px solid #ddd5f0; border-radius:10px; font:inherit; font-size:15px; background:#fff; color:var(--ink); }
+.f-account-form .primary-button { flex:0 1 auto; }
+@media (max-width:800px) { .f-account-form .primary-button { flex:1 1 100%; } }
