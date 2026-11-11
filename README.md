@@ -32,15 +32,27 @@ One content item moves through six stages — Ide → Brief → Produksi → Rev
 5. **Asset Library** lists Google Drive folders directly. Files stay in Drive; only links are stored and attached to content.
 6. **Dashboard** shows the pipeline counts, pending approvals, leads and AI cost.
 
-## Setup (Settings → AI & Models)
+## Backend (Supabase) and hosting (Vercel)
 
-- **Anthropic API key** — required for every AI feature. Choose the routine and creative models and a monthly rupiah budget.
-- **Google API key** — for Asset Library. Enable "Google Drive API" for the key, and share each folder as "Anyone with the link". Restrict the key to your site's HTTP referrer.
-- **Meta access token + Instagram user ID** — optional, for automatic Instagram profile audits.
+- **Supabase project `forior-creator-os`** (region Singapore).
+  - `public.app_state` — one row per user and store key; RLS limits every user to their own rows. The browser store syncs to it while signed in.
+  - `private.user_secrets` + Vault — API keys encrypted at rest, readable only by the Edge Function.
+  - Edge Function `creator-api` — makes AI (Anthropic), Google Drive and Instagram calls with the signed-in user's stored keys.
+  - Schema: `supabase/migrations/`. Function source: `supabase/functions/creator-api/`.
+- **Vercel project `forior-creator-os`** — builds `main` for production and every branch push as a preview. GitHub Pages keeps working under `/social`.
+
+### One-time setup
+
+1. Supabase → Authentication → URL Configuration: set **Site URL** to the Vercel production URL and add the GitHub Pages and Vercel preview URLs under **Redirect URLs** (magic-link sign-in returns there).
+2. Open the app → Settings → AI & Models → **Masuk** with your email and open the link from the same device.
+3. Still in AI & Models, save the **Anthropic API key** (required), **Google API key** (Asset Library; enable "Google Drive API", share folders as "Anyone with the link") and optionally the Meta token + Instagram user ID. They are stored encrypted on the server.
+4. After your own account exists, turn off new sign-ups in Supabase → Authentication → Sign In / Providers so nobody else can create an account.
+
+Signed out, the app still works from browser storage with keys kept in that browser.
 
 ## Limitations
 
-- No backend: data lives in one browser and is not shared between devices or team members. Keys are stored in that browser only and sent directly to the provider.
+- Sync is last-write-wins per store key; editing the same thing on two devices at once keeps the later save.
 - Automatic mode only runs while the app is open in a browser tab.
 - Video rendering, publishing/scheduling to platforms and automatic inboxes need platform APIs and a server. PNG export of a slide falls back to no photo when the image host blocks canvas export.
 - Reach/engagement/followers and the trend list are illustrative.
