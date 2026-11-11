@@ -2,7 +2,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { costIdr, monthKey } from "./logic";
-import { DEFAULT_SETTINGS, EMPTY_USAGE, readStored, writeStored, type Settings, type Usage } from "./store";
+import { EMPTY_USAGE, getSettings, readStored, writeStored, type Usage } from "./store";
 
 export type Tier = "light" | "creative";
 
@@ -19,7 +19,7 @@ function currentUsage(): Usage {
  * The key comes from Settings and is sent straight from this browser to Anthropic.
  */
 export async function askAI({ tier, role, prompt, maxTokens = 4000 }: { tier: Tier; role: string; prompt: string; maxTokens?: number }): Promise<string> {
-  const settings = readStored<Settings>("settings", DEFAULT_SETTINGS);
+  const settings = getSettings();
   if (!settings.apiKey.trim()) throw new AiSetupError("API key belum diisi. Buka Settings → AI & Models.");
   const usage = currentUsage();
   if (settings.budgetIdr > 0 && usage.idr >= settings.budgetIdr) throw new AiSetupError("Batas biaya AI bulan ini sudah tercapai. Naikkan batas di Settings → AI & Models.");
@@ -67,7 +67,7 @@ export type IgPost = { caption: string; likes: number; comments: number; type: s
  * Needs the user's own Meta access token + Instagram user ID from Settings.
  */
 export async function fetchInstagramPosts(username: string): Promise<{ followers: number; posts: IgPost[] }> {
-  const { metaToken, igUserId } = readStored<Settings>("settings", DEFAULT_SETTINGS);
+  const { metaToken, igUserId } = getSettings();
   if (!metaToken.trim() || !igUserId.trim()) throw new AiSetupError("Token Meta belum diisi.");
   const fields = `business_discovery.username(${username}){followers_count,media.limit(30){caption,like_count,comments_count,media_type,timestamp}}`;
   const response = await fetch(`https://graph.facebook.com/${encodeURIComponent(igUserId.trim())}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(metaToken.trim())}`);

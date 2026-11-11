@@ -78,6 +78,8 @@ export function ApiSettingsTab() {
     <div className="model-routing-cards"><article><span>BULAN INI</span><b>{rupiah(usage.idr)}</b><small>{usage.calls} panggilan AI</small></article><article><span>TOKEN MASUK</span><b>{usage.inputTokens.toLocaleString("id-ID")}</b><small>prompt + konteks brand</small></article><article><span>TOKEN KELUAR</span><b>{usage.outputTokens.toLocaleString("id-ID")}</b><small>hasil tulisan</small></article></div>
     <div className="settings-divider" />
     <div className="settings-field"><label htmlFor="meta">META ACCESS TOKEN (opsional — bedah akun Instagram otomatis)</label><input id="meta" type="password" value={settings.metaToken} onChange={e => set("metaToken", e.target.value)} placeholder="EAAG…" autoComplete="off" /><small>Token dari Meta for Developers dengan izin instagram_basic. Hanya bisa membaca akun Business/Creator publik.</small></div>
+    <div className="settings-divider" />
+    <div className="settings-field"><label htmlFor="gkey">GOOGLE API KEY (Asset Library — membaca folder Google Drive)</label><input id="gkey" type="password" value={settings.googleApiKey} onChange={e => set("googleApiKey", e.target.value)} placeholder="AIza…" autoComplete="off" /><small>Buat di Google Cloud Console → Credentials → API key, lalu aktifkan “Google Drive API”. Folder harus dibagikan “Siapa saja yang memiliki link”. Batasi key ke domain situs Anda (HTTP referrer).</small></div>
     <div className="settings-field"><label htmlFor="igid">INSTAGRAM USER ID (akun Business/Creator Anda)</label><input id="igid" value={settings.igUserId} onChange={e => set("igUserId", e.target.value)} placeholder="1784…" /><small>Tanpa dua isian ini, Bedah Akun tetap berjalan dari catatan/caption yang Anda tempel. TikTok belum punya jalur resmi untuk membaca akun lain.</small></div>
   </>;
 }
@@ -123,34 +125,3 @@ export async function runAgentTask(agent: { name: string; group: string }, task:
 }
 
 export const notify = (message: string) => writeStored<string>("toast", message, "");
-
-export const PLAN_STATUSES = ["Planned", "Brief ready", "In production", "In review", "Scheduled", "Published"];
-type PlanItem = { day: number; title: string; format: string; status: string; hook: string; caption: string; visualDirection: string; cta: string };
-type PlanPatch = Partial<Omit<PlanItem, "day">>;
-
-/** AI + workflow actions for the selected content brief: status, AI brief, AI titles, approval, idea inbox. */
-export function PlanAI({ account, campaign, goal, item, total, onPatch, onTitles }: { account: string; campaign: string; goal: string; item: PlanItem; total: number; onPatch: (patch: PlanPatch) => void; onTitles: (rows: { title: string; format: string }[]) => void }) {
-  const [ideas, setIdeas] = useIdeas();
-  const ai = useAI();
-  const field = (text: string, name: string) => new RegExp(`^${name}\\s*:\\s*(.+)$`, "im").exec(text)?.[1]?.trim();
-  const write = () => ai.run("brief", async () => {
-    const text = await askAI({ tier: "creative", role: "Content Writer", prompt: `Tulis brief konten ${item.format} untuk akun ${account}, campaign "${campaign}" (tujuan: ${goal}).\nTopik: ${item.title}\n\nJawab tepat lima baris berlabel, masing-masing satu baris:\nJUDUL: (maksimal 9 kata)\nHOOK: (kalimat pembuka)\nVISUAL: (arahan visual dan urutan scene/slide, dipisah titik koma)\nCAPTION: (caption siap pakai)\nCTA: (ajakan singkat)` });
-    const patch: PlanPatch = { title: field(text, "JUDUL"), hook: field(text, "HOOK"), visualDirection: field(text, "VISUAL"), caption: field(text, "CAPTION"), cta: field(text, "CTA") };
-    if (!patch.hook) throw new Error("Jawaban model tidak sesuai format. Coba lagi.");
-    onPatch({ ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v)), status: "Brief ready" });
-  });
-  const titles = () => ai.run("plan", async () => {
-    const text = await askAI({ tier: "creative", role: "Creative Strategist", maxTokens: 6000, prompt: `Susun ${total} judul konten untuk akun ${account}, campaign "${campaign}" (tujuan: ${goal}). Campur edukasi, portofolio/before-after, behind the scenes, personal, dan promo jasa. Satu judul per baris dengan format: Reels | judul  atau  Carousel | judul  atau  Feed | judul. Tanpa penomoran, tanpa teks lain.` });
-    const rows = parseLines(text).map(l => l.split("|").map(x => x.trim())).filter(r => r.length === 2 && r[1]).slice(0, total);
-    if (rows.length < 5) throw new Error("Jawaban model tidak sesuai format. Coba lagi.");
-    onTitles(rows.map(r => ({ title: r[1], format: /carousel/i.test(r[0]) ? "Carousel" : /feed/i.test(r[0]) ? "Feed" : "Reels" })));
-  });
-  return <div className="x-tools">
-    <div className="x-row"><label htmlFor="slot-status">STATUS</label><select id="slot-status" value={item.status} onChange={e => onPatch({ status: e.target.value })}>{PLAN_STATUSES.map(s => <option key={s}>{s}</option>)}</select>
-      <AiButton className="outline-button" label="Tulis brief dengan AI" busyLabel="Menulis…" busy={ai.busy === "brief"} onClick={write} />
-      <AiButton className="outline-button" label={`Susun ${total} judul dengan AI`} busyLabel="Menyusun…" busy={ai.busy === "plan"} onClick={titles} />
-      <button className="outline-button" onClick={() => { addApproval({ title: `${item.format} — ${item.title}`, by: "Content Plan", type: "Brief", body: `Hook: ${item.hook}\n\nVisual: ${item.visualDirection}\n\nCaption: ${item.caption}\n\nCTA: ${item.cta}` }); onPatch({ status: "In review" }); }}><Check size={14} /> Ajukan approval</button></div>
-    <AiError message={ai.error} />
-    {ideas.length > 0 && <div className="x-ideas"><label>INBOX IDE ({ideas.length}) — dari Riset, Analitik, dan Bank Hook</label>{ideas.map(idea => <div key={idea}><span>{idea}</span><button className="outline-button" onClick={() => { onPatch({ title: idea, hook: "Kembangkan dari ide: " + idea, status: "Planned" }); setIdeas(old => old.filter(x => x !== idea)); }}>Pakai di konten {item.day}</button><button className="outline-button x-danger" aria-label="Hapus ide" onClick={() => setIdeas(old => old.filter(x => x !== idea))}><Trash2 size={14} /></button></div>)}</div>}
-  </div>;
-}

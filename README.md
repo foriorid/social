@@ -21,26 +21,35 @@ npm run dev
 - Analytics: illustrative metrics plus a community inbox for comments / mentions that can be sent into Content Plan.
 - Automation: intentionally simplified reminder placeholders.
 
-## What works now
+## How it fits together
 
-- **Persistence:** accounts, campaigns, briefs, ideas, approvals, leads, hooks, watchlist, Drive folders and settings are saved in this browser (localStorage).
-- **AI (Anthropic):** enter your API key in **Settings → AI & Models**. Routine tasks use the cheap model, creative tasks the stronger one; both are selectable. A monthly rupiah budget stops AI calls when reached, and usage/cost is tracked per month.
-- **AI Agent Team:** assigning a task runs it for real and files the result in the approval queue (also shown on the Dashboard).
-- **Research & Insight → Bedah Akun:** paste an Instagram/TikTok profile link. With a Meta access token + Instagram user ID (Settings) public posts of Business/Creator accounts are fetched; otherwise paste captions/notes. Ideas from the analysis go to the idea inbox.
-- **Content Plan:** AI can draft all titles of a campaign or a single brief (hook, visual direction, caption, CTA); each brief has a status that feeds the Dashboard pipeline; ideas can be pulled from the inbox; briefs can be sent to approval.
-- **Production Studio:** AI headline/supporting text, zoom, submit to approval, AI editing suggestions for video.
-- **Inbox & Leads:** log leads manually, draft replies with AI, track status.
+One content item moves through six stages — Ide → Brief → Produksi → Review → Terjadwal → Tayang — and every page reads and writes that same item:
+
+1. **Research & Insight** and **Analytics** send ideas to the idea inbox.
+2. **Content Plan** holds campaigns per account. Each content item has a full brief (goal, key message, hook, CTA, visual direction, asset needs, caption, hashtags) and a storyboard: scenes for video, slides for carousel. Board, list and calendar views; share link and HTML/PDF export.
+3. **AI Agent Team** runs a fixed pipeline per content item: Strategist (campaign titles) → Content Writer (brief + storyboard) → Designer / Video Editor (production package) → Social Media Manager (final caption, hashtags, schedule) → your approval. Run it manually for N items, or switch on automatic mode for a campaign (works while the app is open, capped per session and by the monthly budget).
+4. **Production Studio** works from the storyboard: slide editor with templates and PNG export, video scene board with script copy and `.srt` subtitles, production package, caption.
+5. **Asset Library** lists Google Drive folders directly. Files stay in Drive; only links are stored and attached to content.
+6. **Dashboard** shows the pipeline counts, pending approvals, leads and AI cost.
+
+## Setup (Settings → AI & Models)
+
+- **Anthropic API key** — required for every AI feature. Choose the routine and creative models and a monthly rupiah budget.
+- **Google API key** — for Asset Library. Enable "Google Drive API" for the key, and share each folder as "Anyone with the link". Restrict the key to your site's HTTP referrer.
+- **Meta access token + Instagram user ID** — optional, for automatic Instagram profile audits.
 
 ## Limitations
 
-- No backend: data lives in one browser and is not shared between devices or team members. The API key is stored in that browser only and sent directly to the API provider — do not use a shared computer.
-- Reach/engagement/followers, the trend list and agent "working" statuses are illustrative. Live metrics, automatic inboxes, publishing/scheduling, file upload and video rendering need platform APIs and a server.
-- The Meta (Instagram Business Discovery) call has not been tested against a live token.
+- No backend: data lives in one browser and is not shared between devices or team members. Keys are stored in that browser only and sent directly to the provider.
+- Automatic mode only runs while the app is open in a browser tab.
+- Video rendering, publishing/scheduling to platforms and automatic inboxes need platform APIs and a server. PNG export of a slide falls back to no photo when the image host blocks canvas export.
+- Reach/engagement/followers and the trend list are illustrative.
+- The Google Drive and Meta calls were tested against mocked responses, not live keys.
 
 ## Development
 
 ```bash
-npm test        # unit tests for the pure helpers
+npm test        # unit tests for the pure helpers and pipeline logic
 npm run build   # static export to out/
 ```
 
