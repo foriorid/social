@@ -1946,3 +1946,40 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .top-actions .select-button { font-size:0 !important; width:44px; padding:0; gap:0; }
   .top-actions .select-button svg:first-child { width:18px; height:18px; }
 }
+
+/* ---------- Header: account buttons pinned top-right, filters only on Dashboard ---------- */
+.topbar { display:flex; align-items:flex-start; gap:12px; }
+.page-heading { flex:1 1 auto; min-width:0; }
+.top-filters, .top-account { display:flex; align-items:center; gap:10px; flex:none; }
+.avatar-profile { display:grid; place-items:center; padding:0; cursor:pointer; font:inherit; font-weight:700; }
+.floating-menu { z-index:150; }
+.notification-menu { width:min(300px, calc(100vw - 24px)); }
+.notification-menu > button { justify-content:flex-start; gap:10px; margin-top:6px; font-size:14px; line-height:1.45; color:#4b425b; }
+.notification-menu > button .notice-dot { flex:none; margin-top:7px; }
+.notification-menu > p { font-size:14px; }
+.profile-menu { width:min(260px, calc(100vw - 24px)); }
+.profile-menu > button { font-size:14px; min-height:44px; }
+.profile-head { padding:8px 10px 10px; border-bottom:1px solid #eee8f5; margin-bottom:6px; }
+.profile-head b { display:block; font-size:15px; } .profile-head small { font-size:13px; color:var(--muted); }
+@media (max-width:800px) {
+  .topbar { flex-wrap:wrap; align-items:flex-start; }
+  .page-heading { flex:1 1 0; order:1; }
+  .mobile-menu { order:0; }
+  .top-account { order:2; gap:8px; }
+  .top-filters { order:3; flex:1 1 100%; flex-wrap:wrap; gap:8px; }
+  .top-actions { display:none; }
+  .top-filters .select-button { font-size:14px !important; width:auto; padding:0 12px; gap:6px; }
+  .top-filters .select-button svg:last-child { display:inline-block; }
+  .top-account .icon-button, .top-account .avatar-profile { width:44px; height:44px; }
+}
+@media (max-width:800px) { .top-filters .floating-menu { left:0; right:auto; } }
+
+.f-account { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; padding:14px; margin-bottom:16px; border-radius:14px; background:#f3eeff; border:1px solid #dccff7; }
+.f-account > div:first-child { flex:1 1 260px; } .f-account b { display:block; font-size:15px; } .f-account small { display:block; margin-top:2px; font-size:13px; color:#55496f; line-height:1.45; }
+.f-account .x-row { flex:1 1 320px; } .f-account .x-ok, .f-account .x-error { flex-basis:100%; margin:0; }
+
+.f-account-modes { flex-basis:100%; }
+.f-account-form { flex-basis:100%; display:flex; flex-wrap:wrap; gap:10px; }
+.f-account-form input { flex:1 1 220px; min-height:44px; padding:0 12px; border:1px solid #ddd5f0; border-radius:10px; font:inherit; font-size:15px; background:#fff; color:var(--ink); }
+.f-account-form .primary-button { flex:0 1 auto; }
+@media (max-width:800px) { .f-account-form .primary-button { flex:1 1 100%; } }

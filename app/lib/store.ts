@@ -7,6 +7,9 @@ const PREFIX = "forior-os:";
 const cache = new Map<string, unknown>();
 const fallbacks = new Map<string, unknown>();
 const listeners = new Set<() => void>();
+const writeHooks = new Set<(key: string, value: unknown) => void>();
+/** Lets the cloud sync observe every write without the store depending on it. */
+export function onStoreWrite(hook: (key: string, value: unknown) => void) { writeHooks.add(hook); }
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
@@ -35,6 +38,7 @@ export function writeStored<T>(key: string, next: T | ((old: T) => T), initial: 
   cache.set(key, value);
   try { window.localStorage.setItem(PREFIX + key, JSON.stringify(value)); } catch { /* storage full or blocked: state still works for this session */ }
   listeners.forEach(l => l());
+  writeHooks.forEach(h => h(key, value));
 }
 
 /** useState that survives reloads and stays in sync across every component using the same key. */
