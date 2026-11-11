@@ -45,7 +45,7 @@ One content item moves through six stages — Ide → Brief → Produksi → Rev
 
 1. Supabase → Authentication → URL Configuration: set **Site URL** to the Vercel production URL and add the GitHub Pages and Vercel preview URLs under **Redirect URLs** (magic-link sign-in returns there).
 2. Open the app → Settings → AI & Models → **Masuk** with your email and open the link from the same device.
-3. Still in AI & Models, save the **Anthropic API key** (required), **Google API key** (Asset Library; enable "Google Drive API", share folders as "Anyone with the link") and optionally the Meta token + Instagram user ID. They are stored encrypted on the server.
+3. Still in AI & Models, save the **Anthropic API key** (required), **Google API key** (Asset Library; enable "Google Drive API", restrict the key to that API only and leave application restrictions at *None* — the server makes the calls, so a website restriction blocks them; share folders as "Anyone with the link") and optionally the Meta token + Instagram user ID. They are stored encrypted on the server.
 4. After your own account exists, turn off new sign-ups in Supabase → Authentication → Sign In / Providers so nobody else can create an account.
 
 Signed out, the app still works from browser storage with keys kept in that browser.
