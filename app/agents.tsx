@@ -53,7 +53,7 @@ async function runTask(task: Task) {
   }
 }
 
-let ranThisSession = 0;
+let autoStarted = 0; // content items picked up by automatic mode since the page was opened
 
 /** Mount once at the app root: runs queued tasks one at a time and, in automatic mode, feeds the queue. */
 export function useAgentRunner() {
@@ -66,18 +66,17 @@ export function useAgentRunner() {
     if (busy.current) return;
     const next = [...tasks].reverse().find(t => t.status === "queued");
     if (!next) {
-      if (!settings.autoRun || !settings.apiKey || ranThisSession >= settings.autoLimit) return;
+      if (!settings.autoRun || !settings.apiKey || autoStarted >= settings.autoLimit) return;
       for (const c of plan.campaigns) {
         if (!c.auto) continue;
         const item = c.items.find(x => nextStep(x) && !tasks.some(t => t.campaignId === c.id && t.day === x.day && t.status === "failed"));
-        if (item && enqueue(c.id, item.day, true)) return;
+        if (item && enqueue(c.id, item.day, true)) { autoStarted++; return; }
       }
       return;
     }
     busy.current = true;
     setTasks(old => old.map(t => (t.id === next.id ? { ...t, status: "running" } : t)));
     runTask(next).then(() => {
-      ranThisSession++;
       setTasks(old => old.map(t => (t.id === next.id ? { ...t, status: "done", error: undefined } : t)));
       if (next.chain && next.kind !== "plan") enqueue(next.campaignId, next.day, true);
     }).catch(error => {
@@ -105,7 +104,7 @@ export function AgentsPage() {
       <div><span className="module-eyebrow"><Sparkles size={14} /> CARA KERJA TIM</span><h2>{settings.autoRun ? "Mode otomatis aktif" : "Mode manual"}</h2><p>{settings.autoRun ? "Agen menggarap campaign yang ditandai otomatis, satu konten demi satu, sampai tahap approval. Berjalan selama aplikasi ini terbuka." : "Agen hanya bekerja saat Anda memberi tugas. Hasilnya selalu berhenti di approval Anda."}</p></div>
       <div className="f-mode-controls">
         <button className={settings.autoRun ? "outline-button" : "primary-button"} onClick={() => setSettings(o => ({ ...o, autoRun: !o.autoRun }))}>{settings.autoRun ? <><Pause size={15} /> Matikan otomatis</> : <><Zap size={15} /> Nyalakan otomatis</>}</button>
-        <label htmlFor="autolimit">Maks. tugas otomatis per sesi</label><input id="autolimit" type="number" min={1} max={100} value={settings.autoLimit} onChange={e => setSettings(o => ({ ...o, autoLimit: Math.max(1, Number(e.target.value) || 1) }))} />
+        <label htmlFor="autolimit">Maks. konten otomatis per sesi</label><input id="autolimit" type="number" min={1} max={100} value={settings.autoLimit} onChange={e => setSettings(o => ({ ...o, autoLimit: Math.max(1, Number(e.target.value) || 1) }))} />
       </div>
       {!settings.apiKey && <p className="x-error">API key belum diisi. Buka Settings → AI & Models agar agen bisa bekerja.</p>}
     </section>

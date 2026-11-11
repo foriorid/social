@@ -12,7 +12,7 @@ import {
   MessageSquareText, ChartLine, Lightbulb as LightbulbIcon, Cloud, Database, UploadCloud, Music2, UserCircle2, UserPlus, History, ShieldCheck, Info, ExternalLink, FolderPlus, AtSign, Zap
 } from "lucide-react";
 
-import { AiButton, AiCostBadge, AiError, ApiSettingsTab, ApprovalList, InboxLeadsPage, ModelRouterPanel, PlanAI, notify, runAgentTask, useAI } from "./modules";
+import { AiButton, AiCostBadge, AiError, ApiSettingsTab, ApprovalList, InboxLeadsPage, ModelRouterPanel, notify, runAgentTask, useAI } from "./modules";
 import { askAI, fetchInstagramPosts } from "./lib/ai";
 import { parseIdeas, parseLines, parseProfile } from "./lib/logic";
 import { addApproval, addIdea, useApprovals, useIdeas, useLeads, useSettings, useStored } from "./lib/store";

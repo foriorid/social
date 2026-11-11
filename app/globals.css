@@ -1932,3 +1932,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .modal-backdrop { align-items:flex-end; padding:0; }
   .quick-modal { width:100%; max-width:none; max-height:92vh; overflow-y:auto; border-radius:20px 20px 0 0; }
 }
+.modal-backdrop { z-index:130; }
+@media (max-width:800px) { .quick-modal { padding-bottom:calc(24px + env(safe-area-inset-bottom)); } }
+/* Tailwind's reset makes svg block-level, which pushed button icons onto their own line. */
+.primary-button, .outline-button, .assistant-action { display:inline-flex; align-items:center; justify-content:center; gap:8px; text-align:center; text-decoration:none; }
+.outline-button { border-radius:10px; }
+@media (max-width:800px) {
+  .top-actions { justify-content:flex-start; margin-left:0; }
+  .f-hero-actions button { flex:1 1 46%; }
+}
+@media (max-width:800px) {
+  /* date-range button is icon-only on phones; a later typography rule had brought its label back */
+  .top-actions .select-button { font-size:0 !important; width:44px; padding:0; gap:0; }
+  .top-actions .select-button svg:first-child { width:18px; height:18px; }
+}
