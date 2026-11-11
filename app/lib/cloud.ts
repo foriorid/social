@@ -102,7 +102,7 @@ export async function signInWithEmail(email: string) {
 /** Password sign-in needs no redirect URL, so it works even before the Auth URL settings are changed. */
 export async function signInWithPassword(email: string, password: string) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw new Error(/invalid login/i.test(error.message) ? "Email atau kata sandi salah, atau email belum dikonfirmasi." : /not confirmed/i.test(error.message) ? "Email belum dikonfirmasi. Klik link di email konfirmasi dulu." : error.message);
+  if (error) throw new Error(/invalid login/i.test(error.message) ? "Email atau kata sandi salah. Belum punya akun? Pilih “Buat akun” dulu." : /not confirmed/i.test(error.message) ? "Email belum dikonfirmasi. Klik link di email konfirmasi dulu." : error.message);
 }
 
 /** Returns true when the account still needs its email confirmed. */

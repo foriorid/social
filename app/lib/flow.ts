@@ -1,5 +1,5 @@
 // The content pipeline: stages, the fixed job of each agent, prompts and answer parsing. Pure, so it is unit-tested.
-import type { CampaignContent, CampaignData, Scene } from "../plan-data";
+import type { CampaignContent, CampaignData, CampaignKind, Scene } from "../plan-data";
 
 export const STAGES = ["Planned", "Brief ready", "In production", "In review", "Scheduled", "Published"] as const;
 export const STAGE_LABEL: Record<string, string> = { Planned: "Ide", "Brief ready": "Brief", "In production": "Produksi", "In review": "Review", Scheduled: "Terjadwal", Published: "Tayang" };
@@ -19,6 +19,7 @@ export const isVideo = (format: string) => format === "Reels";
 
 /** The next agent step a content item still needs, or null when it is waiting for the human. */
 export function nextStep(item: CampaignContent): StepKind | null {
+  if (item.untitled) return "plan";
   if (!item.board?.length) return "brief";
   if (!item.production) return "production";
   if (!item.schedule) return "publish";
@@ -43,10 +44,22 @@ export function toBoard(raw: unknown, format: string): Scene[] {
   }).filter(s => s.visual || s.text);
 }
 
-const context = (c: CampaignData, item: CampaignContent) => `Akun: ${c.account}\nCampaign: ${c.name} (${c.period})\nTujuan campaign: ${c.goal}\nKonten #${item.day}: ${item.title}\nFormat: ${item.format}\nPilar: ${item.pillar}`;
+export const KIND_LABEL: Record<CampaignKind, string> = { personal: "Personal brand Alvian", business: "Bisnis FORIOR", property: "Promosi properti / klien" };
+
+/** What a campaign of each kind should talk about; keeps photography tips out of property campaigns and vice versa. */
+const KIND_GUIDE: Record<CampaignKind, string> = {
+  personal: "Ini akun personal brand Alvian, fotografer spesialis interior properti di Jakarta. Campur edukasi fotografi interior, behind the scenes pemotretan, cerita personal dan perjalanan karier, portofolio before/after, dan ajakan memakai jasa FORIOR.",
+  business: "Ini akun bisnis FORIOR, penyedia jasa foto interior properti. Fokus pada portofolio proyek klien, before/after, proses kerja tim, testimoni dan hasil bisnis klien, paket dan penawaran jasa.",
+  property: "Ini konten promosi untuk properti yang menjadi subjek campaign (villa/rumah/apartemen/hotel klien), dengan foto hasil pemotretan FORIOR. Fokus pada properti itu sendiri: tur ruangan, kamar, fasilitas, pengalaman menginap atau tinggal, detail desain, suasana dan lokasi sekitar, momen dan aktivitas, serta ajakan booking atau inquiry. JANGAN membuat konten tips atau edukasi fotografi."
+};
+const campaignHeader = (c: CampaignData) => `Akun: ${c.account}\nJenis campaign: ${KIND_LABEL[c.kind ?? "personal"]}\nCampaign: ${c.name} (${c.period})\nTujuan campaign: ${c.goal}${c.brief?.trim() ? `\nBrief campaign: ${c.brief.trim()}` : ""}`;
+const context = (c: CampaignData, item: CampaignContent) => `${campaignHeader(c)}\nKonten #${item.day}: ${item.title}\nFormat: ${item.format}\nPilar: ${item.pillar}`;
 
 export function stepPrompt(kind: StepKind, c: CampaignData, item: CampaignContent): string {
-  if (kind === "plan") return `Susun ${c.items.length} judul konten untuk akun ${c.account}, campaign "${c.name}" (${c.period}, tujuan: ${c.goal}). Campur edukasi, portofolio/before-after, behind the scenes, personal, dan promo jasa. Balas HANYA JSON array: [{"title":"...","format":"Reels|Carousel|Feed","pillar":"..."}]`;
+  if (kind === "plan") {
+    const open = c.items.filter(x => !x.board?.length).length;
+    return `${campaignHeader(c)}\n\n${KIND_GUIDE[c.kind ?? "personal"]}\nSusun ${open} judul konten yang semuanya relevan dengan campaign ini. Variasikan sudut pandang dan pilar, kira-kira 40% Reels, 35% Carousel, 25% Feed. Judul spesifik dan menarik, maksimal 10 kata, dalam bahasa Indonesia. Balas HANYA JSON array: [{"title":"...","format":"Reels|Carousel|Feed","pillar":"..."}]`;
+  }
   if (kind === "brief") return `${context(c, item)}\n\nTulis brief lengkap dan storyboard. ${isVideo(item.format) ? "Storyboard video 4-6 scene: label berisi rentang detik (mis. \"0-3 dtk\"), visual = arahan shot/gerak kamera, text = teks di layar atau narasi, audio = musik/suara." : "Storyboard 5-8 slide: label \"Slide N\", visual = foto/komposisi yang dipakai, text = teks pada slide (singkat), audio kosong."}\nBalas HANYA JSON: {"hook":"kalimat pembuka","message":"pesan utama satu kalimat","goal":"tujuan konten","visualDirection":"arah visual keseluruhan","assetNeeds":"foto/footage yang perlu disiapkan","caption":"draf caption","cta":"ajakan","board":[{"label":"","visual":"","text":"","audio":""}]}`;
   const board = (item.board ?? []).map(s => `${s.label}: ${s.visual} | ${s.text}`).join("\n");
   if (kind === "production") return `${context(c, item)}\nHook: ${item.hook}\nStoryboard:\n${board}\n\n${isVideo(item.format) ? "Buat paket produksi video: shot list bernomor (lensa/angle, gerakan, durasi), urutan edit, transisi, saran audio, dan teks subtitle per scene." : "Buat paket produksi desain: untuk tiap slide tulis layout, hierarki teks, dan catatan pemilihan foto; lalu catatan konsistensi brand."} Tulis sebagai teks biasa yang rapi, tanpa JSON.`;
@@ -70,7 +83,7 @@ export function parsePlan(answer: string, count: number): { title: string; forma
   const rows = extractJson(answer);
   if (!Array.isArray(rows)) throw new Error("Jawaban model bukan daftar judul. Coba lagi.");
   const list = rows.map(r => { const o = (r ?? {}) as Record<string, unknown>; const f = str(o.format); return { title: str(o.title), format: (/carousel/i.test(f) ? "Carousel" : /feed/i.test(f) ? "Feed" : "Reels") as CampaignContent["format"], pillar: str(o.pillar) || "Brand story" }; }).filter(r => r.title).slice(0, count);
-  if (list.length < 3) throw new Error("Daftar judul dari model terlalu sedikit. Coba lagi.");
+  if (list.length < Math.min(3, count)) throw new Error("Daftar judul dari model terlalu sedikit. Coba lagi.");
   return list;
 }
 
@@ -90,4 +103,14 @@ export function toSrt(board: Scene[]): string {
     cursor = end;
     return `${i + 1}\n${stamp(start)} --> ${stamp(end)}\n${s.text.trim()}\n`;
   }).join("\n");
+}
+
+/** Puts new titles on the items that have no storyboard yet; items already worked on keep their content. */
+export function applyPlan(items: CampaignContent[], rows: { title: string; format: CampaignContent["format"]; pillar: string }[]): CampaignContent[] {
+  let n = 0;
+  return items.map(x => {
+    if (x.board?.length || n >= rows.length) return x;
+    const r = rows[n++];
+    return { ...x, ...r, untitled: false, status: "Planned", hook: "", caption: "", visualDirection: "", cta: "", message: "", assetNeeds: "", hashtags: "", production: "", schedule: "", scenes: [] };
+  });
 }
