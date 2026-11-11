@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Pause, Play, RotateCcw, Sparkles, Trash2, Zap } from "lucide-react";
 import { askAI } from "./lib/ai";
-import { PIPELINE, applyStep, nextStep, parsePlan, stepPrompt, type StepKind } from "./lib/flow";
+import { PIPELINE, applyPlan, applyStep, nextStep, parsePlan, stepPrompt, type StepKind } from "./lib/flow";
 import { addApproval, getSettings, readStored, useSettings, useTasks, writeStored, type Task } from "./lib/store";
 import { AiButton, AiError, ApprovalList, ModelRouterPanel, notify, runAgentTask, useAI, useAiReady } from "./modules";
 import { patchCampaign, patchItem, readPlan, usePlan } from "./plan-data";
@@ -18,7 +18,8 @@ export function enqueue(campaignId: string, day: number, chain: boolean, kind?: 
   const item = campaign?.items.find(x => x.day === day);
   const step = kind ?? (item ? nextStep(item) : null);
   if (!campaign || !step || (step !== "plan" && !item)) return false;
-  if (readStored<Task[]>("tasks", []).some(t => t.campaignId === campaignId && t.day === day && isOpen(t))) return false;
+  const open = readStored<Task[]>("tasks", []).filter(isOpen);
+  if (open.some(t => t.campaignId === campaignId && (t.day === day || t.kind === "plan"))) return false;
   const title = step === "plan" ? `Judul campaign — ${campaign.name}` : `${stepOf(step).output} — ${item!.title}`;
   setTasks(old => [{ id: Date.now() + Math.random(), campaignId, day, kind: step, agent: stepOf(step).agent, title, status: "queued" as const, chain, at: new Date().toISOString() }, ...old].slice(0, 200));
   return true;
@@ -28,6 +29,7 @@ export function enqueue(campaignId: string, day: number, chain: boolean, kind?: 
 export function enqueueCampaign(campaignId: string, count: number): number {
   const campaign = readPlan().campaigns.find(c => c.id === campaignId);
   let added = 0;
+  if (campaign?.items.some(x => x.untitled)) return enqueue(campaignId, 0, false, "plan") ? 1 : 0; // titles first; the owner reviews them before briefs are written
   for (const item of campaign?.items ?? []) { if (added >= count) break; if (nextStep(item) && enqueue(campaignId, item.day, true)) added++; }
   return added;
 }
@@ -38,8 +40,8 @@ async function runTask(task: Task) {
   const step = stepOf(task.kind);
   const role = step.agent.includes("/") ? (campaign.items.find(x => x.day === task.day)?.format === "Reels" ? "Video Editor" : "Graphic Designer") : step.agent;
   if (task.kind === "plan") {
-    const rows = parsePlan(await askAI({ tier: step.tier, role, maxTokens: 6000, prompt: stepPrompt("plan", campaign, campaign.items[0]) }), campaign.items.length);
-    patchCampaign(campaign.id, c => ({ ...c, items: c.items.map((x, i) => (rows[i] ? { ...x, ...rows[i] } : x)) }));
+    const rows = parsePlan(await askAI({ tier: step.tier, role, maxTokens: 6000, prompt: stepPrompt("plan", campaign, campaign.items[0]) }), campaign.items.filter(x => !x.board?.length).length);
+    patchCampaign(campaign.id, c => ({ ...c, items: applyPlan(c.items, rows) }));
     return;
   }
   const item = campaign.items.find(x => x.day === task.day);

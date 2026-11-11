@@ -7,8 +7,9 @@ import { readStored, useStored, writeStored } from "./lib/store";
 export type Scene = { label: string; visual: string; text: string; audio: string; image?: string };
 /** A file that stays in Google Drive; only its link is stored. */
 export type AssetRef = { id: string; name: string; url: string; thumb: string; kind: string };
-export type CampaignContent = {day:number;date:string;title:string;format:"Reels"|"Carousel"|"Feed";pillar:string;status:string;goal:string;hook:string;caption:string;visualDirection:string;cta:string;publishDate:string;scenes:string[];message?:string;hashtags?:string;assetNeeds?:string;production?:string;schedule?:string;board?:Scene[];assets?:AssetRef[]};
-export type CampaignData = {id:string;account:string;name:string;period:string;goal:string;cover:string;items:CampaignContent[]};
+export type CampaignContent = {day:number;date:string;title:string;format:"Reels"|"Carousel"|"Feed";pillar:string;status:string;goal:string;hook:string;caption:string;visualDirection:string;cta:string;publishDate:string;scenes:string[];untitled?:boolean;message?:string;hashtags?:string;assetNeeds?:string;production?:string;schedule?:string;board?:Scene[];assets?:AssetRef[]};
+export type CampaignKind = "personal" | "business" | "property";
+export type CampaignData = {id:string;account:string;name:string;period:string;goal:string;cover:string;items:CampaignContent[];kind?:CampaignKind;brief?:string};
 export const DEFAULT_ACCOUNTS=["Alvian","FORIOR","Intragama Villa"];
 export const PERSONAL_TITLES=["Behind the scenes: one shoot, many stories","Kenapa foto interior terlihat lebih mahal?","My everyday camera setup","Before & after: natural light correction","Cara memilih wide lens untuk interior","A day in my life as a property photographer","3 kesalahan saat memotret ruangan","How I prepare for an interior shoot","Flash photography di siang hari","Editing workflow: from RAW to final","My favorite interior composition","What clients don't see behind a shoot","Tips memotret ruangan kecil","The story behind my favorite frame","Drone vs ground angle: when to use each","A simple lighting setup that works","How I direct a property photo session","Lens choice changes the whole story","Photo walk: finding details in a space","My editing rules: keep it realistic","Christmas moments through my lens","Year-end camera bag essentials","Planning a personal content series","A quiet morning before a shoot","One room, five different angles","How I build a visual storytelling sequence","The business side of being a creator","A practical guide to better property photos","What makes a photo feel premium?","New year, new creative direction"];
 export const VALENTINE_TITLES=["Small moments worth remembering","A thoughtful gift starts with a story","The art of a romantic staycation","A photo story for someone special","Five details that create a warm mood","A little love in everyday spaces","How to capture intimate moments","A date-night visual moodboard","Soft light for a softer story","A weekend made for two","The details behind a memorable evening","A simple guide to romantic composition","A love letter to beautiful spaces","Warm textures, quiet moments","The perfect setting for a special date","Behind the scenes: Valentine's shoot","A thoughtful message in every frame","A cozy corner for two","How to tell a story without words","A memorable moment in 15 seconds","A romantic carousel: frame by frame","The little things that matter most","A visual guide to thoughtful surprises","A special-day checklist","The perfect closing frame","A weekend story worth sharing","From first impression to lasting memory","A celebration of meaningful details","A moment to pause and reconnect","Make the ordinary feel special"];
@@ -52,4 +53,13 @@ export function patchItem(campaignId: string, day: number, patch: Partial<Campai
 }
 export function patchCampaign(campaignId: string, fn: (c: PlanState["campaigns"][number]) => PlanState["campaigns"][number]) {
   writeStored<PlanState>("plan", old => ({ ...old, campaigns: old.campaigns.map(c => (c.id === campaignId ? fn(c) : c)) }), DEFAULT_PLAN);
+}
+
+/** Account default for a new campaign; the owner can change it per campaign. */
+export const defaultKind = (account: string): CampaignKind => (account === "Alvian" ? "personal" : account === "FORIOR" ? "business" : "property");
+
+/** Empty slots for a new campaign; the Strategist titles them from the campaign brief. */
+export function makeBlankItems(count: number, period: string, goal: string): CampaignContent[] {
+  const month = period.split(" ")[0] || "Jan", year = period.match(/20\d\d/)?.[0] || "";
+  return Array.from({ length: count }, (_, i) => ({ day: i + 1, date: `${month} ${String(i + 1).padStart(2, "0")}${year ? " " + year : ""}`, title: `Konten ${i + 1} — menunggu judul`, untitled: true, format: "Reels" as const, pillar: "", status: "Planned", goal, hook: "", caption: "", visualDirection: "", cta: "", publishDate: "", scenes: [] }));
 }

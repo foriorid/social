@@ -1983,3 +1983,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .f-account-form input { flex:1 1 220px; min-height:44px; padding:0 12px; border:1px solid #ddd5f0; border-radius:10px; font:inherit; font-size:15px; background:#fff; color:var(--ink); }
 .f-account-form .primary-button { flex:0 1 auto; }
 @media (max-width:800px) { .f-account-form .primary-button { flex:1 1 100%; } }
+
+.f-hero-hint { margin-top:8px !important; padding:8px 12px; border-radius:10px; background:rgba(255,255,255,.14); font-size:13px !important; }
+.f-card strong.f-untitled { color:var(--muted); font-weight:600; font-style:italic; }
+.quick-modal textarea { width:100%; padding:10px 12px; border:1px solid #ddd5f0; border-radius:10px; font:inherit; font-size:15px; line-height:1.5; text-align:left; }
