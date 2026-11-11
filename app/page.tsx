@@ -18,7 +18,11 @@ import { parseIdeas, parseLines, parseProfile } from "./lib/logic";
 import { addApproval, addIdea, useApprovals, useIdeas, useLeads, useSettings, useStored } from "./lib/store";
 
 import { ImageTile } from "./ui";
-import { PublicCampaignPage, type CampaignData } from "./plan-data";
+import { PublicCampaignPage, migrateLegacyPlan, usePlan, type CampaignData } from "./plan-data";
+import { AgentsPage, useAgentRunner } from "./agents";
+import { AssetLibraryPage } from "./assets";
+import { ContentPlanPage } from "./plan";
+import { StudioPage } from "./studio";
 
 type Platform = "All channels" | "Instagram" | "TikTok" | "YouTube";
 type Range = "Last 7 Days" | "Last 30 Days" | "Last 90 Days";
@@ -30,7 +34,7 @@ const navGroups = [
       { name: "Dashboard", icon: Home },
       { name: "Research & Insight", icon: Compass },
       { name: "Content Plan", icon: CalendarDays },
-      { name: "Production Studio", icon: Clapperboard, expandable: true }
+      { name: "Production Studio", icon: Clapperboard }
     ]
   },
   {
@@ -297,18 +301,19 @@ export default function DashboardPage() {
   const [mobileNav, setMobileNav] = useState(false);
   const [quickAction, setQuickAction] = useState("");
   const [showAllAgents, setShowAllAgents] = useState(false);
-  const [studioBrief,setStudioBrief] = useState<{title:string;account:string;campaign:string;format:string;hook:string}|null>(null);
+  const [studioTarget,setStudioTarget] = useState<{campaignId:string;day:number}|null>(null);
+  const [plan] = usePlan();
+  useAgentRunner();
+  useEffect(()=>{migrateLegacyPlan();},[]);
   const [toast,setToast] = useStored<string>("toast","");
   const [approvals] = useApprovals();
   const [ideas] = useIdeas();
   const [leads] = useLeads();
-  const [counts,setCounts] = useState<Record<string,number>>({});
-  // Content Plan keeps its campaigns under its own storage key; recount whenever the user changes page.
-  useEffect(()=>{const c:Record<string,number>={};try{const raw=localStorage.getItem("forior.creatoros.campaigns.v6");const list:CampaignData[]=raw?JSON.parse(raw).campaigns:[];list.forEach(x=>x.items.forEach(i=>{c[i.status]=(c[i.status]||0)+1;}));}catch{}setCounts(c);},[activeNav]);
+  const counts: Record<string,number> = {};
+  plan.campaigns.forEach(c=>c.items.forEach(i=>{counts[i.status]=(counts[i.status]||0)+1;}));
   const pendingApprovals = approvals.filter(a=>a.status==="pending").length;
   const liveCounts: Record<string,number> = { "Ide": ideas.length, "Produksi": (counts["Brief ready"]||0)+(counts["In production"]||0), "Review": (counts["In review"]||0)+pendingApprovals, "Terjadwal": counts["Scheduled"]||0, "Published": counts["Published"]||0 };
 
-  const [pendingIdea,setPendingIdea] = useState("");
   const [publicCampaign,setPublicCampaign] = useState<CampaignData|null>(null);
   useEffect(()=>{const token=window.location.hash.startsWith("#share=")?window.location.hash.slice(7):"";if(token){try{const data=JSON.parse(decodeURIComponent(escape(atob(token))));if(data&&data.name&&Array.isArray(data.items))setPublicCampaign(data);}catch{}}},[]);
   const metrics = useMemo(() => {
@@ -365,18 +370,10 @@ export default function DashboardPage() {
                 const Icon = item.icon;
                 return (
                   <div key={item.name}>
-                    <button className={`nav-item ${activeNav === item.name || (item.expandable && ["Feed & Carousel","Reels & Video","Templates"].includes(activeNav)) ? "active" : ""}`} onClick={() => { setActiveNav(item.name); setMobileNav(false); }}>
+                    <button className={`nav-item ${activeNav === item.name ? "active" : ""}`} onClick={() => { setActiveNav(item.name); setMobileNav(false); }}>
                       <Icon size={18} strokeWidth={1.8} />
                       <span>{item.name}</span>
-                      {item.expandable && <ChevronDown className="nav-chevron" size={14} />}
                     </button>
-                    {item.expandable && (activeNav === item.name || ["Feed & Carousel","Reels & Video","Templates"].includes(activeNav)) && (
-                      <div className="sub-nav">
-                        <button className={activeNav==="Feed & Carousel"?"active":""} onClick={() => {setActiveNav("Feed & Carousel");setMobileNav(false);}}>Feed & Carousel</button>
-                        <button className={activeNav==="Reels & Video"?"active":""} onClick={() => {setActiveNav("Reels & Video");setMobileNav(false);}}>Reels & Video</button>
-                        <button className={activeNav==="Templates"?"active":""} onClick={() => {setActiveNav("Templates");setMobileNav(false);}}>Templates</button>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -443,7 +440,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {activeNav === "Research & Insight" ? <ResearchPage /> : activeNav === "Content Plan" ? <ContentPlanPage initialIdea={pendingIdea} onOpenProduction={(brief)=>{setStudioBrief(brief);setActiveNav(brief.format==="Reels"?"Reels & Video":"Feed & Carousel");}} onShareCampaign={(data)=>{const token=btoa(unescape(encodeURIComponent(JSON.stringify(data))));const link=window.location.origin+window.location.pathname+"#share="+token;navigator.clipboard?.writeText(link);window.open(link,"_blank","noopener,noreferrer");}} /> : activeNav === "AI Agent Team" ? <AIAgentTeamPage /> : activeNav === "Asset Library" ? <AssetLibraryPage /> : activeNav === "Analytics" ? <AnalyticsPage onAddToPlan={(idea)=>{addIdea(idea);setPendingIdea(idea);notify("Ide masuk ke inbox ide di Content Plan.");setActiveNav("Content Plan");}} /> : activeNav === "Inbox & Leads" ? <InboxLeadsPage /> : activeNav === "Automation" ? <div className="module-page automation-simple"><section className="panel automation-simple-card"><span className="automation-simple-icon"><Zap size={24}/></span><div><h2>Automation</h2><p>Atur pengingat dan workflow sederhana. Trigger otomatis akan diaktifkan setelah backend tersedia.</p></div><button className="primary-button" onClick={()=>setQuickAction("Create automation")}><Plus size={14}/> New automation</button></section><div className="automation-simple-grid"><article><Clock3 size={18}/><b>Content reminder</b><p>Pengingat jadwal konten yang akan tayang.</p><span>Coming soon</span></article><article><MessageCircle size={18}/><b>Approval reminder</b><p>Pengingat untuk brief yang menunggu review.</p><span>Coming soon</span></article></div></div> : activeNav === "Settings" ? <SettingsPage /> : ["Production Studio","Feed & Carousel","Reels & Video","Templates"].includes(activeNav) ? <ProductionStudioPage key={activeNav} brief={studioBrief} initialTab={activeNav === "Reels & Video" ? "Reels & Video" : activeNav === "Templates" ? "Templates" : "Feed & Carousel"} /> : <div className="dashboard-content">
+        {activeNav === "Research & Insight" ? <ResearchPage /> : activeNav === "Content Plan" ? <ContentPlanPage onOpenStudio={(campaignId,day)=>{setStudioTarget({campaignId,day});setActiveNav("Production Studio");}} onShare={(data)=>{const token=btoa(unescape(encodeURIComponent(JSON.stringify(data))));const link=window.location.origin+window.location.pathname+"#share="+token;navigator.clipboard?.writeText(link);window.open(link,"_blank","noopener,noreferrer");}} /> : activeNav === "AI Agent Team" ? <AgentsPage /> : activeNav === "Asset Library" ? <AssetLibraryPage /> : activeNav === "Analytics" ? <AnalyticsPage onAddToPlan={(idea)=>{addIdea(idea);notify("Ide masuk ke inbox ide di Content Plan.");setActiveNav("Content Plan");}} /> : activeNav === "Inbox & Leads" ? <InboxLeadsPage /> : activeNav === "Automation" ? <div className="module-page automation-simple"><section className="panel automation-simple-card"><span className="automation-simple-icon"><Zap size={24}/></span><div><h2>Automation</h2><p>Atur pengingat dan workflow sederhana. Trigger otomatis akan diaktifkan setelah backend tersedia.</p></div><button className="primary-button" onClick={()=>setQuickAction("Create automation")}><Plus size={14}/> New automation</button></section><div className="automation-simple-grid"><article><Clock3 size={18}/><b>Content reminder</b><p>Pengingat jadwal konten yang akan tayang.</p><span>Coming soon</span></article><article><MessageCircle size={18}/><b>Approval reminder</b><p>Pengingat untuk brief yang menunggu review.</p><span>Coming soon</span></article></div></div> : activeNav === "Settings" ? <SettingsPage /> : activeNav === "Production Studio" ? <StudioPage target={studioTarget} onOpenPlan={()=>setActiveNav("Content Plan")} /> : <div className="dashboard-content">
           <section className="metrics-row">
             {metrics.map((metric) => {
               const Icon = metric.icon;
@@ -537,6 +534,11 @@ export default function DashboardPage() {
           </footer>
         </div>}
       </section>
+
+      <nav className="f-bottomnav" aria-label="Navigasi cepat">
+        {[["Dashboard","Beranda",Home],["Content Plan","Plan",CalendarDays],["Production Studio","Studio",Clapperboard],["AI Agent Team","Agen",Sparkles]].map(([nav,label,Icon]: any) => <button key={nav} className={activeNav===nav?"active":""} onClick={() => setActiveNav(nav)}><Icon size={20} /><span>{label}</span>{nav==="AI Agent Team" && pendingApprovals>0 && <i>{pendingApprovals}</i>}</button>)}
+        <button onClick={() => setMobileNav(true)}><Menu size={20} /><span>Menu</span></button>
+      </nav>
 
       {toast && <div className="x-toast" role="status"><span>{toast}</span><button onClick={() => setToast("")} aria-label="Tutup pesan"><X size={16} /></button></div>}
 

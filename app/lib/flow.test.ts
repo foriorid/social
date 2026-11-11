@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyStep, driveFolderId, extractJson, nextStep, parsePlan, toBoard } from "./flow.ts";
+import { applyStep, driveFolderId, extractJson, nextStep, parsePlan, toBoard, toSrt } from "./flow.ts";
 
 const item = { day: 1, date: "Dec 01", title: "T", format: "Reels" as const, pillar: "P", status: "Planned", goal: "G", hook: "h", caption: "c", visualDirection: "v", cta: "x", publishDate: "", scenes: [] };
 
@@ -47,4 +47,9 @@ test("driveFolderId reads folder links", () => {
   assert.equal(driveFolderId("https://drive.google.com/drive/folders/1AbC_dEfGhIjKlMn?usp=sharing"), "1AbC_dEfGhIjKlMn");
   assert.equal(driveFolderId("https://drive.google.com/drive/u/0/folders/1AbC_dEfGhIjKlMn"), "1AbC_dEfGhIjKlMn");
   assert.equal(driveFolderId("https://example.com/folders/abc"), null);
+});
+
+test("toSrt uses label timings and falls back to 3s blocks", () => {
+  const srt = toSrt([{ label: "0-3 dtk", visual: "", text: "Halo", audio: "" }, { label: "Scene 2", visual: "", text: "", audio: "" }, { label: "Scene 3", visual: "", text: "Dua", audio: "" }]);
+  assert.equal(srt, "1\n00:00:00,000 --> 00:00:03,000\nHalo\n\n2\n00:00:03,000 --> 00:00:06,000\nDua\n");
 });

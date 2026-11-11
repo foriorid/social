@@ -20,7 +20,7 @@ export function enqueue(campaignId: string, day: number, chain: boolean, kind?: 
   if (!campaign || !step || (step !== "plan" && !item)) return false;
   if (readStored<Task[]>("tasks", []).some(t => t.campaignId === campaignId && t.day === day && isOpen(t))) return false;
   const title = step === "plan" ? `Judul campaign — ${campaign.name}` : `${stepOf(step).output} — ${item!.title}`;
-  setTasks(old => [{ id: Date.now() + Math.random(), campaignId, day, kind: step, agent: stepOf(step).agent, title, status: "queued", chain, at: new Date().toISOString() }, ...old].slice(0, 200));
+  setTasks(old => [{ id: Date.now() + Math.random(), campaignId, day, kind: step, agent: stepOf(step).agent, title, status: "queued" as const, chain, at: new Date().toISOString() }, ...old].slice(0, 200));
   return true;
 }
 

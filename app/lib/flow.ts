@@ -77,3 +77,17 @@ export function parsePlan(answer: string, count: number): { title: string; forma
 export function driveFolderId(url: string): string | null {
   return /drive\.google\.com\/(?:drive\/(?:u\/\d+\/)?folders\/|open\?id=)([A-Za-z0-9_-]{10,})/.exec(url)?.[1] ?? null;
 }
+
+const stamp = (sec: number) => `${String(Math.floor(sec / 3600)).padStart(2, "0")}:${String(Math.floor(sec / 60) % 60).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")},000`;
+
+/** Subtitle file from the storyboard. Uses "0-3 dtk" style labels when present, otherwise 3 seconds per scene. */
+export function toSrt(board: Scene[]): string {
+  let cursor = 0;
+  return board.filter(s => s.text.trim()).map((s, i) => {
+    const m = /(\d+)\s*(?:-|–|sampai|s\/d)\s*(\d+)/.exec(s.label);
+    const start = m && Number(m[2]) > Number(m[1]) ? Number(m[1]) : cursor;
+    const end = m && Number(m[2]) > Number(m[1]) ? Number(m[2]) : start + 3;
+    cursor = end;
+    return `${i + 1}\n${stamp(start)} --> ${stamp(end)}\n${s.text.trim()}\n`;
+  }).join("\n");
+}
