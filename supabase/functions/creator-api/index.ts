@@ -32,7 +32,7 @@ Deno.serve(async req => {
   try {
     switch (body.action) {
       case "secrets.status": {
-        const rows = await sql`select name, updated_at from private.user_secrets where user_id = ${user}::uuid`;
+        const rows = await sql`select name, updated_at from private.secret_status(${user}::uuid)`;
         return json({ saved: Object.fromEntries(rows.map(r => [r.name, r.updated_at])) });
       }
       case "secrets.set": {
