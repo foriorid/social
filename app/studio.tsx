@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, Check, Copy, Download, Film, Layers3, Play, Plus
 import { DriveBrowser } from "./assets";
 import { enqueue } from "./agents";
 import { askAI } from "./lib/ai";
-import { isVideo, toSrt } from "./lib/flow";
+import { guidebookName, isVideo, toSrt, videoGuidebook } from "./lib/flow";
 import { parseLines } from "./lib/logic";
 import { addApproval, useSettings, useStored, useTasks } from "./lib/store";
 import { AiButton, AiError, notify, useAI } from "./modules";
@@ -88,7 +88,8 @@ export function StudioPage({ target, onOpenPlan }: { target: { campaignId: strin
     notify(missing ? `${missing} slide diekspor tanpa foto karena foto tidak bisa dimuat untuk ekspor. Unduh fotonya dari Drive lalu tempel manual.` : all ? "Semua slide diekspor sebagai PNG." : "Slide diekspor sebagai PNG.");
   };
   const rewrite = () => ai.run("slide", async () => { const t = await askAI({ tier: "light", role: "Content Writer", maxTokens: 1500, prompt: `Konten: ${item.title}. Hook: ${item.hook}\nTulis ulang teks untuk ${scene.label} agar lebih tajam, maksimal 12 kata. Teks sekarang: "${scene.text}". Konteks visual: ${scene.visual}. Balas hanya teksnya.` }); edit({ text: parseLines(t)[0] || scene.text }); });
-  const tabs = video ? ["Isi", "Naskah", "Paket produksi", "Caption"] : ["Isi", "Desain", "Caption"];
+  const tabs = video ? ["Isi", "Naskah", "Paket produksi", "Claude Code", "Caption"] : ["Isi", "Desain", "Caption"];
+  const guidebook = () => videoGuidebook(campaign, item, { name: settings.brandName, handle: settings.handle });
   const overlay = look.template === "light" ? "linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,.15) 45%,rgba(255,255,255,.94))" : look.template === "bold" ? "linear-gradient(180deg,rgba(106,63,208,.88),rgba(106,63,208,.2) 45%,rgba(60,30,140,.94))" : "linear-gradient(180deg,rgba(20,12,45,.6),rgba(20,12,45,.05) 45%,rgba(20,12,45,.9))";
 
   return <div className="module-page f-page">
@@ -127,6 +128,13 @@ export function StudioPage({ target, onOpenPlan }: { target: { campaignId: strin
           <label className="f-label">TEMPLATE</label><div className="f-options">{TEMPLATES.map(t => <button key={t.id} className={look.template === t.id ? "active" : ""} onClick={() => setLook(o => ({ ...o, template: t.id }))}>{t.name}</button>)}</div>
           <label className="f-label">RASIO</label><div className="f-options">{(["4:5", "1:1"] as const).map(r => <button key={r} className={look.ratio === r ? "active" : ""} onClick={() => setLook(o => ({ ...o, ratio: r }))}>{r === "4:5" ? "4:5 · 1080×1350" : "1:1 · 1080×1080"}</button>)}</div>
           <p className="x-empty">Foto Anda dipakai apa adanya. Template hanya mengatur lapisan warna dan teks.</p>
+        </>}
+        {tab === "Claude Code" && <>
+          <p className="f-help">Render video di komputer Anda dengan <b>Claude Code + Remotion</b>, memakai langganan Claude Pro (tanpa token API aplikasi ini).</p>
+          <ol className="f-steps"><li>Unduh guidebook di bawah dan simpan sebagai <code>guidebook.md</code> di folder proyek.</li><li>Taruh klip di <code>footage/</code>, foto di <code>photos/</code>, musik/voice-over di <code>audio/</code>. Urutkan nama file sesuai scene (01-, 02-, …).</li><li>Buka folder itu di Claude Code, lalu ketik: <i>“Ikuti guidebook.md dan buat videonya dengan Remotion.”</i></li><li>Hasil MP4 ada di <code>out/</code>. Lanjutkan ke Ajukan approval.</li></ol>
+          {!board.length && <p className="x-error">Storyboard masih kosong. Isi dulu agar guidebook lengkap.</p>}
+          <div className="x-row"><button className="primary-button" onClick={() => saveFile(new Blob([guidebook()], { type: "text/markdown" }), guidebookName(item))}><Download size={14} /> Unduh guidebook.md</button><button className="outline-button" onClick={() => copy(guidebook(), "Guidebook")}><Copy size={14} /> Salin isi</button></div>
+          {!item.production && <p className="x-empty">Tips: minta “Paket produksi” dulu agar guidebook berisi shot list dan urutan edit.</p>}
         </>}
         {tab === "Naskah" && <>
           <pre className="x-output">{board.map(s => `[${s.label}] ${s.text}`).join("\n")}</pre>

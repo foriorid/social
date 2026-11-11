@@ -75,3 +75,24 @@ test("property campaigns forbid photography tips in the planning prompt", () => 
   assert.match(p, /Brief campaign: Villa 4 kamar di Lembang/);
   assert.doesNotMatch(stepPrompt("plan", { ...c, kind: "personal" }, item), /JANGAN/);
 });
+
+test("parseAudit fills defaults and clamps format shares", async () => {
+  const { parseAudit } = await import("./flow.ts");
+  const a = parseAudit('```json\n{"summary":"S","dataQuality":"aneh","profile":{"formats":[{"name":"Reels","share":140},{"name":"Foto","share":0}]},"ideas":[{"title":"Ide 1"}]}\n```');
+  assert.equal(a.dataQuality, "terbatas");
+  assert.deepEqual(a.profile.formats, [{ name: "Reels", share: 100 }]);
+  assert.deepEqual(a.ideas, [{ format: "Reels", title: "Ide 1", angle: "" }]);
+  assert.deepEqual(a.highlights, []);
+});
+
+test("videoGuidebook carries the storyboard, assets and render target", async () => {
+  const { videoGuidebook, guidebookName } = await import("./flow.ts");
+  const c = { id: "c", account: "SPLENDID", name: "Portofolio", period: "Jan 2027", goal: "Awareness", cover: "", items: [] };
+  const it = { ...item, title: "Tur Office Space 2.000 m²", board: [{ label: "0-3 dtk", visual: "Wide | lobby", text: "2.000 m²", audio: "musik" }], assets: [{ id: "f1", name: "lobby.mp4", url: "https://drive.google.com/file/d/f1/view", thumb: "", kind: "Video" }] };
+  const md = videoGuidebook(c, it, { name: "Alvian", handle: "@alvian.indonesia" });
+  assert.match(md, /\| 1 \| 0-3 dtk \| Wide \/ lobby \| 2\.000 m² \| musik \|/);
+  assert.match(md, /Video: lobby\.mp4 — https:\/\/drive\.google\.com\/file\/d\/f1\/view/);
+  assert.match(md, /\.\/out\/tur-office-space-2-000-m2\.mp4/);
+  assert.match(md, /00:00:00,000 --> 00:00:03,000\n2\.000 m²/);
+  assert.equal(guidebookName(it), "guidebook-01-tur-office-space-2-000-m2.md");
+});
