@@ -13,11 +13,13 @@ import {
 } from "lucide-react";
 
 import { AiButton, AiCostBadge, AiError, ApiSettingsTab, ApprovalList, InboxLeadsPage, ModelRouterPanel, notify, runAgentTask, useAI } from "./modules";
-import { askAI, fetchInstagramPosts } from "./lib/ai";
+import { AiSetupError, askAI, fetchInstagramPosts } from "./lib/ai";
 import { parseIdeas, parseLines, parseProfile } from "./lib/logic";
 import { addApproval, addIdea, useApprovals, useIdeas, useLeads, useSettings, useStored, useTasks } from "./lib/store";
 
 import { ImageTile } from "./ui";
+import { AuditView, LegacyAudit } from "./research";
+import { auditPrompt, parseAudit, type Audit } from "./lib/flow";
 import { PublicCampaignPage, migrateLegacyPlan, usePlan, type CampaignData } from "./plan-data";
 import { AgentsPage, useAgentRunner } from "./agents";
 import { startCloud } from "./lib/cloud";
@@ -115,7 +117,7 @@ function ResearchPage() {
   const [platform,setPlatform]=useState("Instagram");
   const [notes,setNotes]=useState("");
   const [auditError,setAuditError]=useState("");
-  const [audits,setAudits]=useStored<Record<string,string>>("audits",{});
+  const [audits,setAudits]=useStored<Record<string,string|Audit>>("audits",{});
   const [watchlist,setWatchlist]=useStored<string[]>("watchlist",["@alvian.indonesia","@kreator.sejenis","@kompetitor.foto"]);
   const [customHooks,setCustomHooks]=useStored<{category:string;hook:string;format:string}[]>("customHooks",[]);
   const [trendNote,setTrendNote]=useStored<string>("trendNote","");
@@ -146,11 +148,11 @@ function ResearchPage() {
           const result = await fetchInstagramPosts(parsed.handle.slice(1));
           data = `Followers: ${result.followers}\n` + result.posts.map(x => `[${x.date}] ${x.type} · ${x.likes} suka · ${x.comments} komentar · ${x.caption.slice(0, 300)}`).join("\n") + (data ? `\nCatatan pengguna: ${data}` : "");
           source = "posting publik terakhir dari Meta API";
-        } catch (error) { if (!data) throw new Error("Belum ada data untuk akun ini. Tempel beberapa caption/catatan di kolom di bawah, atau isi token Meta di Settings → AI & Models. (" + (error instanceof Error ? error.message : String(error)) + ")"); }
+        } catch (error) { if (!(error instanceof AiSetupError)) throw error; /* no Meta token: analyse from notes/positioning; the view explains what data is missing */ }
       }
-      if (!data) throw new Error("Tempel beberapa caption atau catatan tentang akun ini agar bisa dianalisis.");
-      const text = await askAI({ tier: "creative", role: "Research Analyst", maxTokens: 6000, prompt: `Bedah akun ${parsed.platform} ${parsed.handle} berdasarkan data berikut (${source}). Tulis: 1) Profil konten (frekuensi, format dominan, topik), 2) 3-6 konten atau pola paling menarik beserta alasannya, 3) Celah & peluang, 4) lima ide konten untuk saya — tiap ide di baris sendiri diawali "IDE: " lalu format (Reels/Carousel/TikTok) dan judul. Jangan mengarang angka yang tidak ada di data.\n\nDATA:\n${data}` });
-      setAudits(old => ({ ...old, [parsed.handle]: text }));
+      if (!data) data = "(tidak ada data posting; analisis hanya dari nama akun dan positioning)";
+      const result = parseAudit(await askAI({ tier: "creative", role: "Research Analyst", maxTokens: 6000, prompt: auditPrompt(parsed.platform, parsed.handle, source, data) }));
+      setAudits(old => ({ ...old, [parsed.handle]: result }));
     });
   };
   const audit = audits[analysed];
@@ -177,7 +179,8 @@ function ResearchPage() {
           <div className="recent-profiles"><span>Terakhir dibedah:</span>{watchlist.map(v=><button key={v} onClick={()=>{setProfile(`https://instagram.com/${v.slice(1)}`);setAnalysed(v);setPlatform("Instagram");}}>{v}</button>)}</div>
         </section>
         <div className="audit-result-heading"><div><h3>Hasil bedah: {analysed}</h3><span className="channel-chip">{platform}</span><span className="muted-chip">{audit?"Hasil analisis AI":"Contoh tampilan — belum dibedah"}</span></div><span className="audit-cost"><button className="outline-button" onClick={()=>setWatchlist(old=>old.includes(analysed)?old.filter(x=>x!==analysed):[...old,analysed])}>{watchlist.includes(analysed)?"Dipantau ✓":"+ Pantau akun ini"}</button></span></div>
-        {audit&&<section className="panel"><h3>Analisis {analysed}</h3><pre className="x-output">{audit}</pre><div className="x-ideas"><label>IDE DARI ANALISIS INI</label>{parseIdeas(audit).map(idea=><div key={idea}><span>{idea}</span><button className="outline-button" onClick={()=>addIdea(idea)}>{addedIdeas.includes(idea)?"Di inbox ide ✓":"Tambah ke plan"}</button></div>)}</div></section>}
+        {audit&&typeof audit==="object"&&<AuditView audit={audit} added={addedIdeas} onAdd={addIdea}/>}
+        {audit&&typeof audit==="string"&&<section className="panel"><h3>Analisis {analysed}</h3><LegacyAudit text={audit}/><div className="x-ideas"><label>IDE DARI ANALISIS INI</label>{parseIdeas(audit).map(idea=><div key={idea}><span>{idea}</span><button className="outline-button" onClick={()=>addIdea(idea)}>{addedIdeas.includes(idea)?"Di inbox ide ✓":"Tambah ke plan"}</button></div>)}</div><p className="x-empty">Hasil lama. Tekan “Bedah akun” lagi untuk tampilan baru.</p></section>}
         {!audit&&<div className="audit-grid">
           <section className="panel profile-analysis">
             <h3>Profil konten</h3>

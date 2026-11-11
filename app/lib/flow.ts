@@ -114,3 +114,110 @@ export function applyPlan(items: CampaignContent[], rows: { title: string; forma
     return { ...x, ...r, untitled: false, status: "Planned", hook: "", caption: "", visualDirection: "", cta: "", message: "", assetNeeds: "", hashtags: "", production: "", schedule: "", scenes: [] };
   });
 }
+
+// ---------- Account audit (Research → Bedah Akun) ----------
+export type Audit = {
+  summary: string;
+  dataQuality: "cukup" | "terbatas" | "kosong";
+  missing: string[];
+  profile: { frequency: string; bestTime: string; engagement: string; formats: { name: string; share: number }[]; topics: string[] };
+  highlights: { title: string; why: string; format: string; signal: string }[];
+  gaps: string[];
+  ideas: { format: string; title: string; angle: string }[];
+};
+
+export const auditPrompt = (platform: string, handle: string, source: string, data: string) => `Bedah akun ${platform} ${handle}. Sumber data: ${source}.
+Aturan: jangan mengarang angka atau posting yang tidak ada di data. Bila data tidak menyebut suatu hal, isi "" atau [] dan jelaskan kebutuhannya di "missing". Ide konten tetap boleh diberikan berdasarkan positioning akun.
+Balas HANYA JSON:
+{"summary":"2-3 kalimat inti temuan","dataQuality":"cukup|terbatas|kosong","missing":["data yang perlu ditempel agar analisis lebih tajam"],
+"profile":{"frequency":"","bestTime":"","engagement":"","formats":[{"name":"Reels|Carousel|Foto","share":0-100}],"topics":["topik"]},
+"highlights":[{"title":"konten/pola menarik","why":"alasan singkat","format":"Reels|Carousel|Foto","signal":"mis. ER 11% atau simpan tinggi, kosong bila tidak ada di data"}],
+"gaps":["celah atau peluang"],
+"ideas":[{"format":"Reels|Carousel|TikTok","title":"judul ide","angle":"sudut pandang singkat"}]}
+
+DATA:
+${data}`;
+
+const list = (v: unknown) => (Array.isArray(v) ? v : []);
+/** Normalises the model's audit JSON so the view never breaks on a missing field. */
+export function parseAudit(answer: string): Audit {
+  const o = extractJson(answer) as Record<string, unknown>;
+  const p = (o.profile ?? {}) as Record<string, unknown>;
+  const q = str(o.dataQuality);
+  return {
+    summary: str(o.summary),
+    dataQuality: q === "cukup" || q === "kosong" ? q : "terbatas",
+    missing: list(o.missing).map(str).filter(Boolean),
+    profile: { frequency: str(p.frequency), bestTime: str(p.bestTime), engagement: str(p.engagement), topics: list(p.topics).map(str).filter(Boolean),
+      formats: list(p.formats).map(f => { const r = (f ?? {}) as Record<string, unknown>; return { name: str(r.name), share: Math.max(0, Math.min(100, Number(r.share) || 0)) }; }).filter(f => f.name && f.share > 0) },
+    highlights: list(o.highlights).map(h => { const r = (h ?? {}) as Record<string, unknown>; return { title: str(r.title), why: str(r.why), format: str(r.format), signal: str(r.signal) }; }).filter(h => h.title),
+    gaps: list(o.gaps).map(str).filter(Boolean),
+    ideas: list(o.ideas).map(i => { const r = (i ?? {}) as Record<string, unknown>; return { format: str(r.format) || "Reels", title: str(r.title), angle: str(r.angle) }; }).filter(i => i.title)
+  };
+}
+
+// ---------- Video guidebook for Claude Code + Remotion ----------
+const slug = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "video";
+export const guidebookName = (item: CampaignContent) => `guidebook-${String(item.day).padStart(2, "0")}-${slug(item.title)}.md`;
+
+/** One Markdown file that Claude Code can follow to build the video with Remotion from local footage. */
+export function videoGuidebook(c: CampaignData, item: CampaignContent, brand: { name: string; handle: string }): string {
+  const board = item.board ?? [];
+  const rows = board.map((s, i) => `| ${i + 1} | ${s.label} | ${s.visual.replace(/\|/g, "/")} | ${s.text.replace(/\|/g, "/")} | ${s.audio.replace(/\|/g, "/")} |`).join("\n");
+  const assets = (item.assets ?? []).map(a => `- ${a.kind}: ${a.name} — ${a.url}`).join("\n") || "- (belum ada aset Drive yang ditautkan; pakai file di folder lokal)";
+  const name = slug(item.title);
+  return `# Guidebook video — ${item.title}
+
+> Dibuat dari FORIOR Creator OS. Simpan file ini di folder proyek bersama footage dan foto, lalu minta Claude Code: "Ikuti guidebook ini dan buat videonya dengan Remotion."
+
+## Proyek
+- Akun: ${c.account} (${brand.name}, ${brand.handle})
+- Campaign: ${c.name} · ${c.period} · tujuan: ${c.goal}
+- Konten #${item.day}: **${item.title}** · format ${item.format} · pilar ${item.pillar || "-"}
+${c.brief?.trim() ? `- Brief campaign: ${c.brief.trim()}\n` : ""}
+## Brief
+- Hook: ${item.hook || "-"}
+- Pesan utama: ${item.message || "-"}
+- Tujuan konten: ${item.goal || "-"}
+- Arah visual: ${item.visualDirection || "-"}
+- CTA: ${item.cta || "-"}
+
+## Storyboard
+| # | Durasi | Visual / arahan shot | Teks layar / narasi | Audio |
+|---|---|---|---|---|
+${rows || "| - | - | (storyboard belum ada) | - | - |"}
+
+## Paket produksi
+${item.production?.trim() || "(belum ada)"}
+
+## Aset
+Struktur folder yang diharapkan:
+\`\`\`
+./footage/   klip video (urut nama file = urutan scene, mis. 01-hook.mp4, 02-proses.mp4)
+./photos/    foto (dipakai bila scene tidak punya klip)
+./audio/     musik latar dan voice-over (opsional)
+./guidebook.md
+\`\`\`
+Aset dari Google Drive yang ditautkan:
+${assets}
+
+## Instruksi untuk Claude Code
+1. Buat proyek Remotion (TypeScript) bila belum ada, dengan komposisi \`${name}\`: 1080×1920, 30 fps, durasi total mengikuti kolom Durasi di storyboard.
+2. Satu \`<Sequence>\` per baris storyboard. Pakai klip dari \`./footage\` sesuai urutan; bila tidak ada, pakai foto dari \`./photos\` dengan gerakan zoom/pan halus (Ken Burns).
+3. Tampilkan "Teks layar / narasi" sebagai teks besar di sepertiga bawah: font sans-serif tebal, putih dengan bayangan lembut, maksimal 2 baris. Wordmark "FORIOR" kecil di kiri atas.
+4. Bila ada voice-over di \`./audio\`, sinkronkan per scene; musik latar di volume rendah (≈ -18 dB) di bawah voice-over.
+5. Subtitle: pakai file SRT di bawah sebagai sumber teks dan waktu.
+6. Jangan ubah warna asli footage interior selain koreksi exposure ringan; jangan tambahkan objek yang tidak ada di properti.
+7. Render ke \`./out/${name}.mp4\` (H.264, 1080×1920), lalu tampilkan pratinjau di Remotion Studio untuk dicek.
+
+## Caption untuk posting
+${item.caption || "-"}
+
+${item.hashtags || ""}
+
+## Subtitle (SRT)
+\`\`\`srt
+${toSrt(board).trim()}
+\`\`\`
+`;
+}

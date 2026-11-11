@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, CalendarDays, Check, ChevronRight, Download, FileText, Play, Plus, Printer, Share2, Sparkles, Trash2, Users, X, Zap } from "lucide-react";
+import { ArrowRight, CalendarDays, Check, ChevronRight, Download, FileText, Pencil, Play, Plus, Printer, Share2, Sparkles, Trash2, Users, X, Zap } from "lucide-react";
 import { DriveBrowser } from "./assets";
 import { enqueue, enqueueCampaign } from "./agents";
 import { KIND_LABEL, PIPELINE, STAGES, STAGE_LABEL, isVideo, nextStep } from "./lib/flow";
-import { addApproval, useIdeas, useSettings, useTasks } from "./lib/store";
+import { addApproval, useIdeas, useSettings, useTasks, writeStored, type Task } from "./lib/store";
 import { notify, useAiReady } from "./modules";
 import { campaignHtml, defaultKind, makeBlankItems, patchCampaign, patchItem, usePlan, type CampaignContent, type CampaignData, type CampaignKind, type Scene } from "./plan-data";
 import { ImageTile } from "./ui";
+const dropTasks = (match: (t: Task) => boolean) => writeStored<Task[]>("tasks", old => old.filter(t => !match(t)), []);
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const FORMATS: CampaignContent["format"][] = ["Reels", "Carousel", "Feed"];
@@ -19,7 +20,7 @@ function Field({ label, value, onChange, rows = 2, placeholder }: { label: strin
 }
 
 /** Full brief + storyboard for one content item. Opens as a side panel on desktop and a full screen sheet on phones. */
-function ContentSheet({ campaign, item, onClose, onOpenStudio }: { campaign: CampaignData; item: CampaignContent; onClose: () => void; onOpenStudio: () => void }) {
+function ContentSheet({ campaign, item, onClose, onOpenStudio, onDelete }: { campaign: CampaignData; item: CampaignContent; onClose: () => void; onOpenStudio: () => void; onDelete: () => void }) {
   const [tasks] = useTasks();
   const [ideas, setIdeas] = useIdeas();
   const [picking, setPicking] = useState(false);
@@ -78,7 +79,7 @@ function ContentSheet({ campaign, item, onClose, onOpenStudio }: { campaign: Cam
 
     {ideas.length > 0 && <div className="x-ideas"><label>INBOX IDE — pakai sebagai judul konten ini</label>{ideas.slice(0, 5).map(idea => <div key={idea}><span>{idea}</span><button className="outline-button" onClick={() => { set({ title: idea, board: [], production: "", schedule: "", status: "Planned" }); setIdeas(old => old.filter(x => x !== idea)); }}>Pakai</button></div>)}</div>}
 
-    <div className="f-sheet-actions"><button className="primary-button" onClick={onOpenStudio}>Buka di Production Studio <ArrowRight size={15} /></button><button className="outline-button" onClick={() => { addApproval({ title: `${item.format} — ${item.title}`, by: "Content Plan", type: `${campaign.account} · diajukan manual`, body: `Hook: ${item.hook}\n\nStoryboard:\n${board.map(s => `• ${s.label} — ${s.visual}${s.text ? ` | "${s.text}"` : ""}`).join("\n")}\n\nCaption:\n${item.caption}\n\n${item.hashtags ?? ""}` }); set({ status: "In review" }); notify("Konten masuk ke antrean approval."); }}><Check size={15} /> Ajukan approval</button></div>
+    <div className="f-sheet-actions"><button className="outline-button x-danger f-delete" onClick={onDelete}><Trash2 size={15} /> Hapus konten</button><button className="primary-button" onClick={onOpenStudio}>Buka di Production Studio <ArrowRight size={15} /></button><button className="outline-button" onClick={() => { addApproval({ title: `${item.format} — ${item.title}`, by: "Content Plan", type: `${campaign.account} · diajukan manual`, body: `Hook: ${item.hook}\n\nStoryboard:\n${board.map(s => `• ${s.label} — ${s.visual}${s.text ? ` | "${s.text}"` : ""}`).join("\n")}\n\nCaption:\n${item.caption}\n\n${item.hashtags ?? ""}` }); set({ status: "In review" }); notify("Konten masuk ke antrean approval."); }}><Check size={15} /> Ajukan approval</button></div>
   </aside></div>;
 }
 
@@ -91,7 +92,7 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
   const [openDay, setOpenDay] = useState<number | null>(null);
   const [view, setView] = useState<"Papan" | "Daftar" | "Kalender">("Papan");
   const [format, setFormat] = useState("Semua");
-  const [modal, setModal] = useState<"" | "account" | "campaign" | "edit" | "content">("");
+  const [modal, setModal] = useState<"" | "account" | "manage" | "campaign" | "edit" | "content">("");
   const [form, setForm] = useState({ account: "", name: "", period: "Jan 2027", goal: "Awareness & engagement", title: "", format: "Reels", kind: "" as CampaignKind | "", brief: "", campaignAccount: "" });
   const ready = useAiReady();
   const campaign = plan.campaigns.find(c => c.id === campaignId) ?? null;
@@ -114,12 +115,30 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
   };
   const formAccount = form.campaignAccount || (modal === "edit" && campaign ? campaign.account : newAccount);
   const openEdit = (c: CampaignData) => { setForm(f => ({ ...f, campaignAccount: c.account, name: c.name, period: c.period, goal: c.goal, kind: c.kind ?? defaultKind(c.account), brief: c.brief ?? "" })); setModal("edit"); };
+  const deleteCampaign = (c: CampaignData) => {
+    if (!window.confirm(`Hapus campaign “${c.name}” beserta ${c.items.length} kontennya? Tindakan ini tidak bisa dibatalkan.`)) return;
+    setPlan(o => ({ ...o, campaigns: o.campaigns.filter(x => x.id !== c.id) })); dropTasks(t => t.campaignId === c.id);
+    setModal(""); setCampaignId(null); notify("Campaign dihapus.");
+  };
+  const renameAccount = (from: string, to: string) => {
+    const name = to.trim(); if (!name || name === from) return setModal("");
+    if (plan.accounts.includes(name)) return notify("Nama akun itu sudah ada.");
+    setPlan(o => ({ accounts: o.accounts.map(a => (a === from ? name : a)), campaigns: o.campaigns.map(c => (c.account === from ? { ...c, account: name } : c)) }));
+    setAccountFilter(name); setModal("");
+  };
+  const deleteAccount = (name: string) => {
+    const owned = plan.campaigns.filter(c => c.account === name);
+    if (!window.confirm(owned.length ? `Hapus akun “${name}” beserta ${owned.length} campaign di dalamnya?` : `Hapus akun “${name}”?`)) return;
+    const ids = new Set(owned.map(c => c.id));
+    setPlan(o => ({ accounts: o.accounts.filter(a => a !== name), campaigns: o.campaigns.filter(c => c.account !== name) })); dropTasks(t => ids.has(t.campaignId));
+    setAccountFilter("Semua akun"); setCampaignId(null); setModal(""); notify("Akun dihapus.");
+  };
   const saveEdit = () => { if (!campaign || !form.name.trim()) return; patchCampaign(campaign.id, c => ({ ...c, account: form.campaignAccount || c.account, name: form.name.trim(), period: form.period, goal: form.goal, kind: form.kind || defaultKind(c.account), brief: form.brief.trim() })); setModal(""); };
   const addContent = () => { if (!campaign || !form.title.trim()) return; const day = Math.max(0, ...campaign.items.map(x => x.day)) + 1; patchCampaign(campaign.id, c => ({ ...c, items: [...c.items, { day, date: "Belum dijadwalkan", title: form.title.trim(), format: form.format as CampaignContent["format"], pillar: "Brand story", status: "Planned", goal: c.goal, hook: "", caption: "", visualDirection: "", cta: "", publishDate: "", scenes: [] }] })); setForm(f => ({ ...f, title: "" })); setModal(""); setOpenDay(day); };
   const Card = ({ x }: { x: CampaignContent }) => <button className="f-card" onClick={() => setOpenDay(x.day)}><span className="f-card-top"><b>{pad(x.day)}</b><em className={`f-fmt f-${x.format.toLowerCase()}`}>{x.format}</em>{busyDays.has(x.day) && <em className="f-fmt f-busy">Agen bekerja</em>}</span><strong className={x.untitled ? "f-untitled" : ""}>{x.title}</strong><small>{x.board?.length ? `${x.board.length} ${isVideo(x.format) ? "scene" : "slide"} · ` : "Belum ada storyboard · "}{x.publishDate || x.date}</small></button>;
 
   return <div className="module-page f-page">
-    <div className="f-toolbar"><div className="f-chips" aria-label="Filter akun">{["Semua akun", ...plan.accounts].map(a => <button key={a} className={accountFilter === a ? "active" : ""} onClick={() => { setAccountFilter(a); setCampaignId(null); }}>{a}</button>)}</div><div className="x-row"><button className="outline-button" onClick={() => setModal("account")}><Users size={15} /> Akun baru</button><button className="primary-button" onClick={() => { setForm(f => ({ ...f, campaignAccount: accountFilter === "Semua akun" ? plan.accounts[0] : accountFilter, kind: "" })); setModal("campaign"); }}><Plus size={15} /> Campaign baru</button></div></div>
+    <div className="f-toolbar"><div className="f-chips" aria-label="Filter akun">{["Semua akun", ...plan.accounts].map(a => <button key={a} className={accountFilter === a ? "active" : ""} onClick={() => { setAccountFilter(a); setCampaignId(null); }}>{a}</button>)}</div><div className="x-row">{accountFilter !== "Semua akun" && <button className="outline-button" onClick={() => { setForm(f => ({ ...f, account: accountFilter })); setModal("manage"); }}><Pencil size={15} /> Kelola akun</button>}<button className="outline-button" onClick={() => setModal("account")}><Users size={15} /> Akun baru</button><button className="primary-button" onClick={() => { setForm(f => ({ ...f, campaignAccount: accountFilter === "Semua akun" ? plan.accounts[0] : accountFilter, kind: "" })); setModal("campaign"); }}><Plus size={15} /> Campaign baru</button></div></div>
 
     {!campaign ? <>
       {!visible.length && <p className="x-empty">Belum ada campaign untuk akun ini. Buat campaign pertama.</p>}
@@ -140,12 +159,13 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
       {view === "Kalender" && <div className="x-cal">{items.map(x => <button key={x.day} className={x.status === "Published" || x.status === "Scheduled" ? "ok" : ""} onClick={() => setOpenDay(x.day)}><b>{x.publishDate || x.date}</b><span>{x.format} · {STAGE_LABEL[x.status] ?? x.status}</span><small>{x.title}</small></button>)}</div>}
     </>}
 
-    {campaign && item && <ContentSheet campaign={campaign} item={item} onClose={() => setOpenDay(null)} onOpenStudio={() => onOpenStudio(campaign.id, item.day)} />}
+    {campaign && item && <ContentSheet campaign={campaign} item={item} onClose={() => setOpenDay(null)} onOpenStudio={() => onOpenStudio(campaign.id, item.day)} onDelete={() => { if (!window.confirm(`Hapus konten “${item.title}”? Brief dan storyboard-nya ikut terhapus.`)) return; patchCampaign(campaign.id, c => ({ ...c, items: c.items.filter(x => x.day !== item.day) })); dropTasks(t => t.campaignId === campaign.id && t.day === item.day); setOpenDay(null); notify("Konten dihapus."); }} />}
 
     {modal && <div className="modal-backdrop" onClick={() => setModal("")}><div className="quick-modal plan-v2-modal" onClick={e => e.stopPropagation()}><button className="modal-close" onClick={() => setModal("")} aria-label="Tutup"><X size={18} /></button>
+      {modal === "manage" && <><span className="modal-icon"><Pencil size={21} /></span><h2>Kelola akun</h2><p>Ganti nama berlaku untuk semua campaign di akun ini.</p><label htmlFor="m-rename">NAMA AKUN</label><input id="m-rename" value={form.account} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} /><button className="primary-button" onClick={() => renameAccount(accountFilter, form.account)}>Simpan nama</button><button className="outline-button x-danger f-delete-wide" onClick={() => deleteAccount(accountFilter)}><Trash2 size={15} /> Hapus akun</button></>}
       {modal === "account" && <><span className="modal-icon"><Users size={21} /></span><h2>Akun baru</h2><p>Tambahkan brand atau klien.</p><label htmlFor="m-acc">NAMA AKUN</label><input id="m-acc" value={form.account} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} placeholder="Contoh: Pawon Cabin" /><button className="primary-button" onClick={addAccount}>Simpan akun</button></>}
       {modal === "campaign" && <><span className="modal-icon"><CalendarDays size={21} /></span><h2>Campaign baru</h2><p>30 slot konten. Strategist langsung menyusun judul dari brief di bawah.</p><label htmlFor="m-acc2">AKUN</label><select id="m-acc2" value={formAccount} onChange={e => setForm(f => ({ ...f, campaignAccount: e.target.value, kind: "" }))}>{plan.accounts.map(a => <option key={a}>{a}</option>)}</select><label htmlFor="m-name">NAMA CAMPAIGN</label><input id="m-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Contoh: Villa Syllo Bandung" /><label htmlFor="m-kind">JENIS CAMPAIGN</label><select id="m-kind" value={form.kind || defaultKind(formAccount)} onChange={e => setForm(f => ({ ...f, kind: e.target.value as CampaignKind }))}>{(Object.keys(KIND_LABEL) as CampaignKind[]).map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select><label htmlFor="m-brief">BRIEF CAMPAIGN</label><textarea id="m-brief" rows={4} value={form.brief} onChange={e => setForm(f => ({ ...f, brief: e.target.value }))} placeholder="Contoh: Villa Syllo, villa 4 kamar di Lembang, Bandung. Kolam renang privat, view pegunungan, cocok untuk keluarga dan gathering 15 orang. Target: keluarga Jakarta–Bandung. CTA: booking via WhatsApp." /><label htmlFor="m-period">PERIODE</label><input id="m-period" value={form.period} onChange={e => setForm(f => ({ ...f, period: e.target.value }))} /><label htmlFor="m-goal">TUJUAN</label><select id="m-goal" value={form.goal} onChange={e => setForm(f => ({ ...f, goal: e.target.value }))}>{["Awareness & engagement", "Lead generation", "Bookings", "Sales conversion"].map(g => <option key={g}>{g}</option>)}</select><button className="primary-button" onClick={addCampaign}>Buat campaign</button></>}
-      {modal === "edit" && <><span className="modal-icon"><FileText size={21} /></span><h2>Brief campaign</h2><p>Dipakai agen untuk menyusun judul, brief, dan storyboard. Setelah disimpan, tekan “Susun ulang judul” bila judul lama tidak relevan.</p><label htmlFor="m-acc2">AKUN</label><select id="m-acc2" value={formAccount} onChange={e => setForm(f => ({ ...f, campaignAccount: e.target.value, kind: "" }))}>{plan.accounts.map(a => <option key={a}>{a}</option>)}</select><label htmlFor="m-name">NAMA CAMPAIGN</label><input id="m-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /><label htmlFor="m-kind">JENIS CAMPAIGN</label><select id="m-kind" value={form.kind || defaultKind(formAccount)} onChange={e => setForm(f => ({ ...f, kind: e.target.value as CampaignKind }))}>{(Object.keys(KIND_LABEL) as CampaignKind[]).map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select><label htmlFor="m-brief">BRIEF CAMPAIGN</label><textarea id="m-brief" rows={4} value={form.brief} onChange={e => setForm(f => ({ ...f, brief: e.target.value }))} placeholder="Contoh: Villa Syllo, villa 4 kamar di Lembang, Bandung. Kolam renang privat, view pegunungan, cocok untuk keluarga dan gathering 15 orang. Target: keluarga Jakarta–Bandung. CTA: booking via WhatsApp." /><label htmlFor="m-period">PERIODE</label><input id="m-period" value={form.period} onChange={e => setForm(f => ({ ...f, period: e.target.value }))} /><label htmlFor="m-goal">TUJUAN</label><select id="m-goal" value={form.goal} onChange={e => setForm(f => ({ ...f, goal: e.target.value }))}>{["Awareness & engagement", "Lead generation", "Bookings", "Sales conversion"].map(g => <option key={g}>{g}</option>)}</select><button className="primary-button" onClick={saveEdit}>Simpan brief</button></>}
+      {modal === "edit" && <><span className="modal-icon"><FileText size={21} /></span><h2>Brief campaign</h2><p>Dipakai agen untuk menyusun judul, brief, dan storyboard. Setelah disimpan, tekan “Susun ulang judul” bila judul lama tidak relevan.</p><label htmlFor="m-acc2">AKUN</label><select id="m-acc2" value={formAccount} onChange={e => setForm(f => ({ ...f, campaignAccount: e.target.value, kind: "" }))}>{plan.accounts.map(a => <option key={a}>{a}</option>)}</select><label htmlFor="m-name">NAMA CAMPAIGN</label><input id="m-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /><label htmlFor="m-kind">JENIS CAMPAIGN</label><select id="m-kind" value={form.kind || defaultKind(formAccount)} onChange={e => setForm(f => ({ ...f, kind: e.target.value as CampaignKind }))}>{(Object.keys(KIND_LABEL) as CampaignKind[]).map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select><label htmlFor="m-brief">BRIEF CAMPAIGN</label><textarea id="m-brief" rows={4} value={form.brief} onChange={e => setForm(f => ({ ...f, brief: e.target.value }))} placeholder="Contoh: Villa Syllo, villa 4 kamar di Lembang, Bandung. Kolam renang privat, view pegunungan, cocok untuk keluarga dan gathering 15 orang. Target: keluarga Jakarta–Bandung. CTA: booking via WhatsApp." /><label htmlFor="m-period">PERIODE</label><input id="m-period" value={form.period} onChange={e => setForm(f => ({ ...f, period: e.target.value }))} /><label htmlFor="m-goal">TUJUAN</label><select id="m-goal" value={form.goal} onChange={e => setForm(f => ({ ...f, goal: e.target.value }))}>{["Awareness & engagement", "Lead generation", "Bookings", "Sales conversion"].map(g => <option key={g}>{g}</option>)}</select><button className="primary-button" onClick={saveEdit}>Simpan brief</button>{campaign && <button className="outline-button x-danger f-delete-wide" onClick={() => deleteCampaign(campaign)}><Trash2 size={15} /> Hapus campaign</button>}</>}
       {modal === "content" && <><span className="modal-icon"><FileText size={21} /></span><h2>Konten baru</h2><p>Cukup judul dan format. Brief dan storyboard bisa diisi agen.</p><label htmlFor="m-title">JUDUL</label><input id="m-title" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /><label htmlFor="m-format">FORMAT</label><select id="m-format" value={form.format} onChange={e => setForm(f => ({ ...f, format: e.target.value }))}>{FORMATS.map(f => <option key={f}>{f}</option>)}</select><button className="primary-button" onClick={addContent}>Tambah konten</button></>}
     </div></div>}
   </div>;
