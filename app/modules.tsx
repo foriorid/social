@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, Eye, EyeOff, FileText, Loader2, MessageCircle, Plus, Printer, ShieldCheck, Sparkles, Trash2, WandSparkles } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, FileText, Loader2, MessageCircle, Plus, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { askAI, type Tier } from "./lib/ai";
 import { monthKey, rupiah } from "./lib/logic";
-import { buildPlan, briefKey, DEFAULT_ACCOUNTS, DEFAULT_CAMPAIGNS, SLOTS, STATUSES, type Brief, type Campaign, type Slot } from "./lib/plan";
 import { parseLines } from "./lib/logic";
 import { addApproval, useApprovals, useIdeas, useLeads, useSettings, useStored, useUsage, writeStored, type Lead } from "./lib/store";
 
@@ -117,33 +116,6 @@ export function InboxLeadsPage() {
   </div>;
 }
 
-export function SharedPlanPage() {
-  const [campaigns] = useStored<Campaign[]>("campaigns", DEFAULT_CAMPAIGNS);
-  const [accounts] = useStored<string[]>("accounts", DEFAULT_ACCOUNTS);
-  const [briefs, setBriefs] = useStored<Record<string, Brief>>("briefs", {});
-  const [campaignId, setCampaignId] = useState(campaigns[0]?.id ?? 0);
-  const campaign = campaigns.find(c => c.id === campaignId) ?? campaigns[0];
-  if (!campaign) return <div className="module-page"><p className="x-empty">Belum ada campaign. Buat di Content Plan.</p></div>;
-  const plan = buildPlan(campaign, briefs);
-  const patch = (day: number, value: Brief) => setBriefs(old => ({ ...old, [briefKey(campaign.id, day)]: { ...old[briefKey(campaign.id, day)], ...value } }));
-  const approved = plan.filter(s => s.client === "approved").length;
-  return <div className="module-page x-shared">
-    <div className="x-row x-noprint"><select aria-label="Pilih campaign" value={campaign.id} onChange={e => setCampaignId(Number(e.target.value))}>{accounts.map(a => <optgroup key={a} label={a}>{campaigns.filter(c => c.account === a).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>)}</select><button className="primary-button" onClick={() => window.print()}><Printer size={14} /> Cetak / simpan PDF</button><span className="muted-chip">Tampilan klien — tanpa data AI, biaya, atau catatan internal</span></div>
-    <section className="x-cover"><span>CONTENT PLAN · {campaign.period}</span><h2>{campaign.account}</h2><p>{campaign.name}</p><div><b>{plan.length}</b> konten · <b>{plan.filter(s => s.format === "Reels").length}</b> Reels · <b>{plan.filter(s => s.format !== "Reels").length}</b> Carousel/Feed · tujuan: {campaign.goal}</div></section>
-    <section className="panel"><div className="agent-section-heading"><div><h3>Rencana publikasi 30 hari</h3><p>{approved} dari {plan.length} konten disetujui klien.</p></div></div>
-      <div className="x-cal">{plan.map(s => <div key={s.day} className={s.client === "approved" ? "ok" : ""}><b>{String(s.day).padStart(2, "0")}</b><span>{s.format}</span><small>{s.title}</small></div>)}</div>
-    </section>
-    <section className="panel"><div className="agent-section-heading"><div><h3>Detail konten</h3><p>Klien dapat menyetujui atau meminta revisi per konten.</p></div></div>
-      <div className="x-approvals">{plan.map(s => <article className="x-approval" key={s.day}>
-        <div className="x-approval-head"><span className="approval-file-icon">{String(s.day).padStart(2, "0")}</span><div><b>{s.title}</b><small>{s.format} · {s.pillar}</small></div><span className={`x-status x-${s.client === "approved" ? "approved" : s.client === "revision" ? "revision" : "pending"}`}>{s.client === "approved" ? "Disetujui" : s.client === "revision" ? "Revisi" : "Menunggu"}</span></div>
-        <p className="x-quote">{s.hook}</p>
-        <div className="x-row x-noprint"><input aria-label={`Catatan klien konten ${s.day}`} value={s.note ?? ""} onChange={e => patch(s.day, { note: e.target.value })} placeholder="Catatan klien (opsional)" /><button className="primary-button" onClick={() => patch(s.day, { client: "approved" })}><Check size={14} /> Setujui</button><button className="outline-button" onClick={() => patch(s.day, { client: "revision" })}>Minta revisi</button></div>
-        {s.note && <p className="x-note">Catatan klien: {s.note}</p>}
-      </article>)}</div>
-    </section>
-  </div>;
-}
-
 /** Runs a free-form task as one of the agents and files the output for human approval. */
 export async function runAgentTask(agent: { name: string; group: string }, task: string, workspace: string): Promise<string> {
   const tier: Tier = agent.group === "Strategy" || agent.group === "Creative" ? "creative" : "light";
@@ -152,39 +124,33 @@ export async function runAgentTask(agent: { name: string; group: string }, task:
 
 export const notify = (message: string) => writeStored<string>("toast", message, "");
 
-/** Per-slot actions in Content Plan: status, AI brief, send to approval, pull an idea from the inbox. */
-export function BriefTools({ campaign, slot }: { campaign: Campaign; slot: Slot }) {
-  const [, setBriefs] = useStored<Record<string, Brief>>("briefs", {});
+export const PLAN_STATUSES = ["Planned", "Brief ready", "In production", "In review", "Scheduled", "Published"];
+type PlanItem = { day: number; title: string; format: string; status: string; hook: string; caption: string; visualDirection: string; cta: string };
+type PlanPatch = Partial<Omit<PlanItem, "day">>;
+
+/** AI + workflow actions for the selected content brief: status, AI brief, AI titles, approval, idea inbox. */
+export function PlanAI({ account, campaign, goal, item, total, onPatch, onTitles }: { account: string; campaign: string; goal: string; item: PlanItem; total: number; onPatch: (patch: PlanPatch) => void; onTitles: (rows: { title: string; format: string }[]) => void }) {
   const [ideas, setIdeas] = useIdeas();
   const ai = useAI();
-  const key = briefKey(campaign.id, slot.day);
-  const patch = (value: Brief) => setBriefs(old => ({ ...old, [key]: { ...old[key], ...value } }));
+  const field = (text: string, name: string) => new RegExp(`^${name}\\s*:\\s*(.+)$`, "im").exec(text)?.[1]?.trim();
   const write = () => ai.run("brief", async () => {
-    const text = await askAI({ tier: "creative", role: "Content Writer", prompt: `Tulis brief konten ${slot.format} untuk akun ${campaign.account}, campaign "${campaign.name}" (tujuan: ${campaign.goal}).\nTopik: ${slot.title}\n\nBaris pertama: "JUDUL: ..." (maksimal 9 kata). Lalu hook pembuka satu kalimat, lalu storyboard: untuk Reels 4-5 scene dengan durasi dan arahan shot; untuk Carousel isi tiap slide. Tutup dengan CTA.` });
-    const title = /^JUDUL\s*:\s*(.+)$/im.exec(text)?.[1]?.trim();
-    patch({ title: title || slot.title, hook: text.replace(/^JUDUL\s*:.*\n?/im, "").trim(), status: "Brief ready" });
+    const text = await askAI({ tier: "creative", role: "Content Writer", prompt: `Tulis brief konten ${item.format} untuk akun ${account}, campaign "${campaign}" (tujuan: ${goal}).\nTopik: ${item.title}\n\nJawab tepat lima baris berlabel, masing-masing satu baris:\nJUDUL: (maksimal 9 kata)\nHOOK: (kalimat pembuka)\nVISUAL: (arahan visual dan urutan scene/slide, dipisah titik koma)\nCAPTION: (caption siap pakai)\nCTA: (ajakan singkat)` });
+    const patch: PlanPatch = { title: field(text, "JUDUL"), hook: field(text, "HOOK"), visualDirection: field(text, "VISUAL"), caption: field(text, "CAPTION"), cta: field(text, "CTA") };
+    if (!patch.hook) throw new Error("Jawaban model tidak sesuai format. Coba lagi.");
+    onPatch({ ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v)), status: "Brief ready" });
+  });
+  const titles = () => ai.run("plan", async () => {
+    const text = await askAI({ tier: "creative", role: "Creative Strategist", maxTokens: 6000, prompt: `Susun ${total} judul konten untuk akun ${account}, campaign "${campaign}" (tujuan: ${goal}). Campur edukasi, portofolio/before-after, behind the scenes, personal, dan promo jasa. Satu judul per baris dengan format: Reels | judul  atau  Carousel | judul  atau  Feed | judul. Tanpa penomoran, tanpa teks lain.` });
+    const rows = parseLines(text).map(l => l.split("|").map(x => x.trim())).filter(r => r.length === 2 && r[1]).slice(0, total);
+    if (rows.length < 5) throw new Error("Jawaban model tidak sesuai format. Coba lagi.");
+    onTitles(rows.map(r => ({ title: r[1], format: /carousel/i.test(r[0]) ? "Carousel" : /feed/i.test(r[0]) ? "Feed" : "Reels" })));
   });
   return <div className="x-tools">
-    <div className="x-row"><label htmlFor="slot-status">STATUS</label><select id="slot-status" value={slot.status} onChange={e => patch({ status: e.target.value })}>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
+    <div className="x-row"><label htmlFor="slot-status">STATUS</label><select id="slot-status" value={item.status} onChange={e => onPatch({ status: e.target.value })}>{PLAN_STATUSES.map(s => <option key={s}>{s}</option>)}</select>
       <AiButton className="outline-button" label="Tulis brief dengan AI" busyLabel="Menulis…" busy={ai.busy === "brief"} onClick={write} />
-      <button className="outline-button" onClick={() => { addApproval({ title: `${slot.format} — ${slot.title}`, by: "Content Plan", type: "Brief", body: slot.hook }); patch({ status: "In review" }); }}><Check size={14} /> Ajukan approval</button></div>
+      <AiButton className="outline-button" label={`Susun ${total} judul dengan AI`} busyLabel="Menyusun…" busy={ai.busy === "plan"} onClick={titles} />
+      <button className="outline-button" onClick={() => { addApproval({ title: `${item.format} — ${item.title}`, by: "Content Plan", type: "Brief", body: `Hook: ${item.hook}\n\nVisual: ${item.visualDirection}\n\nCaption: ${item.caption}\n\nCTA: ${item.cta}` }); onPatch({ status: "In review" }); }}><Check size={14} /> Ajukan approval</button></div>
     <AiError message={ai.error} />
-    {ideas.length > 0 && <div className="x-ideas"><label>INBOX IDE ({ideas.length}) — dari Riset, Analitik, dan Bank Hook</label>{ideas.map(idea => <div key={idea}><span>{idea}</span><button className="outline-button" onClick={() => { patch({ title: idea, hook: "Kembangkan dari ide: " + idea, status: "Planned" }); setIdeas(old => old.filter(x => x !== idea)); }}>Pakai di slot {slot.day}</button><button className="outline-button x-danger" aria-label="Hapus ide" onClick={() => setIdeas(old => old.filter(x => x !== idea))}><Trash2 size={14} /></button></div>)}</div>}
-  </div>;
-}
-
-/** Calendar of the 30 slots plus one-shot AI planning for the whole campaign. */
-export function PlanOverview({ campaign, selected, onPick }: { campaign: Campaign; selected: number; onPick: (day: number) => void }) {
-  const [briefs, setBriefs] = useStored<Record<string, Brief>>("briefs", {});
-  const ai = useAI();
-  const plan = buildPlan(campaign, briefs);
-  const generate = () => ai.run("plan", async () => {
-    const text = await askAI({ tier: "creative", role: "Creative Strategist", prompt: `Susun ${SLOTS} judul konten untuk akun ${campaign.account}, campaign "${campaign.name}" (${campaign.period}, tujuan: ${campaign.goal}). Campur edukasi, portofolio/before-after, behind the scenes, personal, dan promo jasa. Satu judul per baris dengan format: Reels | judul  atau  Carousel | judul. Tanpa penomoran, tanpa teks lain.`, maxTokens: 6000 });
-    const rows = parseLines(text).map(l => l.split("|").map(x => x.trim())).filter(r => r.length === 2 && r[1]).slice(0, SLOTS);
-    if (rows.length < 5) throw new Error("Jawaban model tidak sesuai format. Coba lagi.");
-    setBriefs(old => { const next = { ...old }; rows.forEach((r, i) => { const k = briefKey(campaign.id, i + 1); next[k] = { ...next[k], title: r[1], format: /carousel/i.test(r[0]) ? "Carousel" : "Reels", hook: "Susun hook utama untuk " + r[1] + ".", status: "Planned" }; }); return next; });
-  });
-  return <div className="x-plan-overview"><div className="x-row"><AiButton className="primary-button" label="Susun 30 judul dengan AI" busyLabel="Menyusun plan…" busy={ai.busy === "plan"} onClick={generate} /><span className="muted-chip">Mengganti judul 30 slot campaign ini</span></div><AiError message={ai.error} />
-    <div className="x-cal">{plan.map(s => <button key={s.day} className={(s.day === selected ? "sel " : "") + (s.status === "Published" || s.status === "Scheduled" ? "ok" : "")} onClick={() => onPick(s.day)}><b>{String(s.day).padStart(2, "0")}</b><span>{s.format} · {s.status}</span><small>{s.title}</small></button>)}</div>
+    {ideas.length > 0 && <div className="x-ideas"><label>INBOX IDE ({ideas.length}) — dari Riset, Analitik, dan Bank Hook</label>{ideas.map(idea => <div key={idea}><span>{idea}</span><button className="outline-button" onClick={() => { onPatch({ title: idea, hook: "Kembangkan dari ide: " + idea, status: "Planned" }); setIdeas(old => old.filter(x => x !== idea)); }}>Pakai di konten {item.day}</button><button className="outline-button x-danger" aria-label="Hapus ide" onClick={() => setIdeas(old => old.filter(x => x !== idea))}><Trash2 size={14} /></button></div>)}</div>}
   </div>;
 }

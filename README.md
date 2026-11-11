@@ -27,10 +27,9 @@ npm run dev
 - **AI (Anthropic):** enter your API key in **Settings → AI & Models**. Routine tasks use the cheap model, creative tasks the stronger one; both are selectable. A monthly rupiah budget stops AI calls when reached, and usage/cost is tracked per month.
 - **AI Agent Team:** assigning a task runs it for real and files the result in the approval queue (also shown on the Dashboard).
 - **Research & Insight → Bedah Akun:** paste an Instagram/TikTok profile link. With a Meta access token + Instagram user ID (Settings) public posts of Business/Creator accounts are fetched; otherwise paste captions/notes. Ideas from the analysis go to the idea inbox.
-- **Content Plan:** AI can draft 30 titles or a single brief; each slot has a status that feeds the Dashboard pipeline; ideas can be pulled from the inbox.
+- **Content Plan:** AI can draft all titles of a campaign or a single brief (hook, visual direction, caption, CTA); each brief has a status that feeds the Dashboard pipeline; ideas can be pulled from the inbox; briefs can be sent to approval.
 - **Production Studio:** AI headline/supporting text, zoom, submit to approval, AI editing suggestions for video.
 - **Inbox & Leads:** log leads manually, draft replies with AI, track status.
-- **Shared Plan:** client-facing view of a campaign with per-item approve/revise and print to PDF.
 
 ## Limitations
 
