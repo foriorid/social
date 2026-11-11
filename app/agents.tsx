@@ -5,7 +5,7 @@ import { Check, Pause, Play, RotateCcw, Sparkles, Trash2, Zap } from "lucide-rea
 import { askAI } from "./lib/ai";
 import { PIPELINE, applyStep, nextStep, parsePlan, stepPrompt, type StepKind } from "./lib/flow";
 import { addApproval, getSettings, readStored, useSettings, useTasks, writeStored, type Task } from "./lib/store";
-import { AiButton, AiError, ApprovalList, ModelRouterPanel, notify, runAgentTask, useAI } from "./modules";
+import { AiButton, AiError, ApprovalList, ModelRouterPanel, notify, runAgentTask, useAI, useAiReady } from "./modules";
 import { patchCampaign, patchItem, readPlan, usePlan } from "./plan-data";
 
 const setTasks = (fn: (old: Task[]) => Task[]) => writeStored<Task[]>("tasks", fn, []);
@@ -60,13 +60,14 @@ export function useAgentRunner() {
   const [tasks] = useTasks();
   const [settings] = useSettings();
   const [plan] = usePlan();
+  const ready = useAiReady();
   const busy = useRef(false);
   useEffect(() => { setTasks(old => (old.some(t => t.status === "running") ? old.map(t => (t.status === "running" ? { ...t, status: "queued" } : t)) : old)); }, []); // a reload interrupts a running call
   useEffect(() => {
     if (busy.current) return;
     const next = [...tasks].reverse().find(t => t.status === "queued");
     if (!next) {
-      if (!settings.autoRun || !settings.apiKey || autoStarted >= settings.autoLimit) return;
+      if (!settings.autoRun || !ready || autoStarted >= settings.autoLimit) return;
       for (const c of plan.campaigns) {
         if (!c.auto) continue;
         const item = c.items.find(x => nextStep(x) && !tasks.some(t => t.campaignId === c.id && t.day === x.day && t.status === "failed"));
@@ -82,7 +83,7 @@ export function useAgentRunner() {
     }).catch(error => {
       setTasks(old => old.map(t => (t.id === next.id ? { ...t, status: "failed", error: error instanceof Error ? error.message : String(error) } : t)));
     }).finally(() => { busy.current = false; setTasks(old => [...old]); });
-  }, [tasks, settings.autoRun, settings.apiKey, settings.autoLimit, plan]);
+  }, [tasks, settings.autoRun, ready, settings.autoLimit, plan]);
 }
 
 const STATUS_TEXT: Record<Task["status"], string> = { queued: "Antre", running: "Dikerjakan…", done: "Selesai", failed: "Gagal" };
@@ -92,6 +93,7 @@ export function AgentsPage() {
   const [tasks] = useTasks();
   const [settings, setSettings] = useSettings();
   const [plan] = usePlan();
+  const ready = useAiReady();
   const [campaignId, setCampaignId] = useState(plan.campaigns[0]?.id ?? "");
   const [count, setCount] = useState(3);
   const [freeTask, setFreeTask] = useState(""), [freeAgent, setFreeAgent] = useState("Content Writer");
@@ -106,7 +108,7 @@ export function AgentsPage() {
         <button className={settings.autoRun ? "outline-button" : "primary-button"} onClick={() => setSettings(o => ({ ...o, autoRun: !o.autoRun }))}>{settings.autoRun ? <><Pause size={15} /> Matikan otomatis</> : <><Zap size={15} /> Nyalakan otomatis</>}</button>
         <label htmlFor="autolimit">Maks. konten otomatis per sesi</label><input id="autolimit" type="number" min={1} max={100} value={settings.autoLimit} onChange={e => setSettings(o => ({ ...o, autoLimit: Math.max(1, Number(e.target.value) || 1) }))} />
       </div>
-      {!settings.apiKey && <p className="x-error">API key belum diisi. Buka Settings → AI & Models agar agen bisa bekerja.</p>}
+      {!ready && <p className="x-error">API key belum diisi. Buka Settings → AI & Models agar agen bisa bekerja.</p>}
     </section>
 
     <section className="panel"><div className="agent-section-heading"><div><h3>Urutan kerja</h3><p>Setiap konten melewati langkah yang sama. Tugas tiap agen tetap dan jelas.</p></div></div>

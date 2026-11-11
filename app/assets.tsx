@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { ChevronRight, ExternalLink, FolderOpen, FolderPlus, Link2, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { callServer, isSignedIn, readCloudKeys } from "./lib/cloud";
 import { driveFolderId } from "./lib/flow";
 import { getSettings, useSettings, useStored } from "./lib/store";
+import { useCloud } from "./modules";
 import { notify } from "./modules";
 import { patchItem, readPlan, usePlan, type AssetRef } from "./plan-data";
 
@@ -19,6 +21,7 @@ export const toRef = (f: DriveFile): AssetRef => ({ id: f.id, name: f.name, url:
 
 /** Lists a Drive folder with the user's Google API key. Nothing is copied: files stay in Drive. */
 export async function listDriveFolder(folderId: string): Promise<DriveFile[]> {
+  if (isSignedIn() && readCloudKeys().google) return (await callServer<{ files: DriveFile[] }>("drive", { folderId })).files;
   const key = getSettings().googleApiKey.trim();
   if (!key) throw new Error("Google API key belum diisi. Buka Settings → AI & Models.");
   const params = new URLSearchParams({ q: `'${folderId}' in parents and trashed = false`, fields: "files(id,name,mimeType,size,modifiedTime,webViewLink)", pageSize: "200", orderBy: "folder,name", supportsAllDrives: "true", includeItemsFromAllDrives: "true", key });
@@ -34,6 +37,7 @@ function useFolders() { return useStored<DriveFolder[]>("driveFolders", []); }
 export function DriveBrowser({ onPick, pickLabel }: { onPick?: (ref: AssetRef) => void; pickLabel?: string }) {
   const [folders, setFolders] = useFolders();
   const [settings] = useSettings();
+  const [cloud] = useCloud();
   const [trail, setTrail] = useState<{ id: string; name: string }[]>([]);
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
@@ -45,14 +49,14 @@ export function DriveBrowser({ onPick, pickLabel }: { onPick?: (ref: AssetRef) =
   const [linkCampaign, setLinkCampaign] = useState(""), [linkDay, setLinkDay] = useState(1);
   const current = trail[trail.length - 1];
   const load = (id: string) => { setState("loading"); setError(""); listDriveFolder(id).then(list => { setFiles(list); setState("idle"); }).catch(e => { setFiles([]); setError(e instanceof Error ? e.message : String(e)); setState("error"); }); };
-  useEffect(() => { if (current) load(current.id); else setFiles([]); }, [current?.id, settings.googleApiKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (current) load(current.id); else setFiles([]); }, [current?.id, settings.googleApiKey, cloud.keys.google]); // eslint-disable-line react-hooks/exhaustive-deps
   const shown = files.filter(f => (type === "Semua" || kindOf(f.mimeType) === type || kindOf(f.mimeType) === "Folder") && f.name.toLowerCase().includes(query.toLowerCase()));
   const add = () => { const id = driveFolderId(url); if (!name.trim()) return setAddError("Isi nama folder."); if (!id) return setAddError("Link bukan folder Google Drive. Contoh: https://drive.google.com/drive/folders/…"); setFolders(old => [...old.filter(f => f.id !== id), { name: name.trim(), url: url.trim(), id }]); setTrail([{ id, name: name.trim() }]); setName(""); setUrl(""); setAddError(""); setShowAdd(false); };
   const campaign = plan.campaigns.find(c => c.id === linkCampaign) ?? plan.campaigns[0];
   const link = (f: DriveFile) => { if (!campaign) return; const item = readPlan().campaigns.find(c => c.id === campaign.id)?.items.find(x => x.day === linkDay); if (!item) return; const ref = toRef(f); patchItem(campaign.id, linkDay, { assets: [...(item.assets ?? []).filter(a => a.id !== ref.id), ref] }); notify(`Ditautkan ke konten ${linkDay}: ${item.title}`); };
 
   return <div className="f-drive">
-    {!settings.googleApiKey && <p className="x-error">Google API key belum diisi. Isi di Settings → AI & Models, lalu bagikan folder Drive sebagai “Siapa saja yang memiliki link”.</p>}
+    {!settings.googleApiKey && !cloud.keys.google && <p className="x-error">Google API key belum diisi. Isi di Settings → AI & Models, lalu bagikan folder Drive sebagai “Siapa saja yang memiliki link”.</p>}
     <div className="f-drive-bar">
       <div className="f-chips" role="tablist" aria-label="Folder Drive">{folders.map(f => <button key={f.id} className={trail[0]?.id === f.id ? "active" : ""} onClick={() => { setTrail([{ id: f.id, name: f.name }]); setSelected(null); }}><FolderOpen size={15} /> {f.name}</button>)}<button onClick={() => setShowAdd(true)}><FolderPlus size={15} /> Tambah folder</button></div>
     </div>

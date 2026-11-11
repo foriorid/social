@@ -5,6 +5,7 @@ import { Check, Copy, Eye, EyeOff, FileText, Loader2, MessageCircle, Plus, Shiel
 import { askAI, type Tier } from "./lib/ai";
 import { monthKey, rupiah } from "./lib/logic";
 import { parseLines } from "./lib/logic";
+import { aiReady, CLOUD_OFF, saveSecret, signInWithEmail, signOut, type Cloud } from "./lib/cloud";
 import { addApproval, useApprovals, useIdeas, useLeads, useSettings, useStored, useUsage, writeStored, type Lead } from "./lib/store";
 
 /** Runs an AI action and tracks busy/error state for the button that triggered it. */
@@ -36,7 +37,8 @@ export function useMonthUsage() {
 
 export function AiCostBadge() {
   const { usage, settings, percent } = useMonthUsage();
-  return <div className="x-cost"><b>Biaya AI bulan ini: {rupiah(usage.idr)}</b><span>{settings.apiKey ? `${percent}% dari batas ${rupiah(settings.budgetIdr)} · ${usage.calls} panggilan` : "API key belum diisi — buka Settings"}</span><i><em style={{ width: percent + "%" }} /></i></div>;
+  const ready = useAiReady();
+  return <div className="x-cost"><b>Biaya AI bulan ini: {rupiah(usage.idr)}</b><span>{ready ? `${percent}% dari batas ${rupiah(settings.budgetIdr)} · ${usage.calls} panggilan` : "API key belum diisi — buka Settings"}</span><i><em style={{ width: percent + "%" }} /></i></div>;
 }
 
 export function ApprovalList({ limit, empty = "Tidak ada yang menunggu persetujuan." }: { limit?: number; empty?: string }) {
@@ -58,17 +60,47 @@ export function ApprovalList({ limit, empty = "Tidak ada yang menunggu persetuju
 
 const MODELS = [["claude-haiku-5-5", "Claude Haiku 5.5 — termurah"], ["claude-sonnet-5-5", "Claude Sonnet 5.5 — seimbang"], ["claude-opus-5-5", "Claude Opus 5.5 — kualitas tertinggi"]];
 
+export const useCloud = () => useStored<Cloud>("cloud", CLOUD_OFF);
+/** AI can run when the signed-in user has a key on the server, or a key is kept in this browser. */
+export function useAiReady() { const [cloud] = useCloud(); const [settings] = useSettings(); return aiReady(cloud, settings.apiKey); }
+
+export function AccountPanel() {
+  const [cloud] = useCloud();
+  const [email, setEmail] = useState(""), [sent, setSent] = useState(false);
+  const ai = useAI();
+  if (cloud.email) return <section className="f-account"><div><b>Masuk sebagai {cloud.email}</b><small>{cloud.sync === "syncing" ? "Menyinkronkan…" : cloud.sync === "error" ? `Sinkronisasi gagal: ${cloud.error}` : "Data tersinkron ke database. Bisa dibuka dari perangkat lain."}</small></div><button className="outline-button" onClick={() => signOut()}>Keluar</button></section>;
+  return <section className="f-account"><div><b>Masuk untuk menyimpan ke database</b><small>Data dan API key tersimpan aman di server, dan sama di ponsel maupun laptop. Tanpa masuk, data hanya ada di browser ini.</small></div>
+    {sent ? <p className="x-ok">Link masuk dikirim ke {email}. Buka email itu di perangkat ini.</p> : <div className="x-row"><input type="email" aria-label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="nama@email.com" autoComplete="email" /><AiButton className="primary-button" label="Kirim link masuk" busyLabel="Mengirim…" busy={ai.busy === "login"} onClick={() => ai.run("login", async () => { if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Email belum valid."); await signInWithEmail(email.trim()); setSent(true); })} /></div>}
+    <AiError message={ai.error} /></section>;
+}
+
+/** A key field: saved encrypted on the server when signed in, otherwise kept in this browser. */
+function KeyField({ id, label, hint, placeholder, server, local, setLocal }: { id: string; label: string; hint: React.ReactNode; placeholder: string; server: "anthropic" | "google" | "meta_token" | "ig_user_id"; local: string; setLocal: (v: string) => void }) {
+  const [cloud] = useCloud();
+  const [draft, setDraft] = useState(""), [show, setShow] = useState(false);
+  const ai = useAI();
+  const savedAt = cloud.keys[server];
+  if (!cloud.email) return <div className="settings-field"><label htmlFor={id}>{label}</label><div className="x-row"><input id={id} type={show ? "text" : "password"} value={local} onChange={e => setLocal(e.target.value)} placeholder={placeholder} autoComplete="off" /><button className="outline-button" onClick={() => setShow(!show)} aria-label={show ? "Sembunyikan" : "Tampilkan"}>{show ? <EyeOff size={15} /> : <Eye size={15} />}</button></div><small>{hint} Tersimpan hanya di browser ini.</small></div>;
+  const save = (value: string) => ai.run(id, async () => { await saveSecret(server, value); setDraft(""); if (value) setLocal(""); });
+  return <div className="settings-field"><label htmlFor={id}>{label}</label>
+    {savedAt && <p className="x-ok">Tersimpan terenkripsi di server · {new Date(savedAt).toLocaleDateString("id-ID", { dateStyle: "medium" })}</p>}
+    <div className="x-row"><input id={id} type={show ? "text" : "password"} value={draft} onChange={e => setDraft(e.target.value)} placeholder={savedAt ? "Isi untuk mengganti" : placeholder} autoComplete="off" /><button className="outline-button" onClick={() => setShow(!show)} aria-label={show ? "Sembunyikan" : "Tampilkan"}>{show ? <EyeOff size={15} /> : <Eye size={15} />}</button></div>
+    <div className="x-row"><AiButton className="primary-button" label="Simpan ke server" busyLabel="Menyimpan…" busy={ai.busy === id} onClick={() => draft.trim() && save(draft.trim())} />{local && !savedAt && <button className="outline-button" onClick={() => save(local)}>Pindahkan key dari browser ini</button>}{savedAt && <button className="outline-button x-danger" onClick={() => save("")}>Hapus dari server</button>}</div>
+    <small>{hint}</small><AiError message={ai.error} /></div>;
+}
+
 export function ApiSettingsTab() {
   const [settings, setSettings] = useSettings();
+  const [cloud] = useCloud();
   const { usage } = useMonthUsage();
-  const [show, setShow] = useState(false);
   const [testResult, setTestResult] = useState("");
   const ai = useAI();
   const set = <K extends keyof typeof settings>(key: K, value: (typeof settings)[K]) => setSettings(old => ({ ...old, [key]: value }));
   return <>
-    <p className="settings-security-note"><ShieldCheck size={16} /> Aplikasi ini statis (GitHub Pages), jadi key disimpan hanya di browser ini (localStorage) dan dikirim langsung ke penyedia API. Jangan isi di komputer bersama. Tidak ada key yang tersimpan di repo.</p>
-    <div className="settings-field"><label htmlFor="apikey">ANTHROPIC API KEY</label><div className="x-row"><input id="apikey" type={show ? "text" : "password"} value={settings.apiKey} onChange={e => set("apiKey", e.target.value)} placeholder="sk-ant-…" autoComplete="off" /><button className="outline-button" onClick={() => setShow(!show)} aria-label={show ? "Sembunyikan key" : "Tampilkan key"}>{show ? <EyeOff size={15} /> : <Eye size={15} />}</button></div><small>Dibuat di console.anthropic.com → API Keys. Kosongkan untuk mematikan semua fitur AI.</small></div>
-    <div className="x-row"><AiButton className="primary-button" label="Tes koneksi" busyLabel="Mengetes…" busy={ai.busy === "test"} onClick={() => ai.run("test", async () => { setTestResult(""); const text = await askAI({ tier: "light", role: "asisten", prompt: "Balas dengan satu kata: OK", maxTokens: 500 }); setTestResult("Terhubung. Balasan model: " + text); })} />{settings.apiKey && <button className="outline-button x-danger" onClick={() => set("apiKey", "")}>Hapus key</button>}</div>
+    <AccountPanel />
+    <p className="settings-security-note"><ShieldCheck size={16} /> {cloud.email ? "Key disimpan terenkripsi (Supabase Vault) dan hanya dipakai oleh server. Browser tidak pernah menerimanya kembali." : "Belum masuk: key disimpan di browser ini saja dan dikirim langsung ke penyedia API. Jangan isi di komputer bersama."}</p>
+    <KeyField id="apikey" label="ANTHROPIC API KEY" server="anthropic" placeholder="sk-ant-…" local={settings.apiKey} setLocal={v => set("apiKey", v)} hint="Dibuat di console.anthropic.com → API Keys. Wajib untuk semua fitur AI." />
+    <div className="x-row"><AiButton className="primary-button" label="Tes koneksi AI" busyLabel="Mengetes…" busy={ai.busy === "test"} onClick={() => ai.run("test", async () => { setTestResult(""); const text = await askAI({ tier: "light", role: "asisten", prompt: "Balas dengan satu kata: OK", maxTokens: 500 }); setTestResult("Terhubung. Balasan model: " + text); })} /></div>
     {testResult && <p className="x-ok">{testResult}</p>}<AiError message={ai.error} />
     <div className="settings-divider" />
     <div className="settings-field"><label htmlFor="light">MODEL TUGAS RUTIN (balasan, hashtag, ringkasan)</label><select id="light" value={settings.lightModel} onChange={e => set("lightModel", e.target.value)}>{MODELS.map(m => <option key={m[0]} value={m[0]}>{m[1]}</option>)}</select></div>
@@ -77,16 +109,17 @@ export function ApiSettingsTab() {
     <div className="settings-field"><label htmlFor="kurs">KURS USD → RUPIAH (untuk perkiraan biaya)</label><input id="kurs" type="number" min={1} value={settings.usdToIdr} onChange={e => set("usdToIdr", Number(e.target.value) || 1)} /></div>
     <div className="model-routing-cards"><article><span>BULAN INI</span><b>{rupiah(usage.idr)}</b><small>{usage.calls} panggilan AI</small></article><article><span>TOKEN MASUK</span><b>{usage.inputTokens.toLocaleString("id-ID")}</b><small>prompt + konteks brand</small></article><article><span>TOKEN KELUAR</span><b>{usage.outputTokens.toLocaleString("id-ID")}</b><small>hasil tulisan</small></article></div>
     <div className="settings-divider" />
-    <div className="settings-field"><label htmlFor="meta">META ACCESS TOKEN (opsional — bedah akun Instagram otomatis)</label><input id="meta" type="password" value={settings.metaToken} onChange={e => set("metaToken", e.target.value)} placeholder="EAAG…" autoComplete="off" /><small>Token dari Meta for Developers dengan izin instagram_basic. Hanya bisa membaca akun Business/Creator publik.</small></div>
+    <KeyField id="gkey" label="GOOGLE API KEY (Asset Library — membaca folder Google Drive)" server="google" placeholder="AIza…" local={settings.googleApiKey} setLocal={v => set("googleApiKey", v)} hint="Google Cloud Console → Credentials → API key, lalu aktifkan “Google Drive API”. Folder harus dibagikan “Siapa saja yang memiliki link”." />
     <div className="settings-divider" />
-    <div className="settings-field"><label htmlFor="gkey">GOOGLE API KEY (Asset Library — membaca folder Google Drive)</label><input id="gkey" type="password" value={settings.googleApiKey} onChange={e => set("googleApiKey", e.target.value)} placeholder="AIza…" autoComplete="off" /><small>Buat di Google Cloud Console → Credentials → API key, lalu aktifkan “Google Drive API”. Folder harus dibagikan “Siapa saja yang memiliki link”. Batasi key ke domain situs Anda (HTTP referrer).</small></div>
-    <div className="settings-field"><label htmlFor="igid">INSTAGRAM USER ID (akun Business/Creator Anda)</label><input id="igid" value={settings.igUserId} onChange={e => set("igUserId", e.target.value)} placeholder="1784…" /><small>Tanpa dua isian ini, Bedah Akun tetap berjalan dari catatan/caption yang Anda tempel. TikTok belum punya jalur resmi untuk membaca akun lain.</small></div>
+    <KeyField id="meta" label="META ACCESS TOKEN (opsional — bedah akun Instagram otomatis)" server="meta_token" placeholder="EAAG…" local={settings.metaToken} setLocal={v => set("metaToken", v)} hint="Token dari Meta for Developers dengan izin instagram_basic. Hanya membaca akun Business/Creator publik." />
+    <KeyField id="igid" label="INSTAGRAM USER ID (akun Business/Creator Anda)" server="ig_user_id" placeholder="1784…" local={settings.igUserId} setLocal={v => set("igUserId", v)} hint="Tanpa token Meta dan ID ini, Bedah Akun tetap jalan dari caption yang Anda tempel." />
   </>;
 }
 
 export function ModelRouterPanel() {
   const { usage, settings, percent } = useMonthUsage();
-  return <section className="panel x-router"><div className="agent-section-heading"><div><h3>Model router & biaya</h3><p>Tugas rutin memakai model murah; model kreatif hanya untuk naskah, strategi, dan analisis.</p></div><span className="muted-chip">{settings.apiKey ? "AI aktif" : "API key belum diisi"}</span></div>
+  const ready = useAiReady();
+  return <section className="panel x-router"><div className="agent-section-heading"><div><h3>Model router & biaya</h3><p>Tugas rutin memakai model murah; model kreatif hanya untuk naskah, strategi, dan analisis.</p></div><span className="muted-chip">{ready ? "AI aktif" : "API key belum diisi"}</span></div>
     <div className="model-routing-cards"><article><span>RUTIN</span><b>{settings.lightModel}</b><small>Community Manager, Social Media Manager, Workflow</small></article><article><span>KREATIF</span><b>{settings.creativeModel}</b><small>Research, Strategist, Writer, Designer, Video Editor</small></article><article><span>BULAN INI</span><b>{rupiah(usage.idr)}</b><small>{percent}% dari batas {rupiah(settings.budgetIdr)} · {usage.calls} panggilan</small></article></div>
   </section>;
 }

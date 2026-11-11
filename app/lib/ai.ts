@@ -2,6 +2,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { costIdr, monthKey } from "./logic";
+import { callServer, isSignedIn, readCloudKeys, ServerSetupError } from "./cloud";
 import { EMPTY_USAGE, getSettings, readStored, writeStored, type Usage } from "./store";
 
 export type Tier = "light" | "creative";
@@ -16,18 +17,30 @@ function currentUsage(): Usage {
 /**
  * One model call with the brand voice as system prompt.
  * light = routine/volume work (cheapest model), creative = scripts, strategy, analysis.
- * The key comes from Settings and is sent straight from this browser to Anthropic.
+ * Signed in: the call goes through the creator-api Edge Function, which holds the key in Vault.
+ * Signed out: falls back to a key kept in this browser, sent straight to Anthropic.
  */
 export async function askAI({ tier, role, prompt, maxTokens = 4000 }: { tier: Tier; role: string; prompt: string; maxTokens?: number }): Promise<string> {
   const settings = getSettings();
-  if (!settings.apiKey.trim()) throw new AiSetupError("API key belum diisi. Buka Settings → AI & Models.");
+  const viaServer = isSignedIn() && !!readCloudKeys().anthropic;
+  if (!viaServer && !settings.apiKey.trim()) throw new AiSetupError("API key belum diisi. Buka Settings → AI & Models.");
   const usage = currentUsage();
   if (settings.budgetIdr > 0 && usage.idr >= settings.budgetIdr) throw new AiSetupError("Batas biaya AI bulan ini sudah tercapai. Naikkan batas di Settings → AI & Models.");
 
   const model = tier === "light" ? settings.lightModel : settings.creativeModel;
-  const client = new Anthropic({ apiKey: settings.apiKey.trim(), dangerouslyAllowBrowser: true });
   const system = `Kamu adalah ${role} di tim media sosial ${settings.brandName} (${settings.handle}), fotografer spesialis interior properti di Jakarta, pemilik brand FORIOR. Gaya bahasa brand: ${settings.brandVoice} Jawab dalam bahasa Indonesia, ringkas, langsung ke hasil, tanpa pembuka atau penutup.`;
 
+  const record = (input: number, output: number) => writeStored<Usage>("usage", { month: monthKey(), inputTokens: usage.inputTokens + input, outputTokens: usage.outputTokens + output, idr: usage.idr + costIdr(model, input, output, settings.usdToIdr), calls: usage.calls + 1 }, EMPTY_USAGE);
+  if (viaServer) {
+    try {
+      const r = await callServer<{ text: string; stop_reason: string; usage: { input_tokens: number; output_tokens: number } }>("ai", { model, system, prompt, maxTokens });
+      record(r.usage.input_tokens, r.usage.output_tokens);
+      if (r.stop_reason === "refusal") throw new Error("Model menolak permintaan ini. Ubah instruksinya lalu coba lagi.");
+      if (!r.text) throw new Error("Model tidak mengembalikan teks. Coba lagi.");
+      return r.text;
+    } catch (error) { if (error instanceof ServerSetupError) throw new AiSetupError(error.message); throw error; }
+  }
+  const client = new Anthropic({ apiKey: settings.apiKey.trim(), dangerouslyAllowBrowser: true });
   try {
     // Sonnet/Opus tiers can decline on safety classifiers; let the API retry on its default fallback model. Haiku has no server-side fallback.
     const withFallback = !model.includes("haiku");
@@ -39,13 +52,7 @@ export async function askAI({ tier, role, prompt, maxTokens = 4000 }: { tier: Ti
       system,
       messages: [{ role: "user", content: prompt }]
     });
-    writeStored<Usage>("usage", {
-      month: monthKey(),
-      inputTokens: usage.inputTokens + response.usage.input_tokens,
-      outputTokens: usage.outputTokens + response.usage.output_tokens,
-      idr: usage.idr + costIdr(model, response.usage.input_tokens, response.usage.output_tokens, settings.usdToIdr),
-      calls: usage.calls + 1
-    }, EMPTY_USAGE);
+    record(response.usage.input_tokens, response.usage.output_tokens);
     if (response.stop_reason === "refusal") throw new Error("Model menolak permintaan ini. Ubah instruksinya lalu coba lagi.");
     const text = response.content.map(block => (block.type === "text" ? block.text : "")).join("").trim();
     if (!text) throw new Error("Model tidak mengembalikan teks. Coba lagi.");
@@ -67,6 +74,10 @@ export type IgPost = { caption: string; likes: number; comments: number; type: s
  * Needs the user's own Meta access token + Instagram user ID from Settings.
  */
 export async function fetchInstagramPosts(username: string): Promise<{ followers: number; posts: IgPost[] }> {
+  if (isSignedIn() && readCloudKeys().meta_token) {
+    const d = await callServer<{ followers_count?: number; media?: { data?: Record<string, unknown>[] } }>("instagram", { username });
+    return { followers: d.followers_count ?? 0, posts: (d.media?.data ?? []).map(m => ({ caption: String(m.caption ?? ""), likes: Number(m.like_count ?? 0), comments: Number(m.comments_count ?? 0), type: String(m.media_type ?? ""), date: String(m.timestamp ?? "").slice(0, 10) })) };
+  }
   const { metaToken, igUserId } = getSettings();
   if (!metaToken.trim() || !igUserId.trim()) throw new AiSetupError("Token Meta belum diisi.");
   const fields = `business_discovery.username(${username}){followers_count,media.limit(30){caption,like_count,comments_count,media_type,timestamp}}`;

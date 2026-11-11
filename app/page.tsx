@@ -20,6 +20,7 @@ import { addApproval, addIdea, useApprovals, useIdeas, useLeads, useSettings, us
 import { ImageTile } from "./ui";
 import { PublicCampaignPage, migrateLegacyPlan, usePlan, type CampaignData } from "./plan-data";
 import { AgentsPage, useAgentRunner } from "./agents";
+import { startCloud } from "./lib/cloud";
 import { AssetLibraryPage } from "./assets";
 import { ContentPlanPage } from "./plan";
 import { StudioPage } from "./studio";
@@ -305,7 +306,7 @@ export default function DashboardPage() {
   const [studioTarget,setStudioTarget] = useState<{campaignId:string;day:number}|null>(null);
   const [plan] = usePlan();
   useAgentRunner();
-  useEffect(()=>{migrateLegacyPlan();},[]);
+  useEffect(()=>{migrateLegacyPlan();startCloud();},[]);
   const [toast,setToast] = useStored<string>("toast","");
   const [approvals] = useApprovals();
   const [ideas] = useIdeas();
