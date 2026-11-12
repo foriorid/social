@@ -49,10 +49,7 @@ async function runTask(task: Task) {
   const answer = await askAI({ tier: step.tier, role, maxTokens: step.maxTokens, label: step.output.replace(/ \(1 panggilan\)$/, ""), prompt: stepPrompt(task.kind, campaign, item) });
   const patch = applyStep(task.kind, item, answer);
   patchItem(campaign.id, item.day, patch);
-  if (task.kind === "brief") {
-    const done = { ...item, ...patch };
-    addApproval({ title: `${done.format} — ${done.title}`, by: "Tim Agent", type: `${campaign.account} · siap review`, body: `Hook: ${done.hook}\n\nStoryboard:\n${(done.board ?? []).map(s => `• ${s.label} — ${s.visual}${s.text ? ` | "${s.text}"` : ""}`).join("\n")}\n\nCaption:\n${done.caption}\n\n${done.hashtags ?? ""}\n\nJadwal usulan: ${done.schedule ?? "-"}` });
-  }
+
 }
 
 let autoStarted = 0; // content items picked up by automatic mode since the page was opened

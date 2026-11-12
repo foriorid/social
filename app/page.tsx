@@ -19,7 +19,7 @@ import { addApproval, addIdea, useApprovals, useIdeas, useLeads, useSettings, us
 
 import { ImageTile } from "./ui";
 import { AuditView, LegacyAudit } from "./research";
-import { auditPrompt, parseAudit, type Audit } from "./lib/flow";
+import { auditPrompt, parseAudit, stageOf, type Audit } from "./lib/flow";
 import { PublicCampaignPage, migrateLegacyPlan, usePlan, type CampaignData } from "./plan-data";
 import { AgentsPage, useAgentRunner } from "./agents";
 import { startCloud } from "./lib/cloud";
@@ -72,11 +72,11 @@ const contentCards = [
 ];
 
 const pipelineSteps: Array<{ label: string; count: string; icon: typeof Lightbulb; current?: boolean; done?: boolean }> = [
-  { label: "Ide", count: "18", icon: Lightbulb },
-  { label: "Produksi", count: "6", icon: Camera, current: true },
-  { label: "Review", count: "5", icon: CheckCircle2 },
-  { label: "Terjadwal", count: "10", icon: CalendarDays },
-  { label: "Published", count: "28", icon: CheckCircle2, done: true }
+  { label: "Ide", count: "", icon: Lightbulb },
+  { label: "Brief", count: "", icon: FileText },
+  { label: "Produksi", count: "", icon: Camera, current: true },
+  { label: "Draft", count: "", icon: CheckCircle2 },
+  { label: "Publish", count: "", icon: Send, done: true }
 ];
 
 function BrandMark() {
@@ -315,9 +315,9 @@ export default function DashboardPage() {
   const [ideas] = useIdeas();
   const [leads] = useLeads();
   const counts: Record<string,number> = {};
-  plan.campaigns.forEach(c=>c.items.forEach(i=>{counts[i.status]=(counts[i.status]||0)+1;}));
+  plan.campaigns.forEach(c=>c.items.forEach(i=>{const s=stageOf(i.status);counts[s]=(counts[s]||0)+1;}));
   const pendingApprovals = approvals.filter(a=>a.status==="pending").length;
-  const liveCounts: Record<string,number> = { "Ide": ideas.length, "Produksi": (counts["Brief ready"]||0)+(counts["In production"]||0), "Review": (counts["In review"]||0)+pendingApprovals, "Terjadwal": counts["Scheduled"]||0, "Published": counts["Published"]||0 };
+  const liveCounts: Record<string,number> = { "Ide": ideas.length, "Brief": counts["Brief"]||0, "Produksi": counts["Produksi"]||0, "Draft": counts["Draft"]||0, "Publish": counts["Publish"]||0 };
   const [tasks] = useTasks();
   const failedTasks = tasks.filter(t=>t.status==="failed").length, runningTasks = tasks.filter(t=>t.status==="queued"||t.status==="running").length;
   const newLeads = leads.filter(l=>l.status==="Baru").length;

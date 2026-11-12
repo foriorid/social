@@ -5,6 +5,7 @@ import { Check, Copy, Eye, EyeOff, FileText, Loader2, MessageCircle, Plus, Shiel
 import { askAI, CHEAP_MODEL, type Tier } from "./lib/ai";
 import { costIdr, monthKey, rupiah } from "./lib/logic";
 import { parseLines } from "./lib/logic";
+import { patchItem } from "./plan-data";
 import { aiReady, CLOUD_OFF, saveSecret, signInWithEmail, signInWithPassword, signOut, signUpWithPassword, type Cloud } from "./lib/cloud";
 import { useCallLog, addApproval, useApprovals, useIdeas, useLeads, useSettings, useStored, useUsage, writeStored, type Lead } from "./lib/store";
 
@@ -46,7 +47,12 @@ export function ApprovalList({ limit, empty = "Tidak ada yang menunggu persetuju
   const [open, setOpen] = useState<number | null>(null);
   const pending = approvals.filter(a => a.status === "pending");
   const shown = limit ? pending.slice(0, limit) : approvals;
-  const setStatus = (id: number, status: "approved" | "revision" | "pending") => setApprovals(old => old.map(a => (a.id === id ? { ...a, status } : a)));
+  // A decision on a draft moves its content card: approved → Publish, revision → back to Produksi.
+  const setStatus = (id: number, status: "approved" | "revision" | "pending") => {
+    const a = approvals.find(x => x.id === id);
+    if (a?.ref) patchItem(a.ref.campaignId, a.ref.day, { status: status === "approved" ? "Publish" : status === "revision" ? "Produksi" : "Draft" });
+    setApprovals(old => old.map(x => (x.id === id ? { ...x, status } : x)));
+  };
   if (!shown.length) return <p className="x-empty">{empty}</p>;
   return <div className="x-approvals">{shown.map(a => <article key={a.id} className="x-approval">
     <div className="x-approval-head"><span className="approval-file-icon"><FileText size={16} /></span><div><b>{a.title}</b><small>{a.by} · {a.type} · {new Date(a.at).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}</small></div>

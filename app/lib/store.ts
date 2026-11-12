@@ -92,7 +92,7 @@ export const useCallLog = () => useStored<CallLog[]>("usageLog", []);
 export type Usage = { month: string; inputTokens: number; outputTokens: number; idr: number; calls: number };
 export const EMPTY_USAGE: Usage = { month: "", inputTokens: 0, outputTokens: 0, idr: 0, calls: 0 };
 
-export type Approval = { id: number; title: string; by: string; type: string; body: string; status: "pending" | "approved" | "revision"; at: string };
+export type Approval = { id: number; title: string; by: string; type: string; body: string; status: "pending" | "approved" | "revision"; at: string; ref?: { campaignId: string; day: number } };
 export type Lead = { id: number; name: string; source: string; message: string; status: "Baru" | "Dibalas" | "Penawaran" | "Deal" | "Batal"; reply: string; at: string };
 
 /** Settings saved by an older version lack newer fields, so always layer them over the defaults. */

@@ -80,7 +80,7 @@ export function StudioPage({ target, onOpenPlan }: { target: { campaignId: strin
   const working = tasks.some(t => t.campaignId === campaign.id && t.day === item.day && (t.status === "queued" || t.status === "running"));
   const photos = [...(item.assets ?? []).filter(a => a.kind === "Foto").map(a => a.thumb), ...SAMPLES];
   const photoOf = (s: Scene, n: number) => s.image || photos[n % photos.length];
-  const submit = () => { addApproval({ title: `${item.format} — ${item.title}`, by: video ? "Video Editor" : "Graphic Designer", type: `${campaign.account} · hasil produksi`, body: `${board.map(s => `• ${s.label} — ${s.text || s.visual}`).join("\n")}\n\nCaption:\n${item.caption}\n\n${item.hashtags ?? ""}` }); set({ status: "In review" }); notify("Hasil produksi masuk ke antrean approval."); };
+  const submit = () => { addApproval({ ref: { campaignId: campaign.id, day: item.day }, title: `${item.format} — ${item.title}`, by: video ? "Video Editor" : "Graphic Designer", type: `${campaign.account} · hasil produksi`, body: `${board.map(s => `• ${s.label} — ${s.text || s.visual}`).join("\n")}\n\nCaption:\n${item.caption}\n\n${item.hashtags ?? ""}` }); set({ status: "Draft" }); notify("Hasil produksi masuk ke antrean approval."); };
   const exportSlides = async (all: boolean) => {
     setExporting(true); let missing = 0;
     try { for (const n of all ? board.map((_, k) => k) : [i]) { const { blob, photoMissing } = await renderSlide({ ...board[n], image: photoOf(board[n], n) }, n, board.length, look, settings.handle); if (photoMissing) missing++; saveFile(blob, `${item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${String(n + 1).padStart(2, "0")}.png`); } }

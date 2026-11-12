@@ -23,7 +23,7 @@ test("nextStep needs one brief call, then the human", () => {
 
 test("applyStep(brief) fills the storyboard and advances status", () => {
   const patch = applyStep("brief", item, '{"hook":"H","message":"M","hashtags":"#a #b","schedule":"Rab 19.00","board":[{"visual":"wide shot","text":"Halo"},{"visual":"","text":""}]}');
-  assert.equal(patch.status, "In review");
+  assert.equal(patch.status, "Produksi");
   assert.equal(patch.hook, "H");
   assert.equal(patch.hashtags, "#a #b");
   assert.equal(patch.schedule, "Rab 19.00");
@@ -32,7 +32,7 @@ test("applyStep(brief) fills the storyboard and advances status", () => {
 });
 
 test("applyStep(publish) requires a caption", () => {
-  assert.equal(applyStep("publish", item, '{"caption":"C","hashtags":"#a #b","schedule":"Rab 19.00"}').status, "In review");
+  assert.equal(applyStep("publish", item, '{"caption":"C","hashtags":"#a #b","schedule":"Rab 19.00"}').caption, "C");
   assert.throws(() => applyStep("publish", item, '{"hashtags":"#a"}'));
 });
 
@@ -95,4 +95,9 @@ test("videoGuidebook carries the storyboard, assets and render target", async ()
   assert.match(md, /\.\/out\/tur-office-space-2-000-m2\.mp4/);
   assert.match(md, /00:00:00,000 --> 00:00:03,000\n2\.000 m²/);
   assert.equal(guidebookName(it), "guidebook-01-tur-office-space-2-000-m2.md");
+});
+
+test("stageOf maps the older six statuses onto the four stages", async () => {
+  const { stageOf } = await import("./flow.ts");
+  assert.deepEqual(["Planned", "Brief ready", "In production", "In review", "Scheduled", "Published", "Draft", "aneh"].map(stageOf), ["Brief", "Brief", "Produksi", "Draft", "Publish", "Publish", "Draft", "Brief"]);
 });
