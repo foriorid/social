@@ -87,7 +87,7 @@ export function StudioPage({ target, onOpenPlan }: { target: { campaignId: strin
     finally { setExporting(false); }
     notify(missing ? `${missing} slide diekspor tanpa foto karena foto tidak bisa dimuat untuk ekspor. Unduh fotonya dari Drive lalu tempel manual.` : all ? "Semua slide diekspor sebagai PNG." : "Slide diekspor sebagai PNG.");
   };
-  const rewrite = () => ai.run("slide", async () => { const t = await askAI({ tier: "light", role: "Content Writer", maxTokens: 1500, prompt: `Konten: ${item.title}. Hook: ${item.hook}\nTulis ulang teks untuk ${scene.label} agar lebih tajam, maksimal 12 kata. Teks sekarang: "${scene.text}". Konteks visual: ${scene.visual}. Balas hanya teksnya.` }); edit({ text: parseLines(t)[0] || scene.text }); });
+  const rewrite = () => ai.run("slide", async () => { const t = await askAI({ tier: "light", role: "Content Writer", label: "Pertajam teks slide", maxTokens: 200, prompt: `Konten: ${item.title}. Hook: ${item.hook}\nTulis ulang teks untuk ${scene.label} agar lebih tajam, maksimal 12 kata. Teks sekarang: "${scene.text}". Konteks visual: ${scene.visual}. Balas hanya teksnya.` }); edit({ text: parseLines(t)[0] || scene.text }); });
   const tabs = video ? ["Isi", "Naskah", "Paket produksi", "Claude Code", "Caption"] : ["Isi", "Desain", "Caption"];
   const guidebook = () => videoGuidebook(campaign, item, { name: settings.brandName, handle: settings.handle });
   const overlay = look.template === "light" ? "linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,.15) 45%,rgba(255,255,255,.94))" : look.template === "bold" ? "linear-gradient(180deg,rgba(106,63,208,.88),rgba(106,63,208,.2) 45%,rgba(60,30,140,.94))" : "linear-gradient(180deg,rgba(20,12,45,.6),rgba(20,12,45,.05) 45%,rgba(20,12,45,.9))";

@@ -151,18 +151,18 @@ function ResearchPage() {
         } catch (error) { if (!(error instanceof AiSetupError)) throw error; /* no Meta token: analyse from notes/positioning; the view explains what data is missing */ }
       }
       if (!data) data = "(tidak ada data posting; analisis hanya dari nama akun dan positioning)";
-      const result = parseAudit(await askAI({ tier: "creative", role: "Research Analyst", maxTokens: 6000, prompt: auditPrompt(parsed.platform, parsed.handle, source, data) }));
+      const result = parseAudit(await askAI({ tier: "creative", role: "Research Analyst", label: "Bedah akun", maxTokens: 1800, prompt: auditPrompt(parsed.platform, parsed.handle, source, data) }));
       setAudits(old => ({ ...old, [parsed.handle]: result }));
     });
   };
   const audit = audits[analysed];
   const generateHooks = () => ai.run("hooks", async () => {
-    const text = await askAI({ tier: "creative", role: "Content Writer", prompt: "Tulis 6 hook pembuka konten baru tentang fotografi interior & properti untuk audiens agen properti, pemilik unit sewa, dan desainer interior. Satu per baris dengan format: Kategori | Reels atau Carousel | kalimat hook. Tanpa penomoran, tanpa teks lain." });
+    const text = await askAI({ tier: "creative", role: "Content Writer", label: "Generate hooks", maxTokens: 600, prompt: "Tulis 6 hook pembuka konten baru tentang fotografi interior & properti untuk audiens agen properti, pemilik unit sewa, dan desainer interior. Satu per baris dengan format: Kategori | Reels atau Carousel | kalimat hook. Tanpa penomoran, tanpa teks lain." });
     const rows = parseLines(text).map(l => l.split("|").map(x => x.trim())).filter(r => r.length === 3 && r[2]);
     if (!rows.length) throw new Error("Jawaban model tidak sesuai format. Coba lagi.");
     setCustomHooks(old => [...rows.map(r => ({ category: r[0], format: r[1], hook: r[2] })), ...old]);
   });
-  const analyseTrends = () => ai.run("trend", async () => { setTrendNote(await askAI({ tier: "creative", role: "Research Analyst", prompt: "Berdasarkan pengetahuanmu tentang konten media sosial niche fotografi interior dan properti di Indonesia, tulis 5 arah konten yang layak diuji bulan ini. Untuk tiap arah: nama, alasan singkat, dan format yang cocok. Nyatakan dengan jelas bahwa ini rekomendasi dari pengetahuan umum, bukan data tren real-time." })); });
+  const analyseTrends = () => ai.run("trend", async () => { setTrendNote(await askAI({ tier: "creative", role: "Research Analyst", label: "Rekomendasi tren", maxTokens: 1000, prompt: "Berdasarkan pengetahuanmu tentang konten media sosial niche fotografi interior dan properti di Indonesia, tulis 5 arah konten yang layak diuji bulan ini. Untuk tiap arah: nama, alasan singkat, dan format yang cocok. Nyatakan dengan jelas bahwa ini rekomendasi dari pengetahuan umum, bukan data tren real-time." })); });
   return (
     <div className="module-page">
       <div className="research-tabs-line">

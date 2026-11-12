@@ -47,12 +47,14 @@ Deno.serve(async req => {
         if (!key) return fail("no_key", "API key Anthropic belum disimpan. Buka Settings → AI & Models.");
         const model = String(body.model ?? "");
         if (!MODELS.includes(model)) return fail("input", `Model "${model}" tidak diizinkan.`);
-        const maxTokens = Math.min(Math.max(Number(body.maxTokens) || 4000, 256), 8000);
+        const maxTokens = Math.min(Math.max(Number(body.maxTokens) || 1500, 64), 8000); // the client already fits this under the per-call cost cap
         const client = new Anthropic({ apiKey: key });
         // Haiku has no server-side refusal fallback; the other tiers retry on Anthropic's default fallback model.
         const fallback = model.includes("haiku") ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const };
         try {
-          const response = await client.beta.messages.create({ ...fallback, model, max_tokens: maxTokens, output_config: { effort: "low" }, system: String(body.system ?? ""), messages: [{ role: "user", content: String(body.prompt ?? "") }] });
+          // Hidden reasoning is billed as output; drafting tasks don't need it (Opus can't turn it off).
+          const thinking = model.includes("haiku") ? { thinking: { type: "disabled" as const } } : model.includes("sonnet") ? { thinking: { type: "between_tools" as const } } : {};
+          const response = await client.beta.messages.create({ ...fallback, ...thinking, model, max_tokens: maxTokens, output_config: { effort: "low" }, system: String(body.system ?? ""), messages: [{ role: "user", content: String(body.prompt ?? "") }] });
           const text = response.content.map(b => (b.type === "text" ? b.text : "")).join("").trim();
           return json({ text, stop_reason: response.stop_reason, model: response.model, usage: { input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } });
         } catch (e) {

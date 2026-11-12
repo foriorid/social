@@ -15,18 +15,18 @@ test("nextStep plans untitled slots first", () => {
   assert.equal(nextStep({ ...item, untitled: true }), "plan");
 });
 
-test("nextStep walks brief -> production -> publish -> human", () => {
+test("nextStep needs one brief call, then the human", () => {
   assert.equal(nextStep(item), "brief");
   const withBoard = { ...item, board: [{ label: "0-3 dtk", visual: "wide", text: "", audio: "" }] };
-  assert.equal(nextStep(withBoard), "production");
-  assert.equal(nextStep({ ...withBoard, production: "shot list" }), "publish");
-  assert.equal(nextStep({ ...withBoard, production: "shot list", schedule: "Rab 19.00" }), null);
+  assert.equal(nextStep(withBoard), null);
 });
 
 test("applyStep(brief) fills the storyboard and advances status", () => {
-  const patch = applyStep("brief", item, '{"hook":"H","message":"M","board":[{"visual":"wide shot","text":"Halo"},{"visual":"","text":""}]}');
-  assert.equal(patch.status, "Brief ready");
+  const patch = applyStep("brief", item, '{"hook":"H","message":"M","hashtags":"#a #b","schedule":"Rab 19.00","board":[{"visual":"wide shot","text":"Halo"},{"visual":"","text":""}]}');
+  assert.equal(patch.status, "In review");
   assert.equal(patch.hook, "H");
+  assert.equal(patch.hashtags, "#a #b");
+  assert.equal(patch.schedule, "Rab 19.00");
   assert.deepEqual(patch.board, [{ label: "Scene 1", visual: "wide shot", text: "Halo", audio: "" }]);
   assert.throws(() => applyStep("brief", item, '{"hook":"H","board":[]}'));
 });

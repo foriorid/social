@@ -1,9 +1,9 @@
 "use client";
 
 import Anthropic from "@anthropic-ai/sdk";
-import { costIdr, monthKey } from "./logic";
+import { costIdr, estimateTokens, fitMaxTokens, monthKey, rupiah, thinkingFor } from "./logic";
 import { callServer, isSignedIn, readCloudKeys, ServerSetupError } from "./cloud";
-import { EMPTY_USAGE, getSettings, readStored, writeStored, type Usage } from "./store";
+import { EMPTY_USAGE, getSettings, readStored, writeStored, type CallLog, type Usage } from "./store";
 
 export type Tier = "light" | "creative";
 
@@ -20,17 +20,30 @@ function currentUsage(): Usage {
  * Signed in: the call goes through the creator-api Edge Function, which holds the key in Vault.
  * Signed out: falls back to a key kept in this browser, sent straight to Anthropic.
  */
-export async function askAI({ tier, role, prompt, maxTokens = 4000 }: { tier: Tier; role: string; prompt: string; maxTokens?: number }): Promise<string> {
+export const CHEAP_MODEL = "claude-haiku-5-5";
+
+/**
+ * label names the button/step that triggered the call; it is shown in Settings → Riwayat biaya.
+ * Hemat mode runs everything on Haiku with thinking off; every call is capped at settings.maxCallIdr worst case.
+ */
+export async function askAI({ tier, role, prompt, maxTokens = 1500, label }: { tier: Tier; role: string; prompt: string; maxTokens?: number; label?: string }): Promise<string> {
   const settings = getSettings();
   const viaServer = isSignedIn() && !!readCloudKeys().anthropic;
   if (!viaServer && !settings.apiKey.trim()) throw new AiSetupError("API key belum diisi. Buka Settings → AI & Models.");
   const usage = currentUsage();
   if (settings.budgetIdr > 0 && usage.idr >= settings.budgetIdr) throw new AiSetupError("Batas biaya AI bulan ini sudah tercapai. Naikkan batas di Settings → AI & Models.");
 
-  const model = tier === "light" ? settings.lightModel : settings.creativeModel;
+  const model = settings.costMode === "hemat" ? CHEAP_MODEL : tier === "light" ? settings.lightModel : settings.creativeModel;
   const system = `Kamu adalah ${role} di tim media sosial ${settings.brandName} (${settings.handle}), fotografer spesialis interior properti di Jakarta, pemilik brand FORIOR. Gaya bahasa brand: ${settings.brandVoice} Jawab dalam bahasa Indonesia, ringkas, langsung ke hasil, tanpa pembuka atau penutup.`;
 
-  const record = (input: number, output: number) => writeStored<Usage>("usage", { month: monthKey(), inputTokens: usage.inputTokens + input, outputTokens: usage.outputTokens + output, idr: usage.idr + costIdr(model, input, output, settings.usdToIdr), calls: usage.calls + 1 }, EMPTY_USAGE);
+  const fitted = fitMaxTokens(model, estimateTokens(system + prompt) + 20, maxTokens, settings.maxCallIdr, settings.usdToIdr);
+  if (fitted < 256) throw new AiSetupError(`Dengan ${model}, panggilan ini bisa melebihi batas ${rupiah(settings.maxCallIdr)} per panggilan. Aktifkan Mode hemat atau naikkan batas di Settings → AI & Models.`);
+  maxTokens = fitted;
+  const record = (input: number, output: number) => {
+    const idr = costIdr(model, input, output, settings.usdToIdr);
+    writeStored<Usage>("usage", { month: monthKey(), inputTokens: usage.inputTokens + input, outputTokens: usage.outputTokens + output, idr: usage.idr + idr, calls: usage.calls + 1 }, EMPTY_USAGE);
+    writeStored<CallLog[]>("usageLog", old => [{ at: new Date().toISOString(), label: label ?? role, model, input, output, idr }, ...old].slice(0, 150), []);
+  };
   if (viaServer) {
     try {
       const r = await callServer<{ text: string; stop_reason: string; usage: { input_tokens: number; output_tokens: number } }>("ai", { model, system, prompt, maxTokens });
@@ -48,6 +61,7 @@ export async function askAI({ tier, role, prompt, maxTokens = 4000 }: { tier: Ti
       ...(withFallback ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
       model,
       max_tokens: maxTokens,
+      ...(thinkingFor(model) ? { thinking: thinkingFor(model) } : {}),
       output_config: { effort: "low" }, // these are short drafting tasks; low effort keeps token spend down
       system,
       messages: [{ role: "user", content: prompt }]
