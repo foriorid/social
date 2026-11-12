@@ -1,16 +1,20 @@
 // The content pipeline: stages, the fixed job of each agent, prompts and answer parsing. Pure, so it is unit-tested.
 import type { CampaignContent, CampaignData, CampaignKind, Scene } from "../plan-data";
 
-export const STAGES = ["Planned", "Brief ready", "In production", "In review", "Scheduled", "Published"] as const;
-export const STAGE_LABEL: Record<string, string> = { Planned: "Ide", "Brief ready": "Brief", "In production": "Produksi", "In review": "Review", Scheduled: "Terjadwal", Published: "Tayang" };
+export const STAGES = ["Brief", "Produksi", "Draft", "Publish"] as const;
+export type Stage = typeof STAGES[number];
+export const STAGE_LABEL: Record<string, string> = { Brief: "Brief", Produksi: "Produksi", Draft: "Draft", Publish: "Publish" };
+const LEGACY_STAGE: Record<string, Stage> = { Planned: "Brief", "Brief ready": "Brief", "In production": "Produksi", "In review": "Draft", Scheduled: "Publish", Published: "Publish" };
+/** Maps any stored status, including the six older ones, to the four current stages. */
+export const stageOf = (status: string): Stage => (STAGES as readonly string[]).includes(status) ? (status as Stage) : LEGACY_STAGE[status] ?? "Brief";
 
 export type StepKind = "plan" | "brief" | "production" | "publish";
 export type Step = { kind: StepKind | "approval"; agent: string; tier: "light" | "creative"; job: string; trigger: string; output: string; auto: boolean; maxTokens: number };
 
 export const PIPELINE: Step[] = [
   { kind: "plan", agent: "Creative Strategist", tier: "creative", job: "Menyusun judul, format, dan pilar untuk seluruh konten campaign, dari brief campaign.", trigger: "Saat campaign dibuat / Susun ulang judul", output: "Judul semua konten (1 panggilan)", auto: true, maxTokens: 2500 },
-  { kind: "brief", agent: "Content Writer + Social Media Manager", tier: "creative", job: "Dalam satu panggilan: brief, storyboard (scene/slide), caption, hashtag, dan usulan jadwal.", trigger: "Konten berstatus Ide", output: "Brief lengkap siap review (1 panggilan)", auto: true, maxTokens: 1800 },
-  { kind: "approval", agent: "Anda", tier: "light", job: "Memeriksa dan menyetujui sebelum konten dijadwalkan.", trigger: "Brief selesai", output: "Disetujui / revisi", auto: true, maxTokens: 0 },
+  { kind: "brief", agent: "Content Writer + Social Media Manager", tier: "creative", job: "Dalam satu panggilan: brief, storyboard (scene/slide), caption, hashtag, dan usulan jadwal.", trigger: "Konten berstatus Ide", output: "Brief lengkap → tahap Produksi (1 panggilan)", auto: true, maxTokens: 1800 },
+  { kind: "approval", agent: "Anda", tier: "light", job: "Memeriksa draft dan menyetujui sebelum dipublish.", trigger: "Draft diajukan dari Studio / brief", output: "Disetujui → Publish, revisi → Produksi", auto: true, maxTokens: 0 },
   { kind: "production", agent: "Graphic Designer / Video Editor", tier: "light", job: "Paket produksi: shot list dan urutan edit, atau arahan layout per slide.", trigger: "Hanya bila diminta di Studio / brief", output: "Paket produksi", auto: false, maxTokens: 1200 },
   { kind: "publish", agent: "Social Media Manager", tier: "light", job: "Merapikan ulang caption, hashtag, dan jadwal setelah brief diedit.", trigger: "Hanya bila diminta di Studio", output: "Caption final + jadwal", auto: false, maxTokens: 600 }
 ];
@@ -66,15 +70,15 @@ export function stepPrompt(kind: StepKind, c: CampaignData, item: CampaignConten
 
 /** Turn a step's model answer into the fields it fills on the content item. */
 export function applyStep(kind: Exclude<StepKind, "plan">, item: CampaignContent, answer: string): Partial<CampaignContent> {
-  if (kind === "production") return { production: answer.trim(), status: "In production" };
+  if (kind === "production") return { production: answer.trim(), status: "Produksi" };
   const o = extractJson(answer) as Record<string, unknown>;
   if (kind === "publish") {
     if (!str(o.caption)) throw new Error("Jawaban model tidak berisi caption. Coba lagi.");
-    return { caption: str(o.caption), hashtags: str(o.hashtags), schedule: str(o.schedule), status: "In review" };
+    return { caption: str(o.caption), hashtags: str(o.hashtags), schedule: str(o.schedule) };
   }
   const board = toBoard(o.board, item.format);
   if (!board.length) throw new Error("Jawaban model tidak berisi storyboard. Coba lagi.");
-  return { hook: str(o.hook) || item.hook, message: str(o.message), goal: str(o.goal) || item.goal, visualDirection: str(o.visualDirection) || item.visualDirection, assetNeeds: str(o.assetNeeds), caption: str(o.caption) || item.caption, cta: str(o.cta) || item.cta, board, scenes: board.map(s => `${s.label}: ${s.visual}`), hashtags: str(o.hashtags) || item.hashtags, schedule: str(o.schedule) || item.schedule, status: "In review" };
+  return { hook: str(o.hook) || item.hook, message: str(o.message), goal: str(o.goal) || item.goal, visualDirection: str(o.visualDirection) || item.visualDirection, assetNeeds: str(o.assetNeeds), caption: str(o.caption) || item.caption, cta: str(o.cta) || item.cta, board, scenes: board.map(s => `${s.label}: ${s.visual}`), hashtags: str(o.hashtags) || item.hashtags, schedule: str(o.schedule) || item.schedule, status: "Produksi" };
 }
 
 export function parsePlan(answer: string, count: number): { title: string; format: CampaignContent["format"]; pillar: string }[] {
@@ -109,7 +113,7 @@ export function applyPlan(items: CampaignContent[], rows: { title: string; forma
   return items.map(x => {
     if (x.board?.length || n >= rows.length) return x;
     const r = rows[n++];
-    return { ...x, ...r, untitled: false, status: "Planned", hook: "", caption: "", visualDirection: "", cta: "", message: "", assetNeeds: "", hashtags: "", production: "", schedule: "", scenes: [] };
+    return { ...x, ...r, untitled: false, status: "Brief", hook: "", caption: "", visualDirection: "", cta: "", message: "", assetNeeds: "", hashtags: "", production: "", schedule: "", scenes: [] };
   });
 }
 

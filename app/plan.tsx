@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, CalendarDays, Check, ChevronRight, Download, FileText, Pencil, Play, Plus, Printer, Share2, Sparkles, Trash2, Users, X, Zap } from "lucide-react";
+import { ArrowRight, BarChart3, CalendarDays, Check, CheckCircle2, Clapperboard, Code2, Columns3, FileText, Layers3, List, MoreHorizontal, PenLine, Pencil, Play, Plus, Printer, Search, Send, Share2, Sparkles, Trash2, Users, X, Zap } from "lucide-react";
 import { DriveBrowser } from "./assets";
 import { enqueue, enqueueCampaign } from "./agents";
-import { KIND_LABEL, PIPELINE, STAGES, STAGE_LABEL, isVideo, nextStep } from "./lib/flow";
+import { KIND_LABEL, PIPELINE, STAGES, STAGE_LABEL, isVideo, nextStep, stageOf, type Stage } from "./lib/flow";
 import { addApproval, useIdeas, useSettings, useTasks, writeStored, type Task } from "./lib/store";
 import { notify, useAiReady } from "./modules";
-import { campaignHtml, defaultKind, makeBlankItems, patchCampaign, patchItem, usePlan, type CampaignContent, type CampaignData, type CampaignKind, type Scene } from "./plan-data";
+import { campaignHtml, defaultKind, patchCampaign, patchItem, usePlan, type CampaignContent, type CampaignData, type CampaignKind, type Scene } from "./plan-data";
 import { ImageTile } from "./ui";
 const dropTasks = (match: (t: Task) => boolean) => writeStored<Task[]>("tasks", old => old.filter(t => !match(t)), []);
 
@@ -35,10 +35,10 @@ function ContentSheet({ campaign, item, onClose, onOpenStudio, onDelete }: { cam
   const failed = mine.find(t => t.status === "failed");
   const stepInfo = step ? PIPELINE.find(s => s.kind === step) : null;
   return <div className="f-sheet-backdrop" onClick={onClose}><aside className="f-sheet wide" role="dialog" aria-label={`Brief konten ${item.day}`} onClick={e => e.stopPropagation()}>
-    <div className="f-sheet-head"><div><span className="f-eyebrow">KONTEN {pad(item.day)} / {campaign.items.length} · {campaign.account}</span><input className="f-title" aria-label="Judul konten" value={item.title} onChange={e => set({ title: e.target.value })} /></div><button className="modal-close" onClick={onClose} aria-label="Tutup"><X size={18} /></button></div>
+    <div className="f-sheet-head"><div><span className="f-eyebrow">KONTEN {pad(item.day)} · {campaign.name} · {campaign.account}</span><input className="f-title" aria-label="Judul konten" value={item.title} onChange={e => set({ title: e.target.value })} /></div><button className="modal-close" onClick={onClose} aria-label="Tutup"><X size={18} /></button></div>
     <div className="f-meta-row">
       <div><label htmlFor="s-format">FORMAT</label><select id="s-format" value={item.format} onChange={e => set({ format: e.target.value as CampaignContent["format"] })}>{FORMATS.map(f => <option key={f}>{f}</option>)}</select></div>
-      <div><label htmlFor="s-status">STATUS</label><select id="s-status" value={item.status} onChange={e => set({ status: e.target.value })}>{STAGES.map(s => <option key={s} value={s}>{STAGE_LABEL[s]}</option>)}</select></div>
+      <div><label htmlFor="s-status">STATUS</label><select id="s-status" value={stageOf(item.status)} onChange={e => set({ status: e.target.value })}>{STAGES.map(s => <option key={s} value={s}>{STAGE_LABEL[s]}</option>)}</select></div>
       <div><label htmlFor="s-date">TANGGAL TAYANG</label><input id="s-date" value={item.publishDate || item.date} onChange={e => set({ publishDate: e.target.value })} /></div>
       <div><label htmlFor="s-pillar">PILAR</label><input id="s-pillar" value={item.pillar} onChange={e => set({ pillar: e.target.value })} /></div>
     </div>
@@ -77,100 +77,168 @@ function ContentSheet({ campaign, item, onClose, onOpenStudio, onDelete }: { cam
     {!!item.assets?.length && <div className="f-linked">{item.assets.map(a => <div key={a.id}><a href={a.url} target="_blank" rel="noreferrer"><img src={a.thumb} alt={a.name} referrerPolicy="no-referrer" /></a><button aria-label={`Lepas ${a.name}`} onClick={() => set({ assets: item.assets!.filter(x => x.id !== a.id) })}><X size={14} /></button></div>)}</div>}
     {picking && <DriveBrowser pickLabel="Tautkan" onPick={ref => { set({ assets: [...(item.assets ?? []).filter(a => a.id !== ref.id), ref] }); notify(`${ref.name} ditautkan.`); }} />}
 
-    {ideas.length > 0 && <div className="x-ideas"><label>INBOX IDE — pakai sebagai judul konten ini</label>{ideas.slice(0, 5).map(idea => <div key={idea}><span>{idea}</span><button className="outline-button" onClick={() => { set({ title: idea, board: [], production: "", schedule: "", status: "Planned" }); setIdeas(old => old.filter(x => x !== idea)); }}>Pakai</button></div>)}</div>}
+    {ideas.length > 0 && <div className="x-ideas"><label>INBOX IDE — pakai sebagai judul konten ini</label>{ideas.slice(0, 5).map(idea => <div key={idea}><span>{idea}</span><button className="outline-button" onClick={() => { set({ title: idea, board: [], production: "", schedule: "", status: "Brief" }); setIdeas(old => old.filter(x => x !== idea)); }}>Pakai</button></div>)}</div>}
 
-    <div className="f-sheet-actions"><button className="outline-button x-danger f-delete" onClick={onDelete}><Trash2 size={15} /> Hapus konten</button><button className="primary-button" onClick={onOpenStudio}>Buka di Production Studio <ArrowRight size={15} /></button><button className="outline-button" onClick={() => { addApproval({ title: `${item.format} — ${item.title}`, by: "Content Plan", type: `${campaign.account} · diajukan manual`, body: `Hook: ${item.hook}\n\nStoryboard:\n${board.map(s => `• ${s.label} — ${s.visual}${s.text ? ` | "${s.text}"` : ""}`).join("\n")}\n\nCaption:\n${item.caption}\n\n${item.hashtags ?? ""}` }); set({ status: "In review" }); notify("Konten masuk ke antrean approval."); }}><Check size={15} /> Ajukan approval</button></div>
+    <div className="f-sheet-actions"><button className="outline-button x-danger f-delete" onClick={onDelete}><Trash2 size={15} /> Hapus konten</button><button className="primary-button" onClick={onOpenStudio}>Buka di Production Studio <ArrowRight size={15} /></button><button className="outline-button" onClick={() => { addApproval({ ref: { campaignId: campaign.id, day: item.day }, title: `${item.format} — ${item.title}`, by: "Content Plan", type: `${campaign.account} · diajukan manual`, body: `Hook: ${item.hook}\n\nStoryboard:\n${board.map(s => `• ${s.label} — ${s.visual}${s.text ? ` | "${s.text}"` : ""}`).join("\n")}\n\nCaption:\n${item.caption}\n\n${item.hashtags ?? ""}` }); set({ status: "Draft" }); notify("Draft masuk ke antrean approval."); }}><Check size={15} /> Ajukan sebagai draft</button></div>
   </aside></div>;
 }
 
+
+const GOALS = ["Awareness & engagement", "Lead generation", "Bookings", "Sales conversion"];
+type View = "Campaign" | "Kalender" | "Daftar Konten";
+type Tab = "Papan Produksi" | "Brief Campaign" | "Analitik";
+const STAGE_ICON = { Brief: FileText, Produksi: Clapperboard, Draft: PenLine, Publish: Send } as const;
+const coverOf = (c: CampaignData) => c.items.flatMap(x => x.assets ?? []).find(a => a.kind === "Foto")?.thumb ?? c.cover;
+const targetOf = (c: CampaignData) => c.target ?? 30;
+const blankForm = { account: "", name: "", period: "", goal: GOALS[0], kind: "" as CampaignKind | "", brief: "", target: 30 };
+
+/** One page for campaigns and their content: campaign list on the left, the selected campaign's production board on the right. */
 export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (campaignId: string, day: number) => void; onShare: (data: CampaignData) => void }) {
   const [plan, setPlan] = usePlan();
   const [settings] = useSettings();
   const [tasks] = useTasks();
-  const [accountFilter, setAccountFilter] = useState("Semua akun");
-  const [campaignId, setCampaignId] = useState<string | null>(null);
-  const [openDay, setOpenDay] = useState<number | null>(null);
-  const [view, setView] = useState<"Papan" | "Daftar" | "Kalender">("Papan");
-  const [format, setFormat] = useState("Semua");
-  const [modal, setModal] = useState<"" | "account" | "manage" | "campaign" | "edit" | "content">("");
-  const [form, setForm] = useState({ account: "", name: "", period: "Jan 2027", goal: "Awareness & engagement", title: "", format: "Reels", kind: "" as CampaignKind | "", brief: "", campaignAccount: "" });
   const ready = useAiReady();
-  const campaign = plan.campaigns.find(c => c.id === campaignId) ?? null;
-  const item = campaign?.items.find(x => x.day === openDay) ?? null;
-  const visible = plan.campaigns.filter(c => accountFilter === "Semua akun" || c.account === accountFilter);
-  const items = campaign ? campaign.items.filter(x => format === "Semua" || x.format === format) : [];
-  const busyDays = new Set(tasks.filter(t => t.campaignId === campaignId && (t.status === "queued" || t.status === "running")).map(t => t.day));
-  const stageCount = (c: CampaignData, s: string) => c.items.filter(x => x.status === s).length;
-  const download = (d: CampaignData) => { const url = URL.createObjectURL(new Blob([campaignHtml(d)], { type: "text/html;charset=utf-8" })); const a = document.createElement("a"); a.href = url; a.download = d.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-content-plan.html"; a.click(); URL.revokeObjectURL(url); };
-  const print = (d: CampaignData) => { const w = window.open("", "_blank"); if (!w) return notify("Izinkan pop-up untuk mencetak PDF."); w.document.open(); w.document.write(campaignHtml(d)); w.document.close(); w.onload = () => w.print(); };
-  const addAccount = () => { const n = form.account.trim(); if (!n || plan.accounts.includes(n)) return; setPlan(o => ({ ...o, accounts: [...o.accounts, n] })); setForm(f => ({ ...f, account: "" })); setModal(""); };
-  const newAccount = form.campaignAccount || (accountFilter === "Semua akun" ? plan.accounts[0] : accountFilter);
-  const planTitles = (id: string) => { if (!ready) return notify("Isi API key di Settings → AI & Models, lalu tekan “Susun judul AI”."); notify(enqueue(id, 0, false, "plan") ? "Strategist menyusun judul dari brief campaign. Judul muncul di papan dalam beberapa detik." : "Penyusunan judul untuk campaign ini masih berjalan."); };
-  const addCampaign = () => {
-    if (!form.name.trim()) return;
+  const [view, setView] = useState<View>("Campaign");
+  const [tab, setTab] = useState<Tab>("Papan Produksi");
+  const [accountFilter, setAccountFilter] = useState("Semua akun");
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [openRef, setOpenRef] = useState<{ campaignId: string; day: number } | null>(null);
+  const [menu, setMenu] = useState<string | null>(null);
+  const [modal, setModal] = useState<"" | "campaign" | "content" | "account" | "manage">("");
+  const [form, setForm] = useState(blankForm);
+  const [draft, setDraft] = useState({ title: "", format: "Reels", stage: "Brief" as Stage, date: "" });
+  const [briefForm, setBriefForm] = useState<typeof blankForm | null>(null);
+  const [stageFilter, setStageFilter] = useState("Semua");
+
+  const visible = plan.campaigns.filter(c => (accountFilter === "Semua akun" || c.account === accountFilter) && c.name.toLowerCase().includes(query.toLowerCase()));
+  const campaign = plan.campaigns.find(c => c.id === selectedId) ?? visible[0] ?? null;
+  const openCampaign = plan.campaigns.find(c => c.id === openRef?.campaignId);
+  const openItem = openCampaign?.items.find(x => x.day === openRef?.day) ?? null;
+  const busy = new Set(tasks.filter(t => t.status === "queued" || t.status === "running").map(t => `${t.campaignId}:${t.day}`));
+  const kindOf = (c: CampaignData) => c.kind ?? defaultKind(c.account);
+  const stageItems = (c: CampaignData, s: Stage) => c.items.filter(x => stageOf(x.status) === s);
+
+  const select = (c: CampaignData) => { setSelectedId(c.id); setBriefForm(null); setMenu(null); };
+  const openNewCampaign = () => { setForm({ ...blankForm, account: accountFilter === "Semua akun" ? plan.accounts[0] : accountFilter, period: new Date().toLocaleDateString("id-ID", { month: "short", year: "numeric" }) }); setModal("campaign"); };
+  const createCampaign = () => {
+    if (!form.name.trim() || !form.brief.trim()) return notify("Isi nama campaign dan deskripsinya.");
     const id = "c" + Date.now();
-    setPlan(o => ({ ...o, campaigns: [...o.campaigns, { id, account: newAccount, name: form.name.trim(), period: form.period, goal: form.goal, cover: "living", kind: form.kind || defaultKind(newAccount), brief: form.brief.trim(), auto: settings.autoRun, items: makeBlankItems(30, form.period, form.goal) }] }));
-    setCampaignId(id); setModal(""); setForm(f => ({ ...f, name: "", brief: "", kind: "", campaignAccount: "" }));
-    planTitles(id);
+    setPlan(o => ({ ...o, campaigns: [{ id, account: form.account, name: form.name.trim(), period: form.period.trim() || "-", goal: form.goal, cover: "living", kind: form.kind || defaultKind(form.account), brief: form.brief.trim(), target: Math.max(1, form.target), items: [] }, ...o.campaigns] }));
+    setSelectedId(id); setTab("Papan Produksi"); setModal(""); notify("Campaign dibuat. Tambahkan konten lewat “Tambah konten”.");
   };
-  const [editId, setEditId] = useState<string | null>(null);
-  const editing = plan.campaigns.find(c => c.id === editId) ?? campaign;
-  const formAccount = form.campaignAccount || (modal === "edit" && editing ? editing.account : newAccount);
-  const openEdit = (c: CampaignData) => { setForm(f => ({ ...f, campaignAccount: c.account, name: c.name, period: c.period, goal: c.goal, kind: c.kind ?? defaultKind(c.account), brief: c.brief ?? "" })); setEditId(c.id); setModal("edit"); };
   const deleteCampaign = (c: CampaignData) => {
     if (!window.confirm(`Hapus campaign “${c.name}” beserta ${c.items.length} kontennya? Tindakan ini tidak bisa dibatalkan.`)) return;
     setPlan(o => ({ ...o, campaigns: o.campaigns.filter(x => x.id !== c.id) })); dropTasks(t => t.campaignId === c.id);
-    setModal(""); setEditId(null); if (campaignId === c.id) setCampaignId(null); notify("Campaign dihapus.");
+    if (selectedId === c.id) setSelectedId(null); setMenu(null); setBriefForm(null); notify("Campaign dihapus.");
   };
-  const renameAccount = (from: string, to: string) => {
-    const name = to.trim(); if (!name || name === from) return setModal("");
-    if (plan.accounts.includes(name)) return notify("Nama akun itu sudah ada.");
-    setPlan(o => ({ accounts: o.accounts.map(a => (a === from ? name : a)), campaigns: o.campaigns.map(c => (c.account === from ? { ...c, account: name } : c)) }));
-    setAccountFilter(name); setModal("");
+  const editBrief = (c: CampaignData) => { select(c); setBriefForm({ account: c.account, name: c.name, period: c.period, goal: c.goal, kind: kindOf(c), brief: c.brief ?? "", target: targetOf(c) }); setTab("Brief Campaign"); };
+  const saveBrief = () => { if (!campaign || !briefForm || !briefForm.name.trim()) return; patchCampaign(campaign.id, c => ({ ...c, account: briefForm.account, name: briefForm.name.trim(), period: briefForm.period, goal: briefForm.goal, kind: briefForm.kind || defaultKind(briefForm.account), brief: briefForm.brief.trim(), target: Math.max(1, briefForm.target) })); notify("Brief campaign disimpan."); };
+  const addContent = () => {
+    if (!campaign || !draft.title.trim()) return;
+    const day = Math.max(0, ...campaign.items.map(x => x.day)) + 1;
+    patchCampaign(campaign.id, c => ({ ...c, items: [...c.items, { day, date: draft.date || "Belum dijadwalkan", publishDate: draft.date, title: draft.title.trim(), format: draft.format as CampaignContent["format"], pillar: "", status: draft.stage, goal: c.goal, hook: "", caption: "", visualDirection: "", cta: "", scenes: [] }] }));
+    setModal(""); setOpenRef({ campaignId: campaign.id, day });
   };
-  const deleteAccount = (name: string) => {
-    const owned = plan.campaigns.filter(c => c.account === name);
-    if (!window.confirm(owned.length ? `Hapus akun “${name}” beserta ${owned.length} campaign di dalamnya?` : `Hapus akun “${name}”?`)) return;
-    const ids = new Set(owned.map(c => c.id));
-    setPlan(o => ({ accounts: o.accounts.filter(a => a !== name), campaigns: o.campaigns.filter(c => c.account !== name) })); dropTasks(t => ids.has(t.campaignId));
-    setAccountFilter("Semua akun"); setCampaignId(null); setModal(""); notify("Akun dihapus.");
+  const suggestTitles = (c: CampaignData, n = 5) => {
+    if (!ready) return notify("Isi API key di Settings → AI & Models dulu.");
+    const start = Math.max(0, ...c.items.map(x => x.day));
+    patchCampaign(c.id, x => ({ ...x, items: [...x.items, ...Array.from({ length: n }, (_, i) => ({ day: start + i + 1, date: "Belum dijadwalkan", publishDate: "", title: `Konten ${start + i + 1} — menunggu judul`, untitled: true, format: "Reels" as const, pillar: "", status: "Brief", goal: x.goal, hook: "", caption: "", visualDirection: "", cta: "", scenes: [] }))] }));
+    enqueue(c.id, 0, false, "plan"); setMenu(null); notify(`Strategist mengusulkan ${n} judul (±Rp 5). Edit atau hapus yang tidak cocok.`);
   };
-  const saveEdit = () => { if (!editing || !form.name.trim()) return; patchCampaign(editing.id, c => ({ ...c, account: form.campaignAccount || c.account, name: form.name.trim(), period: form.period, goal: form.goal, kind: form.kind || defaultKind(c.account), brief: form.brief.trim() })); setModal(""); };
-  const addContent = () => { if (!campaign || !form.title.trim()) return; const day = Math.max(0, ...campaign.items.map(x => x.day)) + 1; patchCampaign(campaign.id, c => ({ ...c, items: [...c.items, { day, date: "Belum dijadwalkan", title: form.title.trim(), format: form.format as CampaignContent["format"], pillar: "Brand story", status: "Planned", goal: c.goal, hook: "", caption: "", visualDirection: "", cta: "", publishDate: "", scenes: [] }] })); setForm(f => ({ ...f, title: "" })); setModal(""); setOpenDay(day); };
-  const Card = ({ x }: { x: CampaignContent }) => <button className="f-card" onClick={() => setOpenDay(x.day)}><span className="f-card-top"><b>{pad(x.day)}</b><em className={`f-fmt f-${x.format.toLowerCase()}`}>{x.format}</em>{busyDays.has(x.day) && <em className="f-fmt f-busy">Agen bekerja</em>}</span><strong className={x.untitled ? "f-untitled" : ""}>{x.title}</strong><small>{x.board?.length ? `${x.board.length} ${isVideo(x.format) ? "scene" : "slide"} · ` : "Belum ada storyboard · "}{x.publishDate || x.date}</small></button>;
+  const download = (d: CampaignData) => { const url = URL.createObjectURL(new Blob([campaignHtml(d)], { type: "text/html;charset=utf-8" })); const a = document.createElement("a"); a.href = url; a.download = d.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-content-plan.html"; a.click(); URL.revokeObjectURL(url); };
+  const print = (d: CampaignData) => { const w = window.open("", "_blank"); if (!w) return notify("Izinkan pop-up untuk mencetak PDF."); w.document.open(); w.document.write(campaignHtml(d)); w.document.close(); w.onload = () => w.print(); };
+  const addAccount = () => { const n = form.account.trim(); if (!n || plan.accounts.includes(n)) return; setPlan(o => ({ ...o, accounts: [...o.accounts, n] })); setAccountFilter(n); setModal(""); };
+  const renameAccount = (from: string, to: string) => { const name = to.trim(); if (!name || name === from) return setModal(""); if (plan.accounts.includes(name)) return notify("Nama akun itu sudah ada."); setPlan(o => ({ accounts: o.accounts.map(a => (a === from ? name : a)), campaigns: o.campaigns.map(c => (c.account === from ? { ...c, account: name } : c)) })); setAccountFilter(name); setModal(""); };
+  const deleteAccount = (name: string) => { const owned = plan.campaigns.filter(c => c.account === name); if (!window.confirm(owned.length ? `Hapus akun “${name}” beserta ${owned.length} campaign di dalamnya?` : `Hapus akun “${name}”?`)) return; const ids = new Set(owned.map(c => c.id)); setPlan(o => ({ accounts: o.accounts.filter(a => a !== name), campaigns: o.campaigns.filter(c => c.account !== name) })); dropTasks(t => ids.has(t.campaignId)); setAccountFilter("Semua akun"); setModal(""); };
 
-  return <div className="module-page f-page">
-    <div className="f-toolbar"><div className="f-chips" aria-label="Filter akun">{["Semua akun", ...plan.accounts].map(a => <button key={a} className={accountFilter === a ? "active" : ""} onClick={() => { setAccountFilter(a); setCampaignId(null); }}>{a}</button>)}</div><div className="x-row">{accountFilter !== "Semua akun" && <button className="outline-button" onClick={() => { setForm(f => ({ ...f, account: accountFilter })); setModal("manage"); }}><Pencil size={15} /> Kelola akun</button>}<button className="outline-button" onClick={() => setModal("account")}><Users size={15} /> Akun baru</button><button className="primary-button" onClick={() => { setForm(f => ({ ...f, campaignAccount: accountFilter === "Semua akun" ? plan.accounts[0] : accountFilter, kind: "" })); setModal("campaign"); }}><Plus size={15} /> Campaign baru</button></div></div>
+  const all = plan.campaigns.filter(c => accountFilter === "Semua akun" || c.account === accountFilter).flatMap(c => c.items.map(x => ({ c, x })));
+  const Card = ({ c, x }: { c: CampaignData; x: CampaignContent }) => <button className="cp-card" onClick={() => setOpenRef({ campaignId: c.id, day: x.day })}><b>{pad(x.day)}</b><span><em className={`f-fmt f-${x.format.toLowerCase()}`}>{x.format}</em>{busy.has(`${c.id}:${x.day}`) && <em className="f-fmt f-busy">Agen bekerja</em>}<strong className={x.untitled ? "f-untitled" : ""}>{x.title}</strong></span></button>;
 
-    {!campaign ? <>
-      {!visible.length && <p className="x-empty">Belum ada campaign untuk akun ini. Buat campaign pertama.</p>}
-      <div className="f-campaigns">{visible.map(c => <article key={c.id} className="f-campaign">
-        <div className="f-campaign-actions"><button aria-label={`Edit campaign ${c.name}`} title="Edit campaign" onClick={() => openEdit(c)}><Pencil size={16} /></button><button aria-label={`Hapus campaign ${c.name}`} title="Hapus campaign" className="x-danger" onClick={() => deleteCampaign(c)}><Trash2 size={16} /></button></div>
-        <button className="f-campaign-open" onClick={() => { setCampaignId(c.id); setFormat("Semua"); }}>
-        <ImageTile kind={c.cover} className="f-cover" />
-        <div className="f-campaign-body"><span className="f-eyebrow">{c.account} · {c.period}{c.auto ? " · agen otomatis" : ""}</span><h3>{c.name}</h3><p>{c.goal} · {c.items.length} konten</p>
-          <div className="f-progress" role="img" aria-label={STAGES.map(s => `${STAGE_LABEL[s]} ${stageCount(c, s)}`).join(", ")}>{STAGES.map(s => stageCount(c, s) > 0 && <i key={s} className={`st-${s.replace(/\s/g, "")}`} style={{ flexGrow: stageCount(c, s) }} />)}</div>
-          <div className="f-legend">{STAGES.map(s => <span key={s}><b>{stageCount(c, s)}</b> {STAGE_LABEL[s]}</span>)}</div></div>
-      </button></article>)}</div>
-    </> : <>
-      <div className="f-trail"><button onClick={() => setCampaignId(null)}>Semua campaign</button><ChevronRight size={14} /><b>{campaign.name}</b></div>
-      <section className="f-hero"><div><span className="f-eyebrow">{campaign.account} · {campaign.period}</span><h2>{campaign.name}</h2><p>{KIND_LABEL[campaign.kind ?? defaultKind(campaign.account)]} · {campaign.goal} · {campaign.items.length} konten · {campaign.items.filter(x => x.board?.length).length} sudah punya storyboard</p>{!campaign.brief && <p className="f-hero-hint">Belum ada brief campaign. Isi lewat “Brief campaign” agar judul dan storyboard dari agen relevan.</p>}</div>
-        <div className="f-hero-actions"><button onClick={() => { if (campaign.items.some(x => x.untitled)) return planTitles(campaign.id); const n = enqueueCampaign(campaign.id, 5); notify(n ? `${n} konten masuk antrean agen.` : "Semua konten sudah digarap atau sedang antre."); }}><Sparkles size={15} /> {campaign.items.some(x => x.untitled) ? "Susun judul AI" : "Garap 5 konten berikutnya"}</button><button onClick={() => openEdit(campaign)}><FileText size={15} /> Brief campaign</button>{!campaign.items.some(x => x.untitled) && <button onClick={() => planTitles(campaign.id)}><Sparkles size={15} /> Susun ulang judul</button>}<button aria-pressed={!!campaign.auto} onClick={() => patchCampaign(campaign.id, c => ({ ...c, auto: !c.auto }))}><Zap size={15} /> {campaign.auto ? "Otomatis: nyala" : "Otomatis: mati"}</button><button onClick={() => onShare(campaign)}><Share2 size={15} /> Bagikan</button><button onClick={() => download(campaign)}><Download size={15} /> HTML</button><button onClick={() => print(campaign)}><Printer size={15} /> PDF</button></div>
-      </section>
-      <div className="f-toolbar"><div className="f-chips" role="tablist">{(["Papan", "Daftar", "Kalender"] as const).map(v => <button key={v} role="tab" aria-selected={view === v} className={view === v ? "active" : ""} onClick={() => setView(v)}>{v}</button>)}</div><div className="f-chips">{["Semua", ...FORMATS].map(f => <button key={f} className={format === f ? "active" : ""} onClick={() => setFormat(f)}>{f}</button>)}</div><button className="primary-button" onClick={() => setModal("content")}><Plus size={15} /> Konten baru</button></div>
-      {view === "Papan" && <div className="f-kanban">{STAGES.map(s => <section key={s} className={`f-col st-${s.replace(/\s/g, "")}`}><header><b>{STAGE_LABEL[s]}</b><span>{items.filter(x => x.status === s).length}</span></header>{items.filter(x => x.status === s).map(x => <Card key={x.day} x={x} />)}{!items.some(x => x.status === s) && <p className="x-empty">Kosong</p>}</section>)}</div>}
-      {view === "Daftar" && <div className="f-list">{items.map(x => <button key={x.day} className="f-row" onClick={() => setOpenDay(x.day)}><b>{pad(x.day)}</b><span><strong>{x.title}</strong><small>{x.format} · {x.pillar} · {x.publishDate || x.date}</small></span><em className={`x-status st-${x.status.replace(/\s/g, "")}`}>{STAGE_LABEL[x.status] ?? x.status}</em><ChevronRight size={16} /></button>)}</div>}
-      {view === "Kalender" && <div className="x-cal">{items.map(x => <button key={x.day} className={x.status === "Published" || x.status === "Scheduled" ? "ok" : ""} onClick={() => setOpenDay(x.day)}><b>{x.publishDate || x.date}</b><span>{x.format} · {STAGE_LABEL[x.status] ?? x.status}</span><small>{x.title}</small></button>)}</div>}
-    </>}
+  return <div className="module-page cp">
+    <div className="cp-views" role="tablist">{([["Campaign", Layers3], ["Kalender", CalendarDays], ["Daftar Konten", List]] as const).map(([v, Icon]) => <button key={v} role="tab" aria-selected={view === v} className={view === v ? "active" : ""} onClick={() => setView(v)}><Icon size={16} /> {v}</button>)}</div>
 
-    {campaign && item && <ContentSheet campaign={campaign} item={item} onClose={() => setOpenDay(null)} onOpenStudio={() => onOpenStudio(campaign.id, item.day)} onDelete={() => { if (!window.confirm(`Hapus konten “${item.title}”? Brief dan storyboard-nya ikut terhapus.`)) return; patchCampaign(campaign.id, c => ({ ...c, items: c.items.filter(x => x.day !== item.day) })); dropTasks(t => t.campaignId === campaign.id && t.day === item.day); setOpenDay(null); notify("Konten dihapus."); }} />}
+    {view === "Campaign" && <div className="cp-layout">
+      <aside className="panel cp-side">
+        <div className="cp-side-head"><h3>Campaign</h3><span className="muted-chip">{visible.length} campaign</span></div>
+        <div className="search-field cp-search"><Search size={15} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Cari campaign…" aria-label="Cari campaign" /></div>
+        <div className="f-chips cp-accounts" aria-label="Filter akun">{["Semua akun", ...plan.accounts].map(a => <button key={a} className={accountFilter === a ? "active" : ""} onClick={() => { setAccountFilter(a); setSelectedId(null); }}>{a}</button>)}<button aria-label="Akun baru" title="Akun baru" onClick={() => { setForm({ ...blankForm }); setModal("account"); }}><Plus size={15} /></button>{accountFilter !== "Semua akun" && <button aria-label="Kelola akun" title="Kelola akun" onClick={() => { setForm({ ...blankForm, account: accountFilter }); setModal("manage"); }}><Pencil size={14} /></button>}</div>
+        <div className="cp-list">{visible.map(c => { const done = Math.min(c.items.length, targetOf(c)); return <article key={c.id} className={`cp-campaign ${campaign?.id === c.id ? "active" : ""}`}>
+          <button className="cp-campaign-open" onClick={() => select(c)}><ImageTile kind={coverOf(c)} className="cp-thumb" /><span className="cp-campaign-text"><b>{c.name}</b><small>{c.account} · {c.period}</small><span className="cp-progress"><i><em style={{ width: `${(done / targetOf(c)) * 100}%` }} /></i><small>{c.items.length} / {targetOf(c)}</small>{c.items.length >= targetOf(c) && <CheckCircle2 size={16} className="cp-full" />}</span></span></button>
+          <button className="cp-more" aria-label={`Menu ${c.name}`} aria-expanded={menu === c.id} onClick={() => setMenu(menu === c.id ? null : c.id)}><MoreHorizontal size={18} /></button>
+          {menu === c.id && <div className="floating-menu cp-menu"><button onClick={() => editBrief(c)}>Edit brief campaign<Pencil size={14} /></button><button className="x-danger" onClick={() => deleteCampaign(c)}>Hapus campaign<Trash2 size={14} /></button></div>}
+        </article>; })}{!visible.length && <p className="x-empty">Belum ada campaign.</p>}</div>
+        <button className="primary-button cp-add" onClick={openNewCampaign}><Plus size={16} /> Tambahkan Campaign</button>
+      </aside>
 
-    {modal && <div className="modal-backdrop" onClick={() => setModal("")}><div className="quick-modal plan-v2-modal" onClick={e => e.stopPropagation()}><button className="modal-close" onClick={() => setModal("")} aria-label="Tutup"><X size={18} /></button>
-      {modal === "manage" && <><span className="modal-icon"><Pencil size={21} /></span><h2>Kelola akun</h2><p>Ganti nama berlaku untuk semua campaign di akun ini.</p><label htmlFor="m-rename">NAMA AKUN</label><input id="m-rename" value={form.account} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} /><button className="primary-button" onClick={() => renameAccount(accountFilter, form.account)}>Simpan nama</button><button className="outline-button x-danger f-delete-wide" onClick={() => deleteAccount(accountFilter)}><Trash2 size={15} /> Hapus akun</button></>}
-      {modal === "account" && <><span className="modal-icon"><Users size={21} /></span><h2>Akun baru</h2><p>Tambahkan brand atau klien.</p><label htmlFor="m-acc">NAMA AKUN</label><input id="m-acc" value={form.account} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} placeholder="Contoh: Pawon Cabin" /><button className="primary-button" onClick={addAccount}>Simpan akun</button></>}
-      {modal === "campaign" && <><span className="modal-icon"><CalendarDays size={21} /></span><h2>Campaign baru</h2><p>30 slot konten. Strategist langsung menyusun judul dari brief di bawah.</p><label htmlFor="m-acc2">AKUN</label><select id="m-acc2" value={formAccount} onChange={e => setForm(f => ({ ...f, campaignAccount: e.target.value, kind: "" }))}>{plan.accounts.map(a => <option key={a}>{a}</option>)}</select><label htmlFor="m-name">NAMA CAMPAIGN</label><input id="m-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Contoh: Villa Syllo Bandung" /><label htmlFor="m-kind">JENIS CAMPAIGN</label><select id="m-kind" value={form.kind || defaultKind(formAccount)} onChange={e => setForm(f => ({ ...f, kind: e.target.value as CampaignKind }))}>{(Object.keys(KIND_LABEL) as CampaignKind[]).map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select><label htmlFor="m-brief">BRIEF CAMPAIGN</label><textarea id="m-brief" rows={4} value={form.brief} onChange={e => setForm(f => ({ ...f, brief: e.target.value }))} placeholder="Contoh: Villa Syllo, villa 4 kamar di Lembang, Bandung. Kolam renang privat, view pegunungan, cocok untuk keluarga dan gathering 15 orang. Target: keluarga Jakarta–Bandung. CTA: booking via WhatsApp." /><label htmlFor="m-period">PERIODE</label><input id="m-period" value={form.period} onChange={e => setForm(f => ({ ...f, period: e.target.value }))} /><label htmlFor="m-goal">TUJUAN</label><select id="m-goal" value={form.goal} onChange={e => setForm(f => ({ ...f, goal: e.target.value }))}>{["Awareness & engagement", "Lead generation", "Bookings", "Sales conversion"].map(g => <option key={g}>{g}</option>)}</select><button className="primary-button" onClick={addCampaign}>Buat campaign</button></>}
-      {modal === "edit" && <><span className="modal-icon"><FileText size={21} /></span><h2>Brief campaign</h2><p>Dipakai agen untuk menyusun judul, brief, dan storyboard. Setelah disimpan, tekan “Susun ulang judul” bila judul lama tidak relevan.</p><label htmlFor="m-acc2">AKUN</label><select id="m-acc2" value={formAccount} onChange={e => setForm(f => ({ ...f, campaignAccount: e.target.value, kind: "" }))}>{plan.accounts.map(a => <option key={a}>{a}</option>)}</select><label htmlFor="m-name">NAMA CAMPAIGN</label><input id="m-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /><label htmlFor="m-kind">JENIS CAMPAIGN</label><select id="m-kind" value={form.kind || defaultKind(formAccount)} onChange={e => setForm(f => ({ ...f, kind: e.target.value as CampaignKind }))}>{(Object.keys(KIND_LABEL) as CampaignKind[]).map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select><label htmlFor="m-brief">BRIEF CAMPAIGN</label><textarea id="m-brief" rows={4} value={form.brief} onChange={e => setForm(f => ({ ...f, brief: e.target.value }))} placeholder="Contoh: Villa Syllo, villa 4 kamar di Lembang, Bandung. Kolam renang privat, view pegunungan, cocok untuk keluarga dan gathering 15 orang. Target: keluarga Jakarta–Bandung. CTA: booking via WhatsApp." /><label htmlFor="m-period">PERIODE</label><input id="m-period" value={form.period} onChange={e => setForm(f => ({ ...f, period: e.target.value }))} /><label htmlFor="m-goal">TUJUAN</label><select id="m-goal" value={form.goal} onChange={e => setForm(f => ({ ...f, goal: e.target.value }))}>{["Awareness & engagement", "Lead generation", "Bookings", "Sales conversion"].map(g => <option key={g}>{g}</option>)}</select><button className="primary-button" onClick={saveEdit}>Simpan brief</button>{editing && <button className="outline-button x-danger f-delete-wide" onClick={() => deleteCampaign(editing)}><Trash2 size={15} /> Hapus campaign</button>}</>}
-      {modal === "content" && <><span className="modal-icon"><FileText size={21} /></span><h2>Konten baru</h2><p>Cukup judul dan format. Brief dan storyboard bisa diisi agen.</p><label htmlFor="m-title">JUDUL</label><input id="m-title" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /><label htmlFor="m-format">FORMAT</label><select id="m-format" value={form.format} onChange={e => setForm(f => ({ ...f, format: e.target.value }))}>{FORMATS.map(f => <option key={f}>{f}</option>)}</select><button className="primary-button" onClick={addContent}>Tambah konten</button></>}
+      {campaign ? <section className="cp-main">
+        <div className="cp-hero"><ImageTile kind={coverOf(campaign)} className="cp-hero-img" /><div className="cp-hero-shade" />
+          <div className="cp-hero-text"><span className="f-eyebrow">{campaign.account} · {campaign.period}</span><h2>{campaign.name}</h2><p>{KIND_LABEL[kindOf(campaign)]} · {campaign.goal} · {campaign.items.length} konten</p></div>
+          <div className="cp-hero-stat"><b>{campaign.items.length} / {targetOf(campaign)}</b><small>Konten direncanakan</small><i><em style={{ width: `${Math.min(100, (campaign.items.length / targetOf(campaign)) * 100)}%` }} /></i></div></div>
+        <div className="cp-tabbar"><div className="cp-tabs" role="tablist">{([["Papan Produksi", Columns3], ["Brief Campaign", FileText], ["Analitik", BarChart3]] as const).map(([t, Icon]) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "active" : ""} onClick={() => { setTab(t); if (t === "Brief Campaign" && !briefForm) editBrief(campaign); }}><Icon size={16} /> {t}</button>)}</div>
+          <div className="cp-actions"><button className="outline-button" onClick={() => onShare(campaign)}><Share2 size={15} /> Bagikan</button><button className="outline-button" onClick={() => print(campaign)}><Printer size={15} /> PDF</button><button className="outline-button" onClick={() => download(campaign)}><Code2 size={15} /> HTML</button>
+            <div className="dropdown-wrap"><button className="outline-button" aria-label="Aksi AI" aria-expanded={menu === "hero"} onClick={() => setMenu(menu === "hero" ? null : "hero")}><MoreHorizontal size={16} /></button>{menu === "hero" && <div className="floating-menu cp-menu cp-menu-right">
+              <button onClick={() => suggestTitles(campaign)}>Usulkan 5 judul dengan AI<Sparkles size={14} /></button>
+              <button onClick={() => { const n = enqueueCampaign(campaign.id, 5); setMenu(null); notify(n ? `${n} konten di tahap Brief digarap agen (±Rp 9 per konten).` : "Tidak ada konten Brief yang perlu digarap."); }}>Tulis brief AI untuk 5 konten<Play size={14} /></button>
+              <button onClick={() => { patchCampaign(campaign.id, c => ({ ...c, auto: !c.auto })); setMenu(null); }}>Agen otomatis: {campaign.auto ? "nyala" : "mati"}<Zap size={14} /></button>
+            </div>}</div></div></div>
+
+        {tab === "Papan Produksi" && <div className="cp-board">{STAGES.map(s => { const Icon = STAGE_ICON[s]; const list = stageItems(campaign, s); return <section key={s} className={`cp-col cp-${s.toLowerCase()}`}>
+          <header><Icon size={17} /><b>{s}</b><span>{list.length}</span></header>
+          <div className="cp-col-body">{list.map(x => <Card key={x.day} c={campaign} x={x} />)}{!list.length && <p className="x-empty">Kosong</p>}</div>
+          <button className="cp-add-content" onClick={() => { setDraft({ title: "", format: "Reels", stage: s, date: "" }); setModal("content"); }}><Plus size={15} /> Tambah konten</button>
+        </section>; })}</div>}
+
+        {tab === "Brief Campaign" && briefForm && <section className="panel cp-brief">
+          <div className="cp-form">
+            <div className="settings-field"><label htmlFor="b-acc">AKUN / BRAND</label><select id="b-acc" value={briefForm.account} onChange={e => setBriefForm({ ...briefForm, account: e.target.value })}>{plan.accounts.map(a => <option key={a}>{a}</option>)}</select></div>
+            <div className="settings-field"><label htmlFor="b-name">NAMA CAMPAIGN</label><input id="b-name" value={briefForm.name} onChange={e => setBriefForm({ ...briefForm, name: e.target.value })} /></div>
+            <div className="settings-field"><label htmlFor="b-period">PERIODE</label><input id="b-period" value={briefForm.period} onChange={e => setBriefForm({ ...briefForm, period: e.target.value })} /></div>
+            <div className="settings-field"><label htmlFor="b-goal">TARGET / OBJECTIVE</label><select id="b-goal" value={briefForm.goal} onChange={e => setBriefForm({ ...briefForm, goal: e.target.value })}>{GOALS.map(g => <option key={g}>{g}</option>)}</select></div>
+            <div className="settings-field"><label htmlFor="b-kind">JENIS CAMPAIGN</label><select id="b-kind" value={briefForm.kind || defaultKind(briefForm.account)} onChange={e => setBriefForm({ ...briefForm, kind: e.target.value as CampaignKind })}>{(Object.keys(KIND_LABEL) as CampaignKind[]).map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></div>
+            <div className="settings-field"><label htmlFor="b-target">TARGET JUMLAH KONTEN</label><input id="b-target" type="number" min={1} max={200} value={briefForm.target} onChange={e => setBriefForm({ ...briefForm, target: Number(e.target.value) || 1 })} /></div>
+            <div className="settings-field cp-wide"><label htmlFor="b-brief">DESKRIPSI CAMPAIGN</label><textarea id="b-brief" rows={4} maxLength={500} value={briefForm.brief} onChange={e => setBriefForm({ ...briefForm, brief: e.target.value })} placeholder="Properti, lokasi, keunggulan, target audiens, CTA. Dipakai agen saat menulis judul dan brief." /><small>{briefForm.brief.length} / 500</small></div>
+          </div>
+          <div className="x-row"><button className="primary-button" onClick={saveBrief}><Check size={15} /> Simpan brief campaign</button><button className="outline-button x-danger" onClick={() => deleteCampaign(campaign)}><Trash2 size={15} /> Hapus campaign</button></div>
+        </section>}
+
+        {tab === "Analitik" && <section className="cp-analytics">
+          <div className="x-kpis">{STAGES.map(s => <div className="agent-overview-card" key={s}><span>{s}</span><b>{stageItems(campaign, s).length}</b><small>konten</small></div>)}</div>
+          <div className="panel"><h3 className="f-h">Komposisi format</h3>{FORMATS.map(f => { const n = campaign.items.filter(x => x.format === f).length; return <div className="r-bar" key={f}><div><span>{f}</span><b>{n}</b></div><i><em style={{ width: `${campaign.items.length ? (n / campaign.items.length) * 100 : 0}%` }} /></i></div>; })}
+            <p className="f-help">{campaign.items.filter(x => x.board?.length).length} dari {campaign.items.length} konten sudah punya storyboard · target {targetOf(campaign)} konten.</p></div>
+          <div className="panel"><h3 className="f-h">Jadwal terdekat</h3>{campaign.items.filter(x => x.publishDate).slice(0, 8).map(x => <div className="cp-sched" key={x.day}><b>{x.publishDate}</b><span>{x.title}</span><em className="f-fmt">{stageOf(x.status)}</em></div>)}{!campaign.items.some(x => x.publishDate) && <p className="x-empty">Belum ada tanggal tayang. Isi di brief konten.</p>}</div>
+        </section>}
+      </section> : <section className="panel cp-main cp-empty"><h3>Belum ada campaign</h3><p>Buat campaign pertama, lalu tambahkan konten satu per satu.</p><button className="primary-button" onClick={openNewCampaign}><Plus size={16} /> Tambahkan Campaign</button></section>}
+    </div>}
+
+    {view === "Kalender" && <section className="panel"><div className="agent-section-heading"><div><h3>Kalender konten</h3><p>Semua konten {accountFilter === "Semua akun" ? "dari semua akun" : `akun ${accountFilter}`}, urut tanggal tayang.</p></div></div>
+      <div className="x-cal">{[...all].sort((a, b) => (a.x.publishDate || "~").localeCompare(b.x.publishDate || "~")).map(({ c, x }) => <button key={c.id + x.day} className={stageOf(x.status) === "Publish" ? "ok" : ""} onClick={() => setOpenRef({ campaignId: c.id, day: x.day })}><b>{x.publishDate || "Belum dijadwalkan"}</b><span>{c.name} · {x.format} · {stageOf(x.status)}</span><small>{x.title}</small></button>)}</div>
+      {!all.length && <p className="x-empty">Belum ada konten.</p>}</section>}
+
+    {view === "Daftar Konten" && <section className="panel"><div className="agent-section-heading"><div><h3>Daftar konten</h3><p>{all.length} konten di semua campaign.</p></div><div className="f-chips">{["Semua", ...STAGES].map(s => <button key={s} className={stageFilter === s ? "active" : ""} onClick={() => setStageFilter(s)}>{s}</button>)}</div></div>
+      <div className="scroll"><table className="f-cost-table"><thead><tr><th>#</th><th>Judul</th><th>Campaign</th><th>Format</th><th>Tahap</th><th>Tayang</th></tr></thead><tbody>
+        {all.filter(({ x }) => stageFilter === "Semua" || stageOf(x.status) === stageFilter).map(({ c, x }) => <tr key={c.id + x.day} className="cp-row" onClick={() => setOpenRef({ campaignId: c.id, day: x.day })}><td>{pad(x.day)}</td><td><button className="cp-link" onClick={() => setOpenRef({ campaignId: c.id, day: x.day })}>{x.title}</button></td><td>{c.name}</td><td>{x.format}</td><td>{stageOf(x.status)}</td><td>{x.publishDate || "—"}</td></tr>)}
+      </tbody></table></div></section>}
+
+    {openCampaign && openItem && <ContentSheet campaign={openCampaign} item={openItem} onClose={() => setOpenRef(null)} onOpenStudio={() => onOpenStudio(openCampaign.id, openItem.day)} onDelete={() => { if (!window.confirm(`Hapus konten “${openItem.title}”? Brief dan storyboard-nya ikut terhapus.`)) return; patchCampaign(openCampaign.id, c => ({ ...c, items: c.items.filter(x => x.day !== openItem.day) })); dropTasks(t => t.campaignId === openCampaign.id && t.day === openItem.day); setOpenRef(null); notify("Konten dihapus."); }} />}
+
+    {modal && <div className="modal-backdrop" onClick={() => setModal("")}><div className={`quick-modal ${modal === "campaign" ? "cp-modal" : "plan-v2-modal"}`} role="dialog" aria-label={modal === "campaign" ? "Tambahkan Campaign" : "Form"} onClick={e => e.stopPropagation()}><button className="modal-close" onClick={() => setModal("")} aria-label="Tutup"><X size={18} /></button>
+      {modal === "campaign" && <>
+        <div className="cp-modal-head"><span className="modal-icon"><Layers3 size={21} /></span><div><h2>Tambahkan Campaign</h2><p>Buat campaign baru untuk menyusun rencana konten dan brief produksinya. Konten ditambahkan manual setelahnya.</p></div></div>
+        <div className="cp-form">
+          <div className="settings-field"><label htmlFor="n-acc">AKUN / BRAND *</label><select id="n-acc" value={form.account} onChange={e => setForm({ ...form, account: e.target.value, kind: "" })}>{plan.accounts.map(a => <option key={a}>{a}</option>)}</select></div>
+          <div className="settings-field"><label htmlFor="n-name">NAMA CAMPAIGN *</label><input id="n-name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Contoh: SPLENDID 2.0" /></div>
+          <div className="settings-field"><label htmlFor="n-period">PERIODE CAMPAIGN *</label><input id="n-period" value={form.period} onChange={e => setForm({ ...form, period: e.target.value })} placeholder="Des 2026 – Jan 2027" /></div>
+          <div className="settings-field"><label htmlFor="n-goal">TARGET / OBJECTIVE</label><select id="n-goal" value={form.goal} onChange={e => setForm({ ...form, goal: e.target.value })}>{GOALS.map(g => <option key={g}>{g}</option>)}</select></div>
+          <div className="settings-field"><label htmlFor="n-kind">JENIS CAMPAIGN</label><select id="n-kind" value={form.kind || defaultKind(form.account)} onChange={e => setForm({ ...form, kind: e.target.value as CampaignKind })}>{(Object.keys(KIND_LABEL) as CampaignKind[]).map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></div>
+          <div className="settings-field"><label htmlFor="n-target">TARGET JUMLAH KONTEN</label><input id="n-target" type="number" min={1} max={200} value={form.target} onChange={e => setForm({ ...form, target: Number(e.target.value) || 1 })} /></div>
+          <div className="settings-field cp-wide"><label htmlFor="n-brief">DESKRIPSI CAMPAIGN *</label><textarea id="n-brief" rows={3} maxLength={250} value={form.brief} onChange={e => setForm({ ...form, brief: e.target.value })} placeholder="Campaign promosi unit properti di area Sudirman & SCBD, dengan pendekatan storytelling dan highlight keunggulan lokasi." /><small>{form.brief.length} / 250</small></div>
+        </div>
+        <div className="cp-modal-actions"><button className="outline-button" onClick={() => setModal("")}>Batal</button><button className="primary-button" onClick={createCampaign}>Buat Campaign</button></div>
+      </>}
+      {modal === "content" && campaign && <><span className="modal-icon"><FileText size={21} /></span><h2>Tambah konten</h2><p>{campaign.name} · tahap {draft.stage}</p><label htmlFor="c-title">JUDUL</label><input id="c-title" value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} onKeyDown={e => { if (e.key === "Enter") addContent(); }} /><label htmlFor="c-format">FORMAT</label><select id="c-format" value={draft.format} onChange={e => setDraft({ ...draft, format: e.target.value })}>{FORMATS.map(f => <option key={f}>{f}</option>)}</select><label htmlFor="c-date">TANGGAL TAYANG (opsional)</label><input id="c-date" value={draft.date} onChange={e => setDraft({ ...draft, date: e.target.value })} placeholder="mis. 12 Des 2026" /><button className="primary-button" onClick={addContent}>Tambah konten</button></>}
+      {modal === "account" && <><span className="modal-icon"><Users size={21} /></span><h2>Akun baru</h2><p>Tambahkan brand atau klien.</p><label htmlFor="m-acc">NAMA AKUN</label><input id="m-acc" value={form.account} onChange={e => setForm({ ...form, account: e.target.value })} placeholder="Contoh: Pawon Cabin" /><button className="primary-button" onClick={addAccount}>Simpan akun</button></>}
+      {modal === "manage" && <><span className="modal-icon"><Pencil size={21} /></span><h2>Kelola akun</h2><p>Ganti nama berlaku untuk semua campaign di akun ini.</p><label htmlFor="m-rename">NAMA AKUN</label><input id="m-rename" value={form.account} onChange={e => setForm({ ...form, account: e.target.value })} /><button className="primary-button" onClick={() => renameAccount(accountFilter, form.account)}>Simpan nama</button><button className="outline-button x-danger f-delete-wide" onClick={() => deleteAccount(accountFilter)}><Trash2 size={15} /> Hapus akun</button></>}
     </div></div>}
   </div>;
 }
