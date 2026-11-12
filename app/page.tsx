@@ -9,7 +9,7 @@ import {
   Search, Send, Settings, Sparkles, Target, Users, Video, X, Youtube,
   ChartNoAxesCombined, Clock3, Layers3, BriefcaseBusiness, TrendingUp, Bookmark,
   Hash, Eye, Flame, WandSparkles, PlusCircle, ChevronRight, Filter, CirclePlay,
-  MessageSquareText, ChartLine, Lightbulb as LightbulbIcon, Cloud, Database, UploadCloud, Music2, UserCircle2, UserPlus, History, ShieldCheck, Info, ExternalLink, FolderPlus, AtSign, Zap
+  MessageSquareText, ChartLine, Lightbulb as LightbulbIcon, Cloud, Database, UploadCloud, Music2, UserCircle2, UserPlus, History, ShieldCheck, Info, ExternalLink, FolderPlus, AtSign, Zap, Images
 } from "lucide-react";
 
 import { AiButton, AiCostBadge, AiError, ApiSettingsTab, ApprovalList, InboxLeadsPage, ModelRouterPanel, notify, runAgentTask, useAI } from "./modules";
@@ -26,6 +26,7 @@ import { startCloud } from "./lib/cloud";
 import { AssetLibraryPage } from "./assets";
 import { ContentPlanPage } from "./plan";
 import { StudioPage } from "./studio";
+import { DeliveryPage } from "./delivery";
 
 type Platform = "All channels" | "Instagram" | "TikTok" | "YouTube";
 type Range = "Last 7 Days" | "Last 30 Days" | "Last 90 Days";
@@ -37,7 +38,8 @@ const navGroups = [
       { name: "Dashboard", icon: Home },
       { name: "Research & Insight", icon: Compass },
       { name: "Content Plan", icon: CalendarDays },
-      { name: "Production Studio", icon: Clapperboard }
+      { name: "Production Studio", icon: Clapperboard },
+      { name: "Photo Delivery", icon: Images }
     ]
   },
   {
@@ -455,14 +457,14 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {activeNav !== "Dashboard" && activeNav !== "Research & Insight" && activeNav !== "Content Plan" && activeNav !== "Production Studio" && activeNav !== "Feed & Carousel" && activeNav !== "Reels & Video" && activeNav !== "Templates" && activeNav !== "Asset Library" && activeNav !== "AI Agent Team" && activeNav !== "Analytics" && activeNav !== "Asset Library" && activeNav !== "Settings" && activeNav !== "Automation" && activeNav !== "Inbox & Leads" && (
+        {activeNav !== "Dashboard" && activeNav !== "Research & Insight" && activeNav !== "Content Plan" && activeNav !== "Production Studio" && activeNav !== "Photo Delivery" && activeNav !== "Feed & Carousel" && activeNav !== "Reels & Video" && activeNav !== "Templates" && activeNav !== "Asset Library" && activeNav !== "AI Agent Team" && activeNav !== "Analytics" && activeNav !== "Asset Library" && activeNav !== "Settings" && activeNav !== "Automation" && activeNav !== "Inbox & Leads" && (
           <div className="section-notice">
             <div><b>{activeNav}</b><span>Preview navigasi — modul ini akan dikembangkan pada tahap berikutnya.</span></div>
             <button onClick={() => setActiveNav("Dashboard")}>Kembali ke Dashboard <ArrowRight size={15} /></button>
           </div>
         )}
 
-        {activeNav === "Research & Insight" ? <ResearchPage /> : activeNav === "Content Plan" ? <ContentPlanPage onOpenStudio={(campaignId,day)=>{setStudioTarget({campaignId,day});setActiveNav("Production Studio");}} onShare={(data)=>{const token=btoa(unescape(encodeURIComponent(JSON.stringify(data))));const link=window.location.origin+window.location.pathname+"#share="+token;navigator.clipboard?.writeText(link);window.open(link,"_blank","noopener,noreferrer");}} /> : activeNav === "AI Agent Team" ? <AgentsPage /> : activeNav === "Asset Library" ? <AssetLibraryPage /> : activeNav === "Analytics" ? <AnalyticsPage onAddToPlan={(idea)=>{addIdea(idea);notify("Ide masuk ke inbox ide di Content Plan.");setActiveNav("Content Plan");}} /> : activeNav === "Inbox & Leads" ? <InboxLeadsPage /> : activeNav === "Automation" ? <div className="module-page automation-simple"><section className="panel automation-simple-card"><span className="automation-simple-icon"><Zap size={24}/></span><div><h2>Automation</h2><p>Atur pengingat dan workflow sederhana. Trigger otomatis akan diaktifkan setelah backend tersedia.</p></div><button className="primary-button" onClick={()=>setQuickAction("Create automation")}><Plus size={14}/> New automation</button></section><div className="automation-simple-grid"><article><Clock3 size={18}/><b>Content reminder</b><p>Pengingat jadwal konten yang akan tayang.</p><span>Coming soon</span></article><article><MessageCircle size={18}/><b>Approval reminder</b><p>Pengingat untuk brief yang menunggu review.</p><span>Coming soon</span></article></div></div> : activeNav === "Settings" ? <SettingsPage /> : activeNav === "Production Studio" ? <StudioPage target={studioTarget} onOpenPlan={()=>setActiveNav("Content Plan")} /> : <div className="dashboard-content">
+        {activeNav === "Research & Insight" ? <ResearchPage /> : activeNav === "Content Plan" ? <ContentPlanPage onOpenStudio={(campaignId,day)=>{setStudioTarget({campaignId,day});setActiveNav("Production Studio");}} onShare={(data)=>{const token=btoa(unescape(encodeURIComponent(JSON.stringify(data))));const link=window.location.origin+window.location.pathname+"#share="+token;navigator.clipboard?.writeText(link);window.open(link,"_blank","noopener,noreferrer");}} /> : activeNav === "AI Agent Team" ? <AgentsPage /> : activeNav === "Asset Library" ? <AssetLibraryPage /> : activeNav === "Analytics" ? <AnalyticsPage onAddToPlan={(idea)=>{addIdea(idea);notify("Ide masuk ke inbox ide di Content Plan.");setActiveNav("Content Plan");}} /> : activeNav === "Inbox & Leads" ? <InboxLeadsPage /> : activeNav === "Automation" ? <div className="module-page automation-simple"><section className="panel automation-simple-card"><span className="automation-simple-icon"><Zap size={24}/></span><div><h2>Automation</h2><p>Atur pengingat dan workflow sederhana. Trigger otomatis akan diaktifkan setelah backend tersedia.</p></div><button className="primary-button" onClick={()=>setQuickAction("Create automation")}><Plus size={14}/> New automation</button></section><div className="automation-simple-grid"><article><Clock3 size={18}/><b>Content reminder</b><p>Pengingat jadwal konten yang akan tayang.</p><span>Coming soon</span></article><article><MessageCircle size={18}/><b>Approval reminder</b><p>Pengingat untuk brief yang menunggu review.</p><span>Coming soon</span></article></div></div> : activeNav === "Settings" ? <SettingsPage /> : activeNav === "Photo Delivery" ? <DeliveryPage /> : activeNav === "Production Studio" ? <StudioPage target={studioTarget} onOpenPlan={()=>setActiveNav("Content Plan")} /> : <div className="dashboard-content">
           <section className="metrics-row">
             {metrics.map((metric) => {
               const Icon = metric.icon;

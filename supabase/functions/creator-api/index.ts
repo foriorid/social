@@ -69,11 +69,19 @@ Deno.serve(async req => {
         if (!key) return fail("no_key", "Google API key belum disimpan. Buka Settings → AI & Models.");
         const folder = String(body.folderId ?? "");
         if (!/^[A-Za-z0-9_-]{10,}$/.test(folder)) return fail("input", "ID folder tidak valid.");
-        const params = new URLSearchParams({ q: `'${folder}' in parents and trashed = false`, fields: "files(id,name,mimeType,size,modifiedTime,webViewLink)", pageSize: "200", orderBy: "folder,name", supportsAllDrives: "true", includeItemsFromAllDrives: "true", key });
-        const r = await fetch("https://www.googleapis.com/drive/v3/files?" + params);
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) return fail("upstream", data?.error?.message ? `Google Drive: ${data.error.message}` : `Google Drive error ${r.status}`, 502);
-        return json({ files: data.files ?? [] });
+        // Photo galleries can hold hundreds of files, so follow nextPageToken (capped at 5,000).
+        const files: unknown[] = [];
+        let pageToken = "";
+        do {
+          const params = new URLSearchParams({ q: `'${folder}' in parents and trashed = false`, fields: "nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink)", pageSize: "1000", orderBy: "folder,name", supportsAllDrives: "true", includeItemsFromAllDrives: "true", key });
+          if (pageToken) params.set("pageToken", pageToken);
+          const r = await fetch("https://www.googleapis.com/drive/v3/files?" + params);
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) return fail("upstream", data?.error?.message ? `Google Drive: ${data.error.message}` : `Google Drive error ${r.status}`, 502);
+          files.push(...(data.files ?? []));
+          pageToken = data.nextPageToken ?? "";
+        } while (pageToken && files.length < 5000);
+        return json({ files });
       }
       case "instagram": {
         const [token, igId] = await Promise.all([secret(user, "meta_token"), secret(user, "ig_user_id")]);

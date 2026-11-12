@@ -10,7 +10,7 @@ import { notify } from "./modules";
 import { patchItem, readPlan, usePlan, type AssetRef } from "./plan-data";
 
 export type DriveFolder = { name: string; url: string; id: string };
-type DriveFile = { id: string; name: string; mimeType: string; size?: string; modifiedTime?: string; webViewLink?: string };
+export type DriveFile = { id: string; name: string; mimeType: string; size?: string; modifiedTime?: string; webViewLink?: string };
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 const kindOf = (mime: string) => (mime === FOLDER_MIME ? "Folder" : mime.startsWith("image/") ? "Foto" : mime.startsWith("video/") ? "Video" : mime.startsWith("audio/") ? "Audio" : "Lainnya");
@@ -24,11 +24,18 @@ export async function listDriveFolder(folderId: string): Promise<DriveFile[]> {
   if (isSignedIn() && readCloudKeys().google) return (await callServer<{ files: DriveFile[] }>("drive", { folderId })).files;
   const key = getSettings().googleApiKey.trim();
   if (!key) throw new Error("Google API key belum diisi. Buka Settings → AI & Models.");
-  const params = new URLSearchParams({ q: `'${folderId}' in parents and trashed = false`, fields: "files(id,name,mimeType,size,modifiedTime,webViewLink)", pageSize: "200", orderBy: "folder,name", supportsAllDrives: "true", includeItemsFromAllDrives: "true", key });
-  const response = await fetch("https://www.googleapis.com/drive/v3/files?" + params);
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error?.message ? `Google Drive: ${data.error.message}` : `Google Drive error ${response.status}`);
-  return data.files ?? [];
+  const files: DriveFile[] = [];
+  let pageToken = "";
+  do {
+    const params = new URLSearchParams({ q: `'${folderId}' in parents and trashed = false`, fields: "nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink)", pageSize: "1000", orderBy: "folder,name", supportsAllDrives: "true", includeItemsFromAllDrives: "true", key });
+    if (pageToken) params.set("pageToken", pageToken);
+    const response = await fetch("https://www.googleapis.com/drive/v3/files?" + params);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.error?.message ? `Google Drive: ${data.error.message}` : `Google Drive error ${response.status}`);
+    files.push(...(data.files ?? []));
+    pageToken = data.nextPageToken ?? "";
+  } while (pageToken && files.length < 5000);
+  return files;
 }
 
 function useFolders() { return useStored<DriveFolder[]>("driveFolders", []); }
