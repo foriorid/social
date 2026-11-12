@@ -2039,3 +2039,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .f-campaign-actions button { width:40px; height:40px; display:grid; place-items:center; border:0; border-radius:12px; background:rgba(255,255,255,.94); color:#4b279e; box-shadow:0 4px 14px rgba(20,10,50,.18); cursor:pointer; }
 .f-campaign-actions button:hover { background:#fff; }
 .f-campaign-actions button.x-danger { color:#9b1c1c !important; }
+
+.f-cost { display:flex; flex-direction:column; gap:12px; }
+.f-cost-head { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; padding:14px; border-radius:14px; background:#f3eeff; border:1px solid #dccff7; }
+.f-cost-head > div:first-child { flex:1 1 280px; } .f-cost-head b { display:block; font-size:15px; } .f-cost-head small { display:block; margin-top:2px; font-size:13px; color:#55496f; line-height:1.45; }
+.f-cost-table { width:100%; border-collapse:collapse; min-width:560px; }
+.f-cost-table th, .f-cost-table td { padding:10px 8px; text-align:left; border-bottom:1px solid var(--line); font-size:14px; vertical-align:top; }
+.f-cost-table th { font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.f-cost-table td b { display:block; font-size:14px; } .f-cost-table td small { display:block; font-size:12px; color:var(--muted); margin-top:2px; }
+.f-cost-table .f-over { color:#9b1c1c; font-weight:700; }
+.f-ondemand { margin-top:10px; }

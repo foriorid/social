@@ -42,3 +42,22 @@ export function monthKey(date: Date = new Date()): string {
 export function rupiah(value: number): string {
   return "Rp " + Math.round(value).toLocaleString("id-ID");
 }
+
+/** Hidden reasoning is billed as output; short drafting tasks don't need it. Opus can't turn it off. */
+export function thinkingFor(model: string): { type: "disabled" } | { type: "between_tools" } | undefined {
+  if (model.includes("haiku")) return { type: "disabled" };
+  if (model.includes("sonnet")) return { type: "between_tools" };
+  return undefined;
+}
+
+/** Rough token count for Indonesian/English text (≈3.5 characters per token). */
+export const estimateTokens = (text: string) => Math.ceil(text.length / 3.5);
+
+/** Largest max_tokens that keeps the worst-case cost of one call at or under capIdr (0 = no cap). */
+export function fitMaxTokens(model: string, inputTokens: number, wanted: number, capIdr: number, usdToIdr: number): number {
+  if (capIdr <= 0) return wanted;
+  const [pin, pout] = PRICES[model] ?? PRICES["claude-opus-5-5"];
+  const inputIdr = (inputTokens * pin / 1_000_000) * usdToIdr;
+  const room = Math.floor((capIdr - inputIdr) / ((pout / 1_000_000) * usdToIdr));
+  return Math.max(0, Math.min(wanted, room));
+}

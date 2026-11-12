@@ -27,3 +27,20 @@ test("parseIdeas keeps only IDE: lines", () => {
 test("monthKey pads the month", () => {
   assert.equal(monthKey(new Date(2026, 2, 5)), "2026-03");
 });
+
+test("thinking is switched off where the model allows it", async () => {
+  const { thinkingFor } = await import("./logic.ts");
+  assert.deepEqual(thinkingFor("claude-haiku-5-5"), { type: "disabled" });
+  assert.deepEqual(thinkingFor("claude-sonnet-5-5"), { type: "between_tools" });
+  assert.equal(thinkingFor("claude-opus-5-5"), undefined);
+});
+
+test("fitMaxTokens keeps the worst case under the per-call cap", async () => {
+  const { fitMaxTokens, costIdr } = await import("./logic.ts");
+  const haiku = fitMaxTokens("claude-haiku-5-5", 800, 1800, 50, 18100);
+  assert.equal(haiku, 1800);
+  assert.ok(costIdr("claude-haiku-5-5", 800, haiku, 18100) <= 50);
+  const sonnet = fitMaxTokens("claude-sonnet-5-5", 800, 1800, 50, 18100);
+  assert.ok(sonnet < 300 && costIdr("claude-sonnet-5-5", 800, sonnet, 18100) <= 50);
+  assert.equal(fitMaxTokens("claude-sonnet-5-5", 800, 1800, 0, 18100), 1800);
+});

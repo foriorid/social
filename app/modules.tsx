@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { Check, Copy, Eye, EyeOff, FileText, Loader2, MessageCircle, Plus, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
-import { askAI, type Tier } from "./lib/ai";
-import { monthKey, rupiah } from "./lib/logic";
+import { askAI, CHEAP_MODEL, type Tier } from "./lib/ai";
+import { costIdr, monthKey, rupiah } from "./lib/logic";
 import { parseLines } from "./lib/logic";
 import { aiReady, CLOUD_OFF, saveSecret, signInWithEmail, signInWithPassword, signOut, signUpWithPassword, type Cloud } from "./lib/cloud";
-import { addApproval, useApprovals, useIdeas, useLeads, useSettings, useStored, useUsage, writeStored, type Lead } from "./lib/store";
+import { useCallLog, addApproval, useApprovals, useIdeas, useLeads, useSettings, useStored, useUsage, writeStored, type Lead } from "./lib/store";
 
 /** Runs an AI action and tracks busy/error state for the button that triggered it. */
 export function useAI() {
@@ -102,6 +102,40 @@ function KeyField({ id, label, hint, placeholder, server, local, setLocal }: { i
     <small>{hint}</small><AiError message={ai.error} /></div>;
 }
 
+/** Typical tokens per trigger (input, output) measured on short Indonesian drafts; used for the estimate column. */
+const TRIGGERS: [string, string, "light" | "creative", number, number][] = [
+  ["Judul campaign", "Buat campaign / Susun ulang judul (30 judul)", "creative", 450, 1300],
+  ["Brief lengkap siap review", "Jalankan agen per konten (brief + storyboard + caption + jadwal)", "creative", 550, 900],
+  ["Paket produksi", "Studio → Paket produksi (bila diminta)", "light", 650, 650],
+  ["Caption final + jadwal", "Studio → Minta SMM merapikan (bila diminta)", "light", 400, 280],
+  ["Bedah akun", "Riset → Bedah akun", "creative", 900, 1100],
+  ["Generate hooks", "Riset → Generate hooks", "creative", 220, 350],
+  ["Draf balasan lead", "Inbox & Leads → Draf balasan AI", "light", 280, 220],
+  ["Pertajam teks slide", "Studio → Pertajam teks", "light", 180, 50],
+  ["Tugas bebas", "AI Agent → Tugas bebas", "creative", 300, 900]
+];
+
+export function CostPanel() {
+  const [settings, setSettings] = useSettings();
+  const [log, setLog] = useCallLog();
+  const modelFor = (tier: "light" | "creative") => (settings.costMode === "hemat" ? CHEAP_MODEL : tier === "light" ? settings.lightModel : settings.creativeModel);
+  const actual = new Map<string, { n: number; idr: number }>();
+  log.forEach(c => { const k = c.label.startsWith("Tugas bebas") ? "Tugas bebas" : c.label; const a = actual.get(k) ?? { n: 0, idr: 0 }; actual.set(k, { n: a.n + 1, idr: a.idr + c.idr }); });
+  return <section className="f-cost">
+    <div className="f-cost-head"><div><b>Mode biaya</b><small>{settings.costMode === "hemat" ? `Hemat: semua tugas memakai ${CHEAP_MODEL} tanpa “thinking”. Rata-rata Rp 5–25 per panggilan.` : "Kualitas: memakai model rutin/kreatif yang Anda pilih di bawah. Bisa Rp 100–400 per panggilan dengan Sonnet."}</small></div>
+      <div className="f-chips" role="radiogroup" aria-label="Mode biaya">{(["hemat", "kualitas"] as const).map(m => <button key={m} role="radio" aria-checked={settings.costMode === m} className={settings.costMode === m ? "active" : ""} onClick={() => setSettings(o => ({ ...o, costMode: m }))}>{m === "hemat" ? "Hemat" : "Kualitas"}</button>)}</div></div>
+    <div className="settings-field"><label htmlFor="maxcall">BATAS BIAYA PER PANGGILAN (RUPIAH)</label><input id="maxcall" type="number" min={0} step={5} value={settings.maxCallIdr} onChange={e => setSettings(o => ({ ...o, maxCallIdr: Math.max(0, Number(e.target.value) || 0) }))} /><small>Panjang jawaban dibatasi otomatis agar biaya terburuk satu panggilan tidak melewati angka ini. Isi 0 untuk tanpa batas.</small></div>
+    <div className="scroll"><table className="f-cost-table"><thead><tr><th>Pemicu</th><th>Model</th><th>Perkiraan / panggilan</th><th>Rata-rata nyata</th></tr></thead><tbody>
+      {TRIGGERS.map(([label, trigger, tier, i, o]) => { const m = modelFor(tier); const a = actual.get(label); return <tr key={label}><td><b>{label}</b><small>{trigger}</small></td><td>{m.replace("claude-", "")}</td><td>{rupiah(costIdr(m, i, o, settings.usdToIdr))}</td><td>{a ? `${rupiah(a.idr / a.n)} · ${a.n}×` : "—"}</td></tr>; })}
+    </tbody></table></div>
+    <p className="f-help">Satu konten dari ide sampai siap review = <b>1 panggilan</b> (brief + storyboard + caption + jadwal). Paket produksi dan rapikan caption hanya berjalan bila Anda memintanya.</p>
+    <div className="f-h-row"><h4 className="f-h">Riwayat biaya ({log.length} panggilan terakhir)</h4>{log.length > 0 && <button className="outline-button" onClick={() => setLog([])}>Kosongkan riwayat</button>}</div>
+    {!log.length ? <p className="x-empty">Belum ada panggilan sejak fitur ini aktif.</p> : <div className="scroll"><table className="f-cost-table"><thead><tr><th>Waktu</th><th>Pemicu</th><th>Model</th><th>Token masuk/keluar</th><th>Biaya</th></tr></thead><tbody>
+      {log.slice(0, 30).map(c => <tr key={c.at + c.label}><td>{new Date(c.at).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}</td><td>{c.label}</td><td>{c.model.replace("claude-", "")}</td><td>{c.input.toLocaleString("id-ID")} / {c.output.toLocaleString("id-ID")}</td><td className={c.idr > settings.maxCallIdr && settings.maxCallIdr > 0 ? "f-over" : ""}>{rupiah(c.idr)}</td></tr>)}
+    </tbody></table></div>}
+  </section>;
+}
+
 export function ApiSettingsTab() {
   const [settings, setSettings] = useSettings();
   const [cloud] = useCloud();
@@ -113,11 +147,13 @@ export function ApiSettingsTab() {
     <AccountPanel />
     <p className="settings-security-note"><ShieldCheck size={16} /> {cloud.email ? "Key disimpan terenkripsi (Supabase Vault) dan hanya dipakai oleh server. Browser tidak pernah menerimanya kembali." : "Belum masuk: key disimpan di browser ini saja dan dikirim langsung ke penyedia API. Jangan isi di komputer bersama."}</p>
     <KeyField id="apikey" label="ANTHROPIC API KEY" server="anthropic" placeholder="sk-ant-…" local={settings.apiKey} setLocal={v => set("apiKey", v)} hint="Dibuat di console.anthropic.com → API Keys. Wajib untuk semua fitur AI." />
-    <div className="x-row"><AiButton className="primary-button" label="Tes koneksi AI" busyLabel="Mengetes…" busy={ai.busy === "test"} onClick={() => ai.run("test", async () => { setTestResult(""); const text = await askAI({ tier: "light", role: "asisten", prompt: "Balas dengan satu kata: OK", maxTokens: 500 }); setTestResult("Terhubung. Balasan model: " + text); })} /></div>
+    <div className="x-row"><AiButton className="primary-button" label="Tes koneksi AI" busyLabel="Mengetes…" busy={ai.busy === "test"} onClick={() => ai.run("test", async () => { setTestResult(""); const text = await askAI({ tier: "light", role: "asisten", label: "Tes koneksi", prompt: "Balas dengan satu kata: OK", maxTokens: 300 }); setTestResult("Terhubung. Balasan model: " + text); })} /></div>
     {testResult && <p className="x-ok">{testResult}</p>}<AiError message={ai.error} />
     <div className="settings-divider" />
-    <div className="settings-field"><label htmlFor="light">MODEL TUGAS RUTIN (balasan, hashtag, ringkasan)</label><select id="light" value={settings.lightModel} onChange={e => set("lightModel", e.target.value)}>{MODELS.map(m => <option key={m[0]} value={m[0]}>{m[1]}</option>)}</select></div>
-    <div className="settings-field"><label htmlFor="creative">MODEL KREATIF (naskah, strategi, bedah akun)</label><select id="creative" value={settings.creativeModel} onChange={e => set("creativeModel", e.target.value)}>{MODELS.map(m => <option key={m[0]} value={m[0]}>{m[1]}</option>)}</select></div>
+    <CostPanel />
+    <div className="settings-divider" />
+    <div className="settings-field"><label htmlFor="light">MODEL TUGAS RUTIN — dipakai di mode Kualitas</label><select id="light" value={settings.lightModel} onChange={e => set("lightModel", e.target.value)}>{MODELS.map(m => <option key={m[0]} value={m[0]}>{m[1]}</option>)}</select></div>
+    <div className="settings-field"><label htmlFor="creative">MODEL KREATIF — dipakai di mode Kualitas</label><select id="creative" value={settings.creativeModel} onChange={e => set("creativeModel", e.target.value)}>{MODELS.map(m => <option key={m[0]} value={m[0]}>{m[1]}</option>)}</select></div>
     <div className="settings-field"><label htmlFor="budget">BATAS BIAYA AI PER BULAN (RUPIAH)</label><input id="budget" type="number" min={0} step={10000} value={settings.budgetIdr} onChange={e => set("budgetIdr", Number(e.target.value) || 0)} /><small>Semua fitur AI berhenti otomatis saat batas tercapai. Isi 0 untuk tanpa batas.</small></div>
     <div className="settings-field"><label htmlFor="kurs">KURS USD → RUPIAH (untuk perkiraan biaya)</label><input id="kurs" type="number" min={1} value={settings.usdToIdr} onChange={e => set("usdToIdr", Number(e.target.value) || 1)} /></div>
     <div className="model-routing-cards"><article><span>BULAN INI</span><b>{rupiah(usage.idr)}</b><small>{usage.calls} panggilan AI</small></article><article><span>TOKEN MASUK</span><b>{usage.inputTokens.toLocaleString("id-ID")}</b><small>prompt + konteks brand</small></article><article><span>TOKEN KELUAR</span><b>{usage.outputTokens.toLocaleString("id-ID")}</b><small>hasil tulisan</small></article></div>
@@ -133,7 +169,7 @@ export function ModelRouterPanel() {
   const { usage, settings, percent } = useMonthUsage();
   const ready = useAiReady();
   return <section className="panel x-router"><div className="agent-section-heading"><div><h3>Model router & biaya</h3><p>Tugas rutin memakai model murah; model kreatif hanya untuk naskah, strategi, dan analisis.</p></div><span className="muted-chip">{ready ? "AI aktif" : "API key belum diisi"}</span></div>
-    <div className="model-routing-cards"><article><span>RUTIN</span><b>{settings.lightModel}</b><small>Community Manager, Social Media Manager, Workflow</small></article><article><span>KREATIF</span><b>{settings.creativeModel}</b><small>Research, Strategist, Writer, Designer, Video Editor</small></article><article><span>BULAN INI</span><b>{rupiah(usage.idr)}</b><small>{percent}% dari batas {rupiah(settings.budgetIdr)} · {usage.calls} panggilan</small></article></div>
+    <div className="model-routing-cards"><article><span>RUTIN</span><b>{settings.costMode === "hemat" ? CHEAP_MODEL : settings.lightModel}</b><small>Community Manager, Social Media Manager, Workflow</small></article><article><span>KREATIF</span><b>{settings.costMode === "hemat" ? CHEAP_MODEL : settings.creativeModel}</b><small>Research, Strategist, Writer, Designer, Video Editor</small></article><article><span>BULAN INI</span><b>{rupiah(usage.idr)}</b><small>{percent}% dari batas {rupiah(settings.budgetIdr)} · {usage.calls} panggilan</small></article></div>
   </section>;
 }
 
@@ -146,7 +182,7 @@ export function InboxLeadsPage() {
   const ai = useAI();
   const update = (id: number, patch: Partial<Lead>) => setLeads(old => old.map(l => (l.id === id ? { ...l, ...patch } : l)));
   const add = () => { if (!name.trim() || !message.trim()) return; setLeads(old => [{ id: Date.now(), name: name.trim(), source, message: message.trim(), status: "Baru", reply: "", at: new Date().toISOString() }, ...old]); setName(""); setMessage(""); };
-  const draft = (lead: Lead) => ai.run("lead" + lead.id, async () => { const reply = await askAI({ tier: "light", role: "Community Manager", prompt: `Tulis draf balasan untuk calon klien jasa foto interior FORIOR. Ramah, singkat (maksimal 80 kata), ajak lanjut ke WhatsApp atau minta detail properti (lokasi, jumlah ruangan, tanggal). Jangan menyebut harga pasti; tulis [HARGA PAKET] bila perlu.\n\nNama: ${lead.name}\nSumber: ${lead.source}\nPesan: ${lead.message}`, maxTokens: 1500 }); update(lead.id, { reply }); });
+  const draft = (lead: Lead) => ai.run("lead" + lead.id, async () => { const reply = await askAI({ tier: "light", role: "Community Manager", label: "Draf balasan lead", maxTokens: 500, prompt: `Tulis draf balasan untuk calon klien jasa foto interior FORIOR. Ramah, singkat (maksimal 80 kata), ajak lanjut ke WhatsApp atau minta detail properti (lokasi, jumlah ruangan, tanggal). Jangan menyebut harga pasti; tulis [HARGA PAKET] bila perlu.\n\nNama: ${lead.name}\nSumber: ${lead.source}\nPesan: ${lead.message}` }); update(lead.id, { reply }); });
   return <div className="module-page">
     <div className="x-kpis">{LEAD_STATUS.map(s => <div className="agent-overview-card" key={s}><span>{s}</span><b>{leads.filter(l => l.status === s).length}</b><small>leads</small></div>)}</div>
     <section className="panel"><div className="agent-section-heading"><div><h3>Catat lead baru</h3><p>Salin pertanyaan calon klien dari DM, komentar, WhatsApp, atau form forior.id. Inbox otomatis membutuhkan izin API platform.</p></div></div>
@@ -167,7 +203,7 @@ export function InboxLeadsPage() {
 /** Runs a free-form task as one of the agents and files the output for human approval. */
 export async function runAgentTask(agent: { name: string; group: string }, task: string, workspace: string): Promise<string> {
   const tier: Tier = agent.group === "Strategy" || agent.group === "Creative" ? "creative" : "light";
-  return askAI({ tier, role: agent.name, prompt: `Workspace: ${workspace}\nTugas: ${task}\n\nKerjakan sesuai peranmu dan berikan hasil yang siap diperiksa pemilik akun.`, maxTokens: 6000 });
+  return askAI({ tier, role: agent.name, label: `Tugas bebas · ${agent.name}`, maxTokens: 1500, prompt: `Workspace: ${workspace}\nTugas: ${task}\n\nKerjakan sesuai peranmu dan berikan hasil yang siap diperiksa pemilik akun.` });
 }
 
 export const notify = (message: string) => writeStored<string>("toast", message, "");

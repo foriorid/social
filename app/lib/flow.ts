@@ -5,14 +5,14 @@ export const STAGES = ["Planned", "Brief ready", "In production", "In review", "
 export const STAGE_LABEL: Record<string, string> = { Planned: "Ide", "Brief ready": "Brief", "In production": "Produksi", "In review": "Review", Scheduled: "Terjadwal", Published: "Tayang" };
 
 export type StepKind = "plan" | "brief" | "production" | "publish";
-export type Step = { kind: StepKind | "approval"; agent: string; tier: "light" | "creative"; job: string; trigger: string; output: string };
+export type Step = { kind: StepKind | "approval"; agent: string; tier: "light" | "creative"; job: string; trigger: string; output: string; auto: boolean; maxTokens: number };
 
 export const PIPELINE: Step[] = [
-  { kind: "plan", agent: "Creative Strategist", tier: "creative", job: "Menyusun judul, format, dan pilar untuk seluruh konten campaign.", trigger: "Saat campaign dibuat", output: "30 judul konten" },
-  { kind: "brief", agent: "Content Writer", tier: "creative", job: "Menulis brief lengkap dan storyboard (scene untuk video, slide untuk carousel).", trigger: "Konten berstatus Ide", output: "Brief + storyboard" },
-  { kind: "production", agent: "Graphic Designer / Video Editor", tier: "light", job: "Menyiapkan paket produksi: arahan layout per slide atau shot list dan catatan edit.", trigger: "Brief siap", output: "Paket produksi" },
-  { kind: "publish", agent: "Social Media Manager", tier: "light", job: "Merapikan caption, hashtag, dan mengusulkan jadwal tayang.", trigger: "Paket produksi siap", output: "Caption final + jadwal" },
-  { kind: "approval", agent: "Anda", tier: "light", job: "Memeriksa dan menyetujui sebelum konten dijadwalkan.", trigger: "Semua langkah agen selesai", output: "Disetujui / revisi" }
+  { kind: "plan", agent: "Creative Strategist", tier: "creative", job: "Menyusun judul, format, dan pilar untuk seluruh konten campaign, dari brief campaign.", trigger: "Saat campaign dibuat / Susun ulang judul", output: "Judul semua konten (1 panggilan)", auto: true, maxTokens: 2500 },
+  { kind: "brief", agent: "Content Writer + Social Media Manager", tier: "creative", job: "Dalam satu panggilan: brief, storyboard (scene/slide), caption, hashtag, dan usulan jadwal.", trigger: "Konten berstatus Ide", output: "Brief lengkap siap review (1 panggilan)", auto: true, maxTokens: 1800 },
+  { kind: "approval", agent: "Anda", tier: "light", job: "Memeriksa dan menyetujui sebelum konten dijadwalkan.", trigger: "Brief selesai", output: "Disetujui / revisi", auto: true, maxTokens: 0 },
+  { kind: "production", agent: "Graphic Designer / Video Editor", tier: "light", job: "Paket produksi: shot list dan urutan edit, atau arahan layout per slide.", trigger: "Hanya bila diminta di Studio / brief", output: "Paket produksi", auto: false, maxTokens: 1200 },
+  { kind: "publish", agent: "Social Media Manager", tier: "light", job: "Merapikan ulang caption, hashtag, dan jadwal setelah brief diedit.", trigger: "Hanya bila diminta di Studio", output: "Caption final + jadwal", auto: false, maxTokens: 600 }
 ];
 
 export const isVideo = (format: string) => format === "Reels";
@@ -21,9 +21,7 @@ export const isVideo = (format: string) => format === "Reels";
 export function nextStep(item: CampaignContent): StepKind | null {
   if (item.untitled) return "plan";
   if (!item.board?.length) return "brief";
-  if (!item.production) return "production";
-  if (!item.schedule) return "publish";
-  return null;
+  return null; // production package and caption polish run only on request, to keep each content at one call
 }
 
 /** Models sometimes wrap JSON in prose or code fences; take the outermost object/array. */
@@ -58,11 +56,11 @@ const context = (c: CampaignData, item: CampaignContent) => `${campaignHeader(c)
 export function stepPrompt(kind: StepKind, c: CampaignData, item: CampaignContent): string {
   if (kind === "plan") {
     const open = c.items.filter(x => !x.board?.length).length;
-    return `${campaignHeader(c)}\n\n${KIND_GUIDE[c.kind ?? "personal"]}\nSusun ${open} judul konten yang semuanya relevan dengan campaign ini. Variasikan sudut pandang dan pilar, kira-kira 40% Reels, 35% Carousel, 25% Feed. Judul spesifik dan menarik, maksimal 10 kata, dalam bahasa Indonesia. Balas HANYA JSON array: [{"title":"...","format":"Reels|Carousel|Feed","pillar":"..."}]`;
+    return `${campaignHeader(c)}\n\n${KIND_GUIDE[c.kind ?? "personal"]}\nSusun ${open} judul konten yang semuanya relevan dengan campaign ini. Variasikan sudut pandang dan pilar, kira-kira 40% Reels, 35% Carousel, 25% Feed. Judul spesifik dan menarik, maksimal 9 kata, pilar 1-2 kata. Balas HANYA JSON array ringkas tanpa spasi berlebih: [{"title":"...","format":"Reels|Carousel|Feed","pillar":"..."}]`;
   }
-  if (kind === "brief") return `${context(c, item)}\n\nTulis brief lengkap dan storyboard. ${isVideo(item.format) ? "Storyboard video 4-6 scene: label berisi rentang detik (mis. \"0-3 dtk\"), visual = arahan shot/gerak kamera, text = teks di layar atau narasi, audio = musik/suara." : "Storyboard 5-8 slide: label \"Slide N\", visual = foto/komposisi yang dipakai, text = teks pada slide (singkat), audio kosong."}\nBalas HANYA JSON: {"hook":"kalimat pembuka","message":"pesan utama satu kalimat","goal":"tujuan konten","visualDirection":"arah visual keseluruhan","assetNeeds":"foto/footage yang perlu disiapkan","caption":"draf caption","cta":"ajakan","board":[{"label":"","visual":"","text":"","audio":""}]}`;
+  if (kind === "brief") return `${context(c, item)}\n\nTulis brief, storyboard, caption, dan jadwal dalam satu jawaban. Singkat dan padat. ${isVideo(item.format) ? "Storyboard video 4-5 scene: label = rentang detik (mis. \"0-3 dtk\"), visual = arahan shot (maks. 15 kata), text = teks layar/narasi (maks. 12 kata), audio = musik/suara (maks. 6 kata)." : "Storyboard 5-7 slide: label \"Slide N\", visual = foto/komposisi (maks. 12 kata), text = teks slide (maks. 12 kata), audio kosong."}\nBalas HANYA JSON tanpa spasi berlebih: {"hook":"maks. 15 kata","message":"maks. 15 kata","goal":"maks. 10 kata","visualDirection":"maks. 25 kata","assetNeeds":"maks. 20 kata","caption":"maks. 70 kata termasuk CTA","cta":"maks. 10 kata","hashtags":"8 hashtag","schedule":"hari & jam WIB + alasan maks. 12 kata","board":[{"label":"","visual":"","text":"","audio":""}]}`;
   const board = (item.board ?? []).map(s => `${s.label}: ${s.visual} | ${s.text}`).join("\n");
-  if (kind === "production") return `${context(c, item)}\nHook: ${item.hook}\nStoryboard:\n${board}\n\n${isVideo(item.format) ? "Buat paket produksi video: shot list bernomor (lensa/angle, gerakan, durasi), urutan edit, transisi, saran audio, dan teks subtitle per scene." : "Buat paket produksi desain: untuk tiap slide tulis layout, hierarki teks, dan catatan pemilihan foto; lalu catatan konsistensi brand."} Tulis sebagai teks biasa yang rapi, tanpa JSON.`;
+  if (kind === "production") return `${context(c, item)}\nHook: ${item.hook}\nStoryboard:\n${board}\n\n${isVideo(item.format) ? "Buat paket produksi video: shot list bernomor (lensa/angle, gerakan, durasi), urutan edit, transisi, saran audio, dan teks subtitle per scene." : "Buat paket produksi desain: untuk tiap slide tulis layout, hierarki teks, dan catatan pemilihan foto; lalu catatan konsistensi brand."} Maksimal 220 kata, poin-poin singkat, tanpa JSON.`;
   return `${context(c, item)}\nHook: ${item.hook}\nDraf caption: ${item.caption}\nCTA: ${item.cta}\n\nRapikan untuk tayang. Balas HANYA JSON: {"caption":"caption final siap tempel, termasuk CTA","hashtags":"8-12 hashtag dipisah spasi","schedule":"usulan hari dan jam tayang (WIB) beserta alasan singkat"}`;
 }
 
@@ -76,7 +74,7 @@ export function applyStep(kind: Exclude<StepKind, "plan">, item: CampaignContent
   }
   const board = toBoard(o.board, item.format);
   if (!board.length) throw new Error("Jawaban model tidak berisi storyboard. Coba lagi.");
-  return { hook: str(o.hook) || item.hook, message: str(o.message), goal: str(o.goal) || item.goal, visualDirection: str(o.visualDirection) || item.visualDirection, assetNeeds: str(o.assetNeeds), caption: str(o.caption) || item.caption, cta: str(o.cta) || item.cta, board, scenes: board.map(s => `${s.label}: ${s.visual}`), status: "Brief ready" };
+  return { hook: str(o.hook) || item.hook, message: str(o.message), goal: str(o.goal) || item.goal, visualDirection: str(o.visualDirection) || item.visualDirection, assetNeeds: str(o.assetNeeds), caption: str(o.caption) || item.caption, cta: str(o.cta) || item.cta, board, scenes: board.map(s => `${s.label}: ${s.visual}`), hashtags: str(o.hashtags) || item.hashtags, schedule: str(o.schedule) || item.schedule, status: "In review" };
 }
 
 export function parsePlan(answer: string, count: number): { title: string; format: CampaignContent["format"]; pillar: string }[] {

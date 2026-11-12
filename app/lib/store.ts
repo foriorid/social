@@ -63,6 +63,8 @@ export type Settings = {
   googleApiKey: string;
   autoRun: boolean;
   autoLimit: number;
+  costMode: "hemat" | "kualitas";
+  maxCallIdr: number;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -79,8 +81,13 @@ export const DEFAULT_SETTINGS: Settings = {
   requireApproval: true,
   googleApiKey: "",
   autoRun: false,
-  autoLimit: 10
+  autoLimit: 10,
+  costMode: "hemat",
+  maxCallIdr: 50
 };
+
+export type CallLog = { at: string; label: string; model: string; input: number; output: number; idr: number };
+export const useCallLog = () => useStored<CallLog[]>("usageLog", []);
 
 export type Usage = { month: string; inputTokens: number; outputTokens: number; idr: number; calls: number };
 export const EMPTY_USAGE: Usage = { month: "", inputTokens: 0, outputTokens: 0, idr: 0, calls: 0 };

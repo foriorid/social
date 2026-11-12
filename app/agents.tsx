@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check, Pause, Play, RotateCcw, Sparkles, Trash2, Zap } from "lucide-react";
-import { askAI } from "./lib/ai";
+import { askAI, CHEAP_MODEL } from "./lib/ai";
 import { PIPELINE, applyPlan, applyStep, nextStep, parsePlan, stepPrompt, type StepKind } from "./lib/flow";
 import { addApproval, getSettings, readStored, useSettings, useTasks, writeStored, type Task } from "./lib/store";
 import { AiButton, AiError, ApprovalList, ModelRouterPanel, notify, runAgentTask, useAI, useAiReady } from "./modules";
@@ -40,16 +40,16 @@ async function runTask(task: Task) {
   const step = stepOf(task.kind);
   const role = step.agent.includes("/") ? (campaign.items.find(x => x.day === task.day)?.format === "Reels" ? "Video Editor" : "Graphic Designer") : step.agent;
   if (task.kind === "plan") {
-    const rows = parsePlan(await askAI({ tier: step.tier, role, maxTokens: 6000, prompt: stepPrompt("plan", campaign, campaign.items[0]) }), campaign.items.filter(x => !x.board?.length).length);
+    const rows = parsePlan(await askAI({ tier: step.tier, role, maxTokens: step.maxTokens, label: "Judul campaign", prompt: stepPrompt("plan", campaign, campaign.items[0]) }), campaign.items.filter(x => !x.board?.length).length);
     patchCampaign(campaign.id, c => ({ ...c, items: applyPlan(c.items, rows) }));
     return;
   }
   const item = campaign.items.find(x => x.day === task.day);
   if (!item) throw new Error("Konten sudah dihapus.");
-  const answer = await askAI({ tier: step.tier, role, maxTokens: 6000, prompt: stepPrompt(task.kind, campaign, item) });
+  const answer = await askAI({ tier: step.tier, role, maxTokens: step.maxTokens, label: step.output.replace(/ \(1 panggilan\)$/, ""), prompt: stepPrompt(task.kind, campaign, item) });
   const patch = applyStep(task.kind, item, answer);
   patchItem(campaign.id, item.day, patch);
-  if (task.kind === "publish") {
+  if (task.kind === "brief") {
     const done = { ...item, ...patch };
     addApproval({ title: `${done.format} — ${done.title}`, by: "Tim Agent", type: `${campaign.account} · siap review`, body: `Hook: ${done.hook}\n\nStoryboard:\n${(done.board ?? []).map(s => `• ${s.label} — ${s.visual}${s.text ? ` | "${s.text}"` : ""}`).join("\n")}\n\nCaption:\n${done.caption}\n\n${done.hashtags ?? ""}\n\nJadwal usulan: ${done.schedule ?? "-"}` });
   }
@@ -114,7 +114,8 @@ export function AgentsPage() {
     </section>
 
     <section className="panel"><div className="agent-section-heading"><div><h3>Urutan kerja</h3><p>Setiap konten melewati langkah yang sama. Tugas tiap agen tetap dan jelas.</p></div></div>
-      <ol className="f-pipeline">{PIPELINE.map((s, i) => <li key={s.kind}><span className="f-step-no">{i + 1}</span><b>{s.agent}</b><p>{s.job}</p><small>Mulai: {s.trigger}</small><small>Hasil: {s.output}</small><em>{s.kind === "approval" ? "Manusia" : s.tier === "creative" ? settings.creativeModel : settings.lightModel}</em></li>)}</ol>
+      <ol className="f-pipeline">{PIPELINE.filter(s => s.auto).map((s, i) => <li key={s.kind}><span className="f-step-no">{i + 1}</span><b>{s.agent}</b><p>{s.job}</p><small>Mulai: {s.trigger}</small><small>Hasil: {s.output}</small><em>{s.kind === "approval" ? "Manusia" : settings.costMode === "hemat" ? CHEAP_MODEL : s.tier === "creative" ? settings.creativeModel : settings.lightModel}</em></li>)}</ol>
+      <p className="f-help f-ondemand"><b>Hanya bila diminta</b> (tidak berjalan otomatis, supaya tiap konten cukup 1 panggilan): {PIPELINE.filter(s => !s.auto).map(s => `${s.agent} — ${s.output}`).join(" · ")}.</p>
     </section>
 
     <section className="panel"><div className="agent-section-heading"><div><h3>Beri tugas ke tim</h3><p>Pilih campaign, lalu tentukan berapa konten yang digarap sampai siap review.</p></div><span className="muted-chip">{waiting} konten belum selesai digarap</span></div>
