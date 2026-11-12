@@ -3,12 +3,12 @@
 // Photo Delivery (admin): client galleries fed from Google Drive folders. Copied from the FORIOR Workspace
 // module with the same workflow and data shape; stored in Supabase `galleries` (owner-only via RLS).
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Check, Copy, ExternalLink, FolderOpen, Heart, Images, Link2, MessageCircle, MessageSquare, Pencil, Plus, RefreshCw, RotateCcw, Search, Send, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, Copy, Download, ExternalLink, FolderOpen, Heart, Images, Link2, MessageCircle, MessageSquare, Pencil, Plus, RefreshCw, RotateCcw, Search, Send, Trash2, X } from "lucide-react";
 import { listDriveFolder } from "./assets";
 import { driveFolderId } from "./lib/flow";
-import { supabase } from "./lib/cloud";
+import { callServer, supabase } from "./lib/cloud";
 import { notify, useCloud } from "./modules";
-import { PHASES, PHASE_LABEL, PHASE_SHORT, newGallery, setPhase, slugify, uniqueSlug, withFolder, type FolderType, type Gallery, type Phase, type Photo } from "../supabase/functions/gallery/delivery";
+import { PHASES, PHASE_LABEL, PHASE_SHORT, fromWorkspace, newGallery, setPhase, slugify, uniqueSlug, withFolder, type FolderType, type Gallery, type Phase, type Photo } from "../supabase/functions/gallery/delivery";
 
 type Row = { id: string; slug: string; data: Gallery; updated_at: string };
 const FOLDER_MIME = "application/vnd.google-apps.folder";
@@ -63,6 +63,7 @@ function DeliveryInner() {
   const { rows, setRows, state, error, load } = useGalleries();
   const [openId, setOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [query, setQuery] = useState(""), [phase, setPhaseFilter] = useState<"" | Phase>("");
   const open = rows.find(r => r.id === openId);
 
@@ -96,6 +97,7 @@ function DeliveryInner() {
         <div className="search-field"><Search size={15} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Cari galeri atau klien…" aria-label="Cari galeri" /></div>
         <div className="f-chips">{(["", ...PHASES] as const).map(p => <button key={p || "all"} className={phase === p ? "active" : ""} onClick={() => setPhaseFilter(p)}>{p ? PHASE_SHORT[p] : "Semua"}</button>)}</div>
         <button className="outline-button" onClick={load} aria-label="Muat ulang"><RefreshCw size={15} /></button>
+        <button className="outline-button" onClick={() => setImporting(true)}><Download size={15} /> Impor dari Workspace</button>
         <button className="primary-button" onClick={() => setCreating(true)}><Plus size={15} /> Galeri baru</button>
       </div>
       {state === "loading" && <p className="x-empty">Memuat galeri…</p>}
@@ -109,8 +111,72 @@ function DeliveryInner() {
         </button>; })}</div>
       {state === "ready" && rows.length > 0 && !shown.length && <p className="x-empty">Tidak ada galeri yang cocok.</p>}
     </section>
+    {importing && <ImportModal rows={rows} onClose={() => setImporting(false)} onDone={load} />}
     {creating && <NewGalleryModal taken={rows.map(r => r.slug)} onClose={() => setCreating(false)} onCreated={row => { setRows(rs => [row, ...rs]); setCreating(false); setOpenId(row.id); }} />}
   </div>;
+}
+
+type WsGallery = Record<string, unknown> & { id?: string; slug?: string; title?: string; phase?: string; createdAt?: string; client?: { company?: string; contact?: string }; previewPhotos?: unknown[] };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Copies galleries from the Workspace app (app.forior.id). Read-only on the Workspace side; the password is used once. */
+function ImportModal({ rows, onClose, onDone }: { rows: Row[]; onClose: () => void; onDone: () => void }) {
+  const [email, setEmail] = useState(""), [password, setPassword] = useState("");
+  const [list, setList] = useState<WsGallery[] | null>(null);
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const existing = new Map(rows.map(r => [r.id, r]));
+  const fetchList = async () => {
+    setBusy(true); setError("");
+    try {
+      const { galleries } = await callServer<{ galleries: WsGallery[] }>("workspace.galleries", { email, password });
+      const sorted = [...galleries].sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")));
+      setList(sorted); setPassword("");
+      setChosen(new Set(sorted.filter(g => !existing.has(String(g.id))).slice(0, 5).map(g => String(g.id))));
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  };
+  const toggle = (id: string) => setChosen(old => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const run = async () => {
+    if (!list) return;
+    setBusy(true); setError("");
+    const taken = new Set(rows.map(r => r.slug));
+    let added = 0, updated = 0;
+    try {
+      for (const doc of list.filter(g => chosen.has(String(g.id)))) {
+        const old = existing.get(String(doc.id));
+        const id = old?.id ?? (UUID.test(String(doc.id)) ? String(doc.id) : crypto.randomUUID());
+        const slug = old?.slug ?? uniqueSlug(slugify(String(doc.slug || doc.projectName || doc.title || "galeri")), taken);
+        taken.add(slug);
+        const data = { ...fromWorkspace({ ...doc, id }, slug), importedFrom: "app.forior.id", importedAt: new Date().toISOString() };
+        const { error } = old ? await supabase.from("galleries").update({ data, updated_at: new Date().toISOString() }).eq("id", id) : await supabase.from("galleries").insert({ id, slug, data });
+        if (error) throw new Error(`${doc.title}: ${error.message}`);
+        if (old) updated++; else added++;
+      }
+      notify(`${added} galeri disalin${updated ? `, ${updated} diperbarui` : ""} dari Workspace.`);
+      onDone(); onClose();
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); onDone(); } finally { setBusy(false); }
+  };
+  return <div className="modal-backdrop" onClick={() => !busy && onClose()}><div className="quick-modal cp-modal" role="dialog" aria-label="Impor dari Workspace" onClick={e => e.stopPropagation()}>
+    <button className="modal-close" onClick={onClose} aria-label="Tutup"><X size={18} /></button>
+    <div className="cp-modal-head"><span className="modal-icon"><Download size={21} /></span><div><h2>Impor dari Workspace</h2><p>Salin galeri Photo Delivery dari app.forior.id ke sini. Galeri di Workspace tidak diubah atau dihapus.</p></div></div>
+    {!list ? <>
+      <div className="cp-form">
+        <div className="settings-field full"><label htmlFor="ws-email">Email Workspace</label><input id="ws-email" type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} /></div>
+        <div className="settings-field full"><label htmlFor="ws-pass">Kata sandi Workspace</label><input id="ws-pass" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && email && password) fetchList(); }} /><small className="dl-hint">Hanya dipakai sekali untuk membaca daftar galeri. Tidak disimpan.</small></div>
+      </div>
+      {error && <p className="x-error">{error}</p>}
+      <div className="cp-modal-actions"><button className="outline-button" onClick={onClose}>Batal</button><button className="primary-button" disabled={busy || !email || !password} onClick={fetchList}>{busy ? "Membaca…" : "Lihat galeri Workspace"}</button></div>
+    </> : <>
+      <p className="dl-hint">{list.length} galeri di Workspace, terbaru di atas. 5 terbaru yang belum ada di sini sudah dicentang.</p>
+      <div className="dl-import-list">{list.map(g => { const id = String(g.id), have = existing.has(id), photos = Array.isArray(g.previewPhotos) ? g.previewPhotos.length : 0;
+        return <label key={id} className={`dl-import-row ${chosen.has(id) ? "on" : ""}`}><input type="checkbox" checked={chosen.has(id)} onChange={() => toggle(id)} />
+          <span><b>{g.title || "Tanpa judul"}</b><small>{[g.client?.company, g.client?.contact].filter(Boolean).join(" · ") || "Tanpa klien"} · {photos} foto · {fmtDate(g.createdAt)}</small></span>
+          <em className={`dl-phase ${PHASE_CLASS[(PHASES as readonly string[]).includes(String(g.phase)) ? (g.phase as Phase) : "Preview"]}`}>{PHASE_SHORT[(PHASES as readonly string[]).includes(String(g.phase)) ? (g.phase as Phase) : "Preview"]}</em>
+          {have && <i className="dl-badge green">{chosen.has(id) ? "Sudah ada · akan diperbarui" : "Sudah ada di sini"}</i>}</label>; })}</div>
+      {error && <p className="x-error">{error}</p>}
+      <div className="cp-modal-actions"><button className="outline-button" onClick={() => setList(null)} disabled={busy}>Kembali</button><button className="primary-button" disabled={busy || !chosen.size} onClick={run}>{busy ? "Menyalin…" : `Salin ${chosen.size} galeri`}</button></div>
+    </>}
+  </div></div>;
 }
 
 function NewGalleryModal({ taken, onClose, onCreated }: { taken: string[]; onClose: () => void; onCreated: (row: Row) => void }) {

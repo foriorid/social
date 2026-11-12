@@ -83,6 +83,20 @@ Deno.serve(async req => {
         } while (pageToken && files.length < 5000);
         return json({ files });
       }
+      case "workspace.galleries": {
+        // Read-only copy of Photo Delivery galleries from the FORIOR Workspace app (app.forior.id).
+        // The Workspace password is used once to get a token and is never stored or logged.
+        const email = String(body.email ?? "").trim(), password = String(body.password ?? "");
+        if (!email || !password || email.length > 200 || password.length > 200) return fail("input", "Isi email dan kata sandi Workspace.");
+        const base = "https://app.forior.id/api";
+        const login = await fetch(`${base}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
+        const auth = await login.json().catch(() => ({}));
+        if (!login.ok || !auth.token) return fail("workspace_auth", auth.error === "Invalid email or password" ? "Email atau kata sandi Workspace salah." : (auth.error ?? `Workspace menolak login (${login.status}).`), 400);
+        const r = await fetch(`${base}/galleries`, { headers: { Authorization: `Bearer ${auth.token}` } });
+        const list = await r.json().catch(() => null);
+        if (!r.ok || !Array.isArray(list)) return fail("upstream", `Gagal membaca galeri Workspace (${r.status}).`, 502);
+        return json({ galleries: list });
+      }
       case "instagram": {
         const [token, igId] = await Promise.all([secret(user, "meta_token"), secret(user, "ig_user_id")]);
         if (!token || !igId) return fail("no_key", "Token Meta belum disimpan.");

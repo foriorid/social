@@ -64,3 +64,11 @@ test("groupBySection keeps order", () => {
   const groups = groupBySection(photosFrom([{ id: "1", section: "A" }, { id: "2", section: "B" }, { id: "3", section: "A" }]));
   assert.deepEqual(groups.map(x => [x.section, x.items.length]), [["A", 2], ["B", 1]]);
 });
+
+test("fromWorkspace keeps the Workspace document and fills gaps", async () => {
+  const { fromWorkspace } = await import("../../supabase/functions/gallery/delivery.ts");
+  const g = fromWorkspace({ _id: "mongo", id: "abc", title: "Nagomi House", phase: "Client Review", selectionLimit: "25", previewPhotos: [{ id: "p1", name: "a.jpg", selected: true }], client: { company: "PT A" } }, "nagomi-house");
+  assert.equal(g.id, "abc"); assert.equal(g.slug, "nagomi-house"); assert.equal(g.phase, "Client Review"); assert.equal(g.selectionLimit, 25);
+  assert.equal(g.previewPhotos[0].selected, true); assert.deepEqual(g.draftPhotos, []); assert.equal((g as Record<string, unknown>)._id, undefined);
+  assert.equal(fromWorkspace({ id: "x", phase: "Weird" }, "x").phase, "Preview");
+});

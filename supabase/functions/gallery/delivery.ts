@@ -155,3 +155,19 @@ export function applyClientAction(g: Gallery, a: ClientAction, makeId: () => str
       throw new DeliveryError("input", "Aksi tidak dikenal.");
   }
 }
+
+/** Turns a gallery document from the Workspace app (MongoDB) into this app's shape; missing fields get defaults. */
+export function fromWorkspace(doc: Record<string, unknown>, slug: string, now = new Date()): Gallery {
+  const base = newGallery({ id: String(doc.id ?? ""), slug, title: String(doc.title ?? "Photo Delivery") }, now);
+  const { _id: _ignored, ...rest } = doc as Record<string, unknown> & { _id?: unknown };
+  const merged = { ...base, ...(rest as Partial<Gallery>), slug };
+  const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+  return {
+    ...merged,
+    phase: (PHASES as readonly string[]).includes(merged.phase) ? merged.phase : "Preview",
+    client: merged.client && typeof merged.client === "object" ? merged.client : {},
+    selectionLimit: Number(merged.selectionLimit) || 0, rawSelectionLimit: Number(merged.rawSelectionLimit) || 0,
+    previewPhotos: arr<Photo>(merged.previewPhotos), draftPhotos: arr<Photo>(merged.draftPhotos), revisionPhotos: arr<Photo>(merged.revisionPhotos),
+    finalPhotos: arr<Photo>(merged.finalPhotos), revisions: arr<Revision>(merged.revisions), quotaAddons: arr<Addon>(merged.quotaAddons)
+  };
+}

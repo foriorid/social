@@ -2373,3 +2373,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .gv-float { left:16px; right:16px; transform:none; justify-content:center; white-space:normal; }
   .gv-lb-row { flex-direction:column; } .gv-lb-nav { width:40px; height:40px; left:6px; } .gv-lb-nav.right { right:6px; }
 }
+.dl-import-list { display:flex; flex-direction:column; gap:8px; max-height:min(52vh,460px); overflow-y:auto; margin:10px 0; }
+.dl-import-row { display:grid; grid-template-columns:22px minmax(0,1fr) auto; gap:4px 12px; align-items:center; padding:10px 12px; border:1px solid var(--line); border-radius:12px; cursor:pointer; background:#fff; }
+.dl-import-row.on { border-color:#b9a2ef; background:#f5f0fe; }
+.dl-import-row input { width:18px; height:18px; accent-color:var(--purple); }
+.dl-import-row > span { min-width:0; display:flex; flex-direction:column; } .dl-import-row b { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .dl-import-row small { font-size:12.5px; color:var(--muted); }
+.dl-import-row > i { grid-column:2 / -1; font-style:normal; justify-self:start; }
