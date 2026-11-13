@@ -231,9 +231,11 @@ const SET_LABEL: Record<FolderType, string> = { preview: "Preview", draft: "Draf
 const photosOf = (g: Gallery, t: FolderType) => (t === "preview" ? g.previewPhotos : t === "draft" ? g.draftPhotos : t === "revision" ? g.revisionPhotos : g.finalPhotos);
 /** The photo set that matches the phase (what the client is looking at), falling back to the newest set that exists. */
 function stageSet(g: Gallery): FolderType {
-  const order: FolderType[] = g.phase === "Done" ? ["final", "revision", "draft"] : g.phase === "Revision" ? ["revision", "draft"] : g.phase === "Client Review" || g.phase === "Editing Progress" ? ["draft"] : ["preview"];
+  const order: FolderType[] = g.phase === "Done" ? ["final", "revision", "draft"] : g.phase === "Revision" ? ["revision", "draft"] : g.phase === "Client Review" ? ["draft"] : ["preview"];
   return order.find(t => photosOf(g, t).length) ?? order[0];
 }
+/** Default filter per phase: once the client has chosen (Selection, Editing), show the photos to edit. */
+const stageFilter = (g: Gallery) => (g.phase === "Client Selection" || g.phase === "Editing Progress" ? "edit" : "all");
 /** The deadline that matters for the current phase. */
 function dueOf(g: Gallery): { label: string; date: string } {
   if (g.phase === "Preview" || g.phase === "Client Selection") return { label: "Pilih sebelum", date: g.selectByDate };
@@ -290,6 +292,11 @@ function AdminLightbox({ photos, index, setIndex }: { photos: Photo[]; index: nu
   </div>;
 }
 
+/** Clipboard can be refused (permissions, insecure context); say so instead of failing silently. */
+const copyText = (text: string, ok: string) => {
+  if (!navigator.clipboard) return notify("Browser tidak mengizinkan menyalin otomatis. Salin manual.");
+  navigator.clipboard.writeText(text).then(() => notify(ok), () => notify("Browser menolak akses clipboard. Salin manual."));
+};
 const PER_PAGE = [12, 24, 48];
 function pages(current: number, total: number): (number | "…")[] {
   if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
@@ -304,7 +311,7 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
   const link = galleryLink(g.slug);
   const [tab, setTab] = useState<"galeri" | "revisi" | "catatan" | "aktivitas">("galeri");
   const [set, setSet] = useState<FolderType>(() => stageSet(g));
-  const [filter, setFilter] = useState(g.phase === "Client Selection" ? "edit" : "all");
+  const [filter, setFilter] = useState(() => stageFilter(g));
   const [sort, setSort] = useState<"az" | "za">("az");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [perPage, setPerPage] = useState(12), [page, setPage] = useState(1);
@@ -314,11 +321,11 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
   const [notes, setNotes] = useState(g.notes ?? "");
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   useEffect(() => { setSlot(document.getElementById("page-heading-slot")); }, []);
-  useEffect(() => { setSet(stageSet(g)); setFilter(g.phase === "Client Selection" ? "edit" : "all"); }, [g.phase]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setSet(stageSet(g)); setFilter(stageFilter(g)); }, [g.phase]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => setNotes(g.notes ?? ""), [g.notes]);
   useEffect(() => setPage(1), [set, filter, sort, perPage]);
 
-  const copy = () => { navigator.clipboard?.writeText(link); notify("Link klien disalin."); };
+  const copy = () => copyText(link, "Link klien disalin.");
   const sendWA = () => {
     const num = String(g.client?.whatsapp || "").replace(/[^0-9]/g, "").replace(/^0/, "62");
     if (!num) return notify("Nomor WhatsApp klien belum diisi. Isi lewat Edit detail.");
@@ -363,6 +370,22 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
     { at: g.importedAt, text: "Data diperbarui dari Workspace", icon: <RefreshCw size={14} /> }
   ].filter((x): x is { at: string; text: string; icon: React.ReactElement } => !!x.at).sort((a, b) => b.at.localeCompare(a.at));
 
+  const copyNames = (list: Photo[], what: string) => copyText(list.map(p => p.name).join("\n"), `${list.length} nama file ${what} disalin. Tempel di Lightroom/Finder untuk mencari fotonya.`);
+  const showPicks = () => { setTab("galeri"); setSet("preview"); setFilter("edit"); };
+  // "Langkah berikutnya": the structured Workspace workflow, one clear next action per phase.
+  const next: { title: string; text: string; icon: React.ReactNode; tone?: string; actions: React.ReactNode } | null =
+    g.phase === "Preview" ? (!g.previewPhotos.length
+      ? { title: "Muat foto preview", text: "Tempel link folder Drive berisi foto preview agar klien bisa mulai memilih.", icon: <FolderOpen size={18} />, actions: <button className="primary-button" onClick={() => setModal("preview")}><FolderOpen size={15} /> Muat folder preview</button> }
+      : g.previewSubmittedAt && g.rawSelectionLimit && !g.rawSubmittedAt
+        ? { title: "Klien sedang memilih foto RAW", text: `Pilihan Edit (${picked.length} foto) sudah masuk. Tahap otomatis pindah ke Pemilihan setelah klien mengirim pilihan RAW.`, icon: <Heart size={18} />, actions: <button className="outline-button dl-wa" onClick={sendWA}><MessageCircle size={15} /> Ingatkan via WA</button> }
+        : { title: "Menunggu klien memilih foto", text: `Kirim link galeri ke klien. Saat klien menekan "Kirim Pilihan", tahap otomatis pindah ke Pemilihan.${g.selectionLimit ? ` Kuota: ${g.selectionLimit} foto.` : ""}`, icon: <Heart size={18} />, actions: <><button className="outline-button dl-wa" onClick={sendWA}><MessageCircle size={15} /> Kirim WA</button><button className="outline-button" onClick={copy}><Link2 size={15} /> Salin link</button></> })
+    : g.phase === "Client Selection" ? { title: `Klien memilih ${picked.length} foto untuk diedit${raw.length ? ` + ${raw.length} RAW` : ""}`, text: "Cek foto pilihan dan catatannya, lalu mulai edit. Pindahkan ke Editing supaya klien tahu fotonya sedang dikerjakan.", icon: <Check size={18} />, tone: "blue", actions: <><button className="outline-button" onClick={() => copyNames(picked, "foto Edit")}><Copy size={15} /> Salin nama file</button>{raw.length > 0 && <button className="outline-button" onClick={() => copyNames(raw, "foto RAW")}><Copy size={15} /> Nama file RAW</button>}<button className="primary-button" onClick={() => changePhase("Editing Progress")}><Pencil size={15} /> Mulai editing</button></> }
+    : g.phase === "Editing Progress" ? { title: `Sedang diedit: ${picked.length} foto pilihan`, text: g.draftPhotos.length ? `${g.draftPhotos.length} foto draft sudah dimuat. Kirim ke klien untuk direview.` : "Setelah selesai, unggah hasil edit ke folder Drive, muat di sini, lalu kirim ke klien untuk review.", icon: <Pencil size={18} />, tone: "amber", actions: <><button className="outline-button" onClick={showPicks}><Images size={15} /> Lihat foto pilihan</button><button className="outline-button" onClick={() => copyNames(picked, "foto Edit")}><Copy size={15} /> Salin nama file</button><button className={g.draftPhotos.length ? "outline-button" : "primary-button"} onClick={() => setModal("draft")}><FolderOpen size={15} /> {g.draftPhotos.length ? "Muat ulang draft" : "Muat folder draft"}</button>{g.draftPhotos.length > 0 && <button className="primary-button" onClick={() => changePhase("Client Review")}><MessageCircle size={15} /> Kirim untuk review</button>}</> }
+    : g.phase === "Client Review" ? { title: "Menunggu review klien", text: `Klien me-review ${g.draftPhotos.length} foto draft. Jika klien minta revisi, tahap otomatis pindah ke Revisi; jika disetujui, otomatis Selesai.`, icon: <MessageSquare size={18} />, tone: "blue", actions: <button className="outline-button dl-wa" onClick={sendWA}><MessageCircle size={15} /> Kirim WA</button> }
+    : g.phase === "Revision" ? { title: g.revisionPhotos.length ? "Hasil revisi sudah dimuat" : `Kerjakan revisi${openRev ? ` (${openRev} permintaan terbuka)` : ""}`, text: g.revisionPhotos.length ? "Klien bisa me-review hasil revisi. Jika disetujui, tahap otomatis Selesai." : "Lihat catatan revisi klien, unggah hasil revisi ke folder Drive, lalu muat di sini.", icon: <RefreshCw size={18} />, tone: "orange", actions: <><button className="outline-button" onClick={() => setTab("revisi")}><MessageSquare size={15} /> Lihat catatan revisi</button><button className="primary-button" onClick={() => setModal("revision")}><FolderOpen size={15} /> {g.revisionPhotos.length ? "Muat ulang revisi" : "Muat hasil revisi"}</button></> }
+    : !g.finalPhotos.length ? { title: "Muat foto final", text: "Klien sudah menyetujui. Unggah foto final resolusi tinggi ke Drive dan muat di sini agar klien bisa mengunduh.", icon: <Download size={18} />, tone: "green", actions: <button className="primary-button" onClick={() => setModal("final")}><FolderOpen size={15} /> Muat folder final</button> }
+    : { title: "Delivery selesai", text: `${g.finalPhotos.length} foto final tersedia untuk diunduh klien sampai ${fmtDate(g.downloadExpiry)}.`, icon: <Check size={18} />, tone: "green", actions: <button className="outline-button dl-wa" onClick={sendWA}><MessageCircle size={15} /> Kirim link unduhan</button> };
+
   const header = <div className="dl-top">
     <div className="dl-top-main">
       <nav className="dl-crumb" aria-label="Breadcrumb"><span>Workspace</span><ChevronRight size={13} /><button onClick={onBack}>Photo Delivery</button><ChevronRight size={13} /><b>{g.title}</b></nav>
@@ -389,7 +412,12 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
 
     <section className="panel dl-phase-panel">
       <PhaseTracker phase={g.phase} onPick={changePhase} />
-      {(g.previewSubmittedAt || g.rawSubmittedAt || g.draftApprovedAt) && <div className="dl-flags">{g.previewSubmittedAt && <span className="dl-badge blue">Pilihan Edit terkirim · {fmtDate(g.previewSubmittedAt)}</span>}{g.rawSubmittedAt && <span className="dl-badge red">Pilihan RAW terkirim</span>}{g.draftApprovedAt && <span className="dl-badge green">Disetujui klien · {fmtDate(g.draftApprovedAt)}</span>}<small>Klik tahap di atas untuk memindahkan galeri.</small></div>}
+      <div className="dl-flags">
+        <label className="dl-phase-select"><span>Tahap delivery</span><span className="dl-select"><select value={g.phase} onChange={e => changePhase(e.target.value)} aria-label="Tahap delivery">{PHASES.map(p => <option key={p} value={p}>{PHASE_LABEL[p]}</option>)}</select><ChevronDown size={15} /></span></label>
+        {g.previewSubmittedAt && <span className="dl-badge blue">Pilihan Edit terkirim · {fmtDate(g.previewSubmittedAt)}</span>}{g.rawSubmittedAt && <span className="dl-badge red">Pilihan RAW terkirim</span>}{g.draftApprovedAt && <span className="dl-badge green">Disetujui klien · {fmtDate(g.draftApprovedAt)}</span>}
+      </div>
+      {next && <div className={`dl-next ${next.tone ?? ""}`}><span className="dl-next-icon">{next.icon}</span><div><b>{next.title}</b><p>{next.text}</p></div><div className="dl-next-actions">{next.actions}</div></div>}
+      {g.previewSubmittedAt && (g.phase === "Client Selection" || g.phase === "Preview") && <div className="dl-reopen"><RotateCcw size={16} /><p>Klien sudah mengirim pilihan. Izinkan klien mengganti pilihan? Pilihan dan catatan tetap tersimpan.</p><button className="outline-button" onClick={() => changePhase("Preview")}>Buka kembali pemilihan</button></div>}
     </section>
 
     <div className="dl-layout">
