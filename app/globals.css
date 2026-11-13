@@ -2485,3 +2485,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (max-width:760px) { .dl-gcontrols .dl-seg:first-child { width:auto; } .dl-sets { flex-wrap:wrap; } .dl-sets .dl-seg { max-width:100%; overflow-x:auto; } }
 .dl-gcount { white-space:nowrap; } .dl-add, .dl-sort, .dl-top-actions > * { white-space:nowrap; }
 @media (max-width:760px) { .dl-gcount { white-space:normal; } }
+.dl-phase-select { display:inline-flex; align-items:center; gap:10px; font-size:13px; font-weight:600; color:#6b6080; margin-right:4px; }
+.dl-phase-select select { min-width:290px; font-weight:600; }
+.dl-next { display:flex; align-items:center; gap:14px; margin-top:14px; padding:14px 16px; border-radius:14px; background:#f5f0fe; border:1px solid #e1d5f8; }
+.dl-next-icon { width:38px; height:38px; flex:none; display:grid; place-items:center; border-radius:11px; background:#fff; color:var(--purple); }
+.dl-next > div:nth-child(2) { flex:1; min-width:220px; } .dl-next b { display:block; font-size:14.5px; color:var(--ink); } .dl-next p { margin:3px 0 0; font-size:13px; color:#5d5470; line-height:1.5; }
+.dl-next-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; } .dl-next-actions > * { min-height:40px; white-space:nowrap; }
+.dl-next.blue { background:#f1f7ff; border-color:#cfe0f7; } .dl-next.blue .dl-next-icon { color:#1f5fae; }
+.dl-next.amber { background:#fffaf0; border-color:#f3dfb4; } .dl-next.amber .dl-next-icon { color:#9a5b00; }
+.dl-next.orange { background:#fff7f0; border-color:#f7d8bf; } .dl-next.orange .dl-next-icon { color:#c2610c; }
+.dl-next.green { background:#f3fbf6; border-color:#c9ecd6; } .dl-next.green .dl-next-icon { color:#1f8a46; }
+.dl-detail .dl-reopen { margin-top:10px; }
+@media (max-width:760px) { .dl-phase-select { width:100%; flex-wrap:wrap; } .dl-phase-select .dl-select, .dl-phase-select select { width:100%; min-width:0; } .dl-next { flex-wrap:wrap; } .dl-next-actions { width:100%; justify-content:stretch; } .dl-next-actions > * { flex:1; justify-content:center; } }
