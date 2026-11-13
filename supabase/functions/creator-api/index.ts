@@ -1,5 +1,7 @@
-// Server side of FORIOR Creator OS: keeps the user's API keys in Vault and makes the calls that need them.
-// Every request carries the signed-in user's JWT (verify_jwt is on); keys are looked up per user.
+// Server side of FORIOR Hub: keeps the API keys in Vault and makes the calls that need them.
+// Every request carries the signed-in user's JWT (verify_jwt is on) and the active workspace; the caller must
+// be a member of it. One set of keys is shared: they belong to the workspace owners (today Alvian owns both
+// workspaces), while usage and cost are recorded per workspace by the client.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@1.8.0";
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
@@ -14,8 +16,16 @@ const auth = createClient(Deno.env.get("SUPABASE_URL")!, JSON.parse(Deno.env.get
 const NAMES = ["anthropic", "google", "meta_token", "ig_user_id"] as const;
 const MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"];
 
-async function secret(user: string, name: string): Promise<string | null> {
-  const [row] = await sql`select private.get_secret(${user}::uuid, ${name}) as v`;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const RANK: Record<string, number> = { editor: 1, admin: 2, owner: 3 };
+
+/** The workspace's key: the first owner of the workspace who saved one. */
+async function secret(ws: string, name: string): Promise<string | null> {
+  const [row] = await sql`
+    select private.get_secret(m.user_id, ${name}) as v
+    from public.workspace_members m
+    where m.workspace_id = ${ws}::uuid and m.role = 'owner' and private.get_secret(m.user_id, ${name}) is not null
+    order by m.created_at limit 1`;
   return row?.v ?? null;
 }
 
@@ -28,14 +38,24 @@ Deno.serve(async req => {
   const user = who.user.id;
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return fail("input", "Body harus JSON."); }
+  const ws = String(body.workspaceId ?? "");
+  if (!UUID.test(ws)) return fail("input", "Workspace tidak dikenal. Muat ulang halaman.");
+  const [member] = await sql`select role from public.workspace_members where workspace_id = ${ws}::uuid and user_id = ${user}::uuid`;
+  if (!member) return fail("forbidden", "Anda bukan anggota workspace ini.", 403);
+  const role = String(member.role);
 
   try {
     switch (body.action) {
       case "secrets.status": {
-        const rows = await sql`select name, updated_at from private.secret_status(${user}::uuid)`;
+        const rows = await sql`
+          select s.name, max(s.updated_at) as updated_at
+          from public.workspace_members m cross join lateral private.secret_status(m.user_id) s
+          where m.workspace_id = ${ws}::uuid and m.role = 'owner'
+          group by s.name`;
         return json({ saved: Object.fromEntries(rows.map(r => [r.name, r.updated_at])) });
       }
       case "secrets.set": {
+        if (RANK[role] < RANK.owner) return fail("forbidden", "Hanya Owner yang bisa mengubah API key.", 403);
         const name = String(body.name ?? ""), value = typeof body.value === "string" ? body.value.trim() : "";
         if (!NAMES.includes(name as typeof NAMES[number])) return fail("input", "Nama key tidak dikenal.");
         if (value.length > 4000) return fail("input", "Key terlalu panjang.");
@@ -43,7 +63,7 @@ Deno.serve(async req => {
         return json({ ok: true });
       }
       case "ai": {
-        const key = await secret(user, "anthropic");
+        const key = await secret(ws, "anthropic");
         if (!key) return fail("no_key", "API key Anthropic belum disimpan. Buka Settings → AI & Models.");
         const model = String(body.model ?? "");
         if (!MODELS.includes(model)) return fail("input", `Model "${model}" tidak diizinkan.`);
@@ -65,7 +85,7 @@ Deno.serve(async req => {
         }
       }
       case "drive": {
-        const key = await secret(user, "google");
+        const key = await secret(ws, "google");
         if (!key) return fail("no_key", "Google API key belum disimpan. Buka Settings → AI & Models.");
         const folder = String(body.folderId ?? "");
         if (!/^[A-Za-z0-9_-]{10,}$/.test(folder)) return fail("input", "ID folder tidak valid.");
@@ -84,6 +104,7 @@ Deno.serve(async req => {
         return json({ files });
       }
       case "workspace.galleries": {
+        if (RANK[role] < RANK.admin) return fail("forbidden", "Hanya Owner/Admin yang bisa mengimpor dari Workspace.", 403);
         // Read-only copy of Photo Delivery galleries from the FORIOR Workspace app (app.forior.id).
         // The Workspace password is used once to get a token and is never stored or logged.
         const email = String(body.email ?? "").trim(), password = String(body.password ?? "");
@@ -98,7 +119,7 @@ Deno.serve(async req => {
         return json({ galleries: list });
       }
       case "instagram": {
-        const [token, igId] = await Promise.all([secret(user, "meta_token"), secret(user, "ig_user_id")]);
+        const [token, igId] = await Promise.all([secret(ws, "meta_token"), secret(ws, "ig_user_id")]);
         if (!token || !igId) return fail("no_key", "Token Meta belum disimpan.");
         const username = String(body.username ?? "");
         if (!/^[A-Za-z0-9._]{1,30}$/.test(username)) return fail("input", "Username tidak valid.");

@@ -30,23 +30,10 @@ export function PublicCampaignPage({data}:{data:CampaignData}){
 }
 
 export type PlanState = { accounts: string[]; campaigns: (CampaignData & { auto?: boolean })[] };
-export const DEFAULT_PLAN: PlanState = { accounts: DEFAULT_ACCOUNTS, campaigns: [
-  makeCampaign("alvian-xmas", "Alvian", "Christmas & New Year 2026", "Dec 2026", "Awareness & engagement", "camera"),
-  makeCampaign("forior-yearend", "FORIOR", "Year-end Property Portfolio", "Dec 2026", "Lead generation", "living"),
-  makeCampaign("intragama-festive", "Intragama Villa", "Festive Season Escape", "Dec 2026", "Bookings", "villa")
-] };
+/** A workspace with no saved plan starts empty (demo campaigns were removed with the workspace split). */
+export const DEFAULT_PLAN: PlanState = { accounts: DEFAULT_ACCOUNTS, campaigns: [] };
 export const usePlan = () => useStored<PlanState>("plan", DEFAULT_PLAN);
 export const readPlan = () => readStored<PlanState>("plan", DEFAULT_PLAN);
-
-/** One-time import of campaigns saved by the previous Content Plan (its own localStorage key). */
-export function migrateLegacyPlan() {
-  try {
-    if (window.localStorage.getItem("forior-os:plan")) return;
-    const raw = window.localStorage.getItem("forior.creatoros.campaigns.v6");
-    const old = raw ? JSON.parse(raw) : null;
-    if (old && Array.isArray(old.accounts) && Array.isArray(old.campaigns)) writeStored<PlanState>("plan", { accounts: old.accounts, campaigns: old.campaigns }, DEFAULT_PLAN);
-  } catch { /* unreadable legacy data: start from the defaults */ }
-}
 
 export function patchItem(campaignId: string, day: number, patch: Partial<CampaignContent>) {
   writeStored<PlanState>("plan", old => ({ ...old, campaigns: old.campaigns.map(c => (c.id === campaignId ? { ...c, items: c.items.map(x => (x.day === day ? { ...x, ...patch } : x)) } : c)) }), DEFAULT_PLAN);

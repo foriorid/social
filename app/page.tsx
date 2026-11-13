@@ -9,10 +9,10 @@ import {
   Search, Send, Settings, Sparkles, Target, Users, Video, X, Youtube,
   ChartNoAxesCombined, Clock3, Layers3, BriefcaseBusiness, TrendingUp, Bookmark,
   Hash, Eye, Flame, WandSparkles, PlusCircle, ChevronRight, Filter, CirclePlay,
-  MessageSquareText, ChartLine, Lightbulb as LightbulbIcon, Cloud, Database, UploadCloud, Music2, UserCircle2, UserPlus, History, ShieldCheck, Info, ExternalLink, FolderPlus, AtSign, Zap, Images
+  MessageSquareText, ChartLine, Lightbulb as LightbulbIcon, Cloud, Database, UploadCloud, Music2, UserCircle2, UserPlus, History, ShieldCheck, Info, ExternalLink, FolderPlus, AtSign, Zap, Images, LogOut
 } from "lucide-react";
 
-import { AiButton, AiCostBadge, AiError, ApiSettingsTab, ApprovalList, InboxLeadsPage, ModelRouterPanel, notify, runAgentTask, useAI } from "./modules";
+import { AiButton, AiCostBadge, AiError, ApiSettingsTab, ApprovalList, InboxLeadsPage, ModelRouterPanel, notify, runAgentTask, useAI, useCloud } from "./modules";
 import { AiSetupError, askAI, fetchInstagramPosts } from "./lib/ai";
 import { parseIdeas, parseLines, parseProfile } from "./lib/logic";
 import { addApproval, addIdea, useApprovals, useIdeas, useLeads, useSettings, useStored, useTasks } from "./lib/store";
@@ -20,9 +20,10 @@ import { addApproval, addIdea, useApprovals, useIdeas, useLeads, useSettings, us
 import { ImageTile } from "./ui";
 import { AuditView, LegacyAudit } from "./research";
 import { auditPrompt, parseAudit, stageOf, type Audit } from "./lib/flow";
-import { PublicCampaignPage, migrateLegacyPlan, usePlan, type CampaignData } from "./plan-data";
+import { PublicCampaignPage, usePlan, type CampaignData } from "./plan-data";
 import { AgentsPage, useAgentRunner } from "./agents";
-import { startCloud } from "./lib/cloud";
+import { activeWorkspace, signOut, startCloud, switchWorkspace } from "./lib/cloud";
+import { GateLoading, LoginScreen, NoWorkspaceScreen, SetPasswordScreen } from "./login";
 import { AssetLibraryPage } from "./assets";
 import { ContentPlanPage } from "./plan";
 import { StudioPage } from "./studio";
@@ -295,7 +296,7 @@ function SettingsPage() {
   </div>;
 }
 
-export default function DashboardPage() {
+function AppShell() {
   const [activeNav, setActiveNav] = useState("Dashboard");
   const [platform, setPlatform] = useState<Platform>("All channels");
   const [range, setRange] = useState<Range>("Last 30 Days");
@@ -304,14 +305,16 @@ export default function DashboardPage() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showWorkspace, setShowWorkspace] = useState(false);
-  const [workspace, setWorkspace] = useState("Alvian · Personal Brand");
+  const [cloud] = useCloud();
+  const ws = activeWorkspace(cloud);
+  const wsLabel = (w: { kind: string }) => (w.kind === "personal" ? "Personal Brand" : "Business");
+  const pickWorkspace = (id: string) => { setShowWorkspace(false); setShowProfile(false); if (id !== cloud.workspaceId) switchWorkspace(id); };
   const [mobileNav, setMobileNav] = useState(false);
   const [quickAction, setQuickAction] = useState("");
   const [showAllAgents, setShowAllAgents] = useState(false);
   const [studioTarget,setStudioTarget] = useState<{campaignId:string;day:number}|null>(null);
   const [plan] = usePlan();
   useAgentRunner();
-  useEffect(()=>{migrateLegacyPlan();startCloud();},[]);
   const [toast,setToast] = useStored<string>("toast","");
   const [approvals] = useApprovals();
   const [ideas] = useIdeas();
@@ -330,8 +333,6 @@ export default function DashboardPage() {
     newLeads>0 && { text:`${newLeads} lead baru belum dibalas.`, nav:"Inbox & Leads" }
   ].filter(Boolean) as { text:string; nav:string }[];
 
-  const [publicCampaign,setPublicCampaign] = useState<CampaignData|null>(null);
-  useEffect(()=>{const token=window.location.hash.startsWith("#share=")?window.location.hash.slice(7):"";if(token){try{const data=JSON.parse(decodeURIComponent(escape(atob(token))));if(data&&data.name&&Array.isArray(data.items))setPublicCampaign(data);}catch{}}},[]);
   const metrics = useMemo(() => {
     if (platform === "TikTok") return [
       { label: "Reach", value: "842K", change: "+28%", icon: Users, line: "two" },
@@ -352,7 +353,7 @@ export default function DashboardPage() {
 
   const visibleSchedules = schedules.filter((item) => platform === "All channels" || item.platform === platform);
 
-  return publicCampaign ? <PublicCampaignPage data={publicCampaign}/> : (
+  return (
     <main className="app-shell">
       <aside className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}>
         <div className="sidebar-top">
@@ -362,16 +363,16 @@ export default function DashboardPage() {
 
         <div className="workspace-wrap">
           <span className="eyebrow">WORKSPACE</span>
-          <button className="workspace-switch" onClick={() => setShowWorkspace(!showWorkspace)}>
-            <div className="avatar avatar-main">A</div>
-            <span><b>{workspace.startsWith("Alvian") ? "Alvian" : "FORIOR"}</b><small>{workspace.startsWith("Alvian") ? "Personal Brand" : "Business Workspace"}</small></span>
+          <button className="workspace-switch" onClick={() => setShowWorkspace(!showWorkspace)} aria-expanded={showWorkspace} aria-label="Ganti workspace">
+            <div className="avatar avatar-main">{(ws?.name ?? "?").charAt(0)}</div>
+            <span><b>{ws?.name ?? "—"}</b><small>{ws ? wsLabel(ws) : ""}</small></span>
             <ChevronDown size={16} />
           </button>
           {showWorkspace && (
             <div className="floating-menu workspace-menu">
-              {["Alvian · Personal Brand", "FORIOR · Business"].map((item) => (
-                <button key={item} onClick={() => { setWorkspace(item); setShowWorkspace(false); }}>
-                  <span>{item}</span>{workspace === item && <Check size={15} />}
+              {cloud.workspaces.map(w => (
+                <button key={w.id} onClick={() => pickWorkspace(w.id)}>
+                  <span>{w.name} · {wsLabel(w)}</span>{w.id === cloud.workspaceId && <Check size={15} />}
                 </button>
               ))}
             </div>
@@ -449,9 +450,10 @@ export default function DashboardPage() {
             <div className="dropdown-wrap">
               <button className="avatar avatar-profile" aria-label="Menu profil" aria-expanded={showProfile} onClick={() => { setShowProfile(!showProfile); setShowNotifications(false); setShowRange(false); setShowPlatform(false); }}>A</button>
               {showProfile && <div className="floating-menu profile-menu">
-                <div className="profile-head"><b>{workspace.split(" · ")[0]}</b><small>{workspace.split(" · ")[1] ?? ""}</small></div>
-                {["Alvian · Personal Brand", "FORIOR · Business"].map(w => <button key={w} onClick={() => { setWorkspace(w); setShowProfile(false); }}>{w}{workspace === w && <Check size={14} />}</button>)}
+                <div className="profile-head"><b>{cloud.email}</b><small>{ws ? `${ws.name} · ${ws.role === "owner" ? "Owner" : ws.role === "admin" ? "Admin" : "Editor"}` : ""}</small></div>
+                {cloud.workspaces.length > 1 && cloud.workspaces.map(w => <button key={w.id} onClick={() => pickWorkspace(w.id)}>{w.name} · {wsLabel(w)}{w.id === cloud.workspaceId && <Check size={14} />}</button>)}
                 <button onClick={() => { setActiveNav("Settings"); setShowProfile(false); }}>Settings<Settings size={14} /></button>
+                <button className="x-danger" onClick={() => { setShowProfile(false); signOut(); }}>Keluar<LogOut size={14} /></button>
               </div>}
             </div>
           </div>
@@ -579,4 +581,23 @@ export default function DashboardPage() {
       )}
     </main>
   );
+}
+
+/** Gate: nothing of the app renders until the visitor is signed in and inside a workspace.
+ *  Shared campaign links (#share=) stay public; client galleries live on their own route. */
+export default function DashboardPage() {
+  const [cloud] = useCloud();
+  const [publicCampaign, setPublicCampaign] = useState<CampaignData | null>(null);
+  useEffect(() => {
+    const token = window.location.hash.startsWith("#share=") ? window.location.hash.slice(7) : "";
+    if (token) { try { const data = JSON.parse(decodeURIComponent(escape(atob(token)))); if (data && data.name && Array.isArray(data.items)) { setPublicCampaign(data); return; } } catch { /* not a share link */ } }
+    startCloud();
+  }, []);
+  if (publicCampaign) return <PublicCampaignPage data={publicCampaign} />;
+  if (!cloud.ready) return <GateLoading />;
+  if (!cloud.email) return <LoginScreen />;
+  if (cloud.mustSetPassword) return <SetPasswordScreen email={cloud.email} />;
+  if (!cloud.workspaceId) return cloud.workspaces.length ? <GateLoading /> : <NoWorkspaceScreen email={cloud.email} error={cloud.error} />;
+  // Remount per workspace so no state from the previous workspace survives a switch.
+  return <AppShell key={cloud.workspaceId} />;
 }

@@ -1,6 +1,6 @@
 # Rencana Major Update: Workspace Alvian vs FORIOR
 
-Status: **disimpan, belum dikerjakan.** Dikerjakan setelah revisi Photo Delivery selesai.
+Status: **Tahap A & B dikerjakan (14 Nov 2026).** Tahap C–E menyusul.
 Dicatat: 13 Nov 2026, dari permintaan Alvian.
 
 ## Permintaan (ringkas)
@@ -74,7 +74,15 @@ Dicatat: 13 Nov 2026, dari permintaan Alvian.
 - **Tahap D: tim**: undang anggota lewat email, peran, kelola anggota di Settings.
 - **Tahap E: modul Project**: Photo Planner, Calendar, Clients dipindah dari app.forior.id.
 
-## 6. Pertanyaan yang perlu dijawab sebelum mulai
+## 6. Keputusan Alvian (13 Nov 2026)
+- Campaign yang ada dihapus semua (cadangan: `private.backup_app_state_20261114`).
+- Satu API key Anthropic untuk semua workspace; pemakaian & biaya dicatat per workspace.
+- Peran: Owner, Admin, Editor.
+- Dashboard FORIOR fokus Project, Sosmed di bawah (tahap C).
+- Tim FORIOR tidak melihat workspace Alvian.
+- Photo Planner: HTML sudah ada, cukup disiapkan menu di sidebar (tahap C).
+
+## 7. Pertanyaan awal
 1. Campaign dengan akun FORIOR dan Intragama Villa: pindah ke workspace FORIOR?
 2. API key AI: satu untuk semua, atau terpisah per workspace (biaya terpisah)?
 3. Peran tim yang dibutuhkan: cukup Admin + Editor, atau perlu Viewer (mis. klien/freelancer)?
