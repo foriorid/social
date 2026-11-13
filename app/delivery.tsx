@@ -2,7 +2,7 @@
 
 // Photo Delivery (admin): client galleries fed from Google Drive folders. Copied from the FORIOR Workspace
 // module with the same workflow and data shape; stored in Supabase `galleries` (owner-only via RLS).
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUpDown, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Download, ExternalLink, FileText, FolderOpen, Heart, History, Images, LayoutGrid, Link2, List, Mail, MessageCircle, MessageSquare, MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, User, X } from "lucide-react";
 import { listDriveFolder } from "./assets";
@@ -297,14 +297,8 @@ const copyText = (text: string, ok: string) => {
   if (!navigator.clipboard) return notify("Browser tidak mengizinkan menyalin otomatis. Salin manual.");
   navigator.clipboard.writeText(text).then(() => notify(ok), () => notify("Browser menolak akses clipboard. Salin manual."));
 };
-const PER_PAGE = [12, 24, 48];
-function pages(current: number, total: number): (number | "…")[] {
-  if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
-  const set = new Set([1, total, current - 1, current, current + 1].filter(n => n >= 1 && n <= total));
-  const list = [...set].sort((a, b) => a - b), out: (number | "…")[] = [];
-  list.forEach((n, i) => { if (i && n - list[i - 1] > 1) out.push("…"); out.push(n); });
-  return out;
-}
+/** Photos rendered at first and added each time the list end scrolls into view. */
+const BATCH = 25;
 
 function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: () => void; onSave: (g: Gallery) => Promise<boolean>; onDelete: () => void }) {
   const g = row.data;
@@ -314,7 +308,8 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
   const [filter, setFilter] = useState(() => stageFilter(g));
   const [sort, setSort] = useState<"az" | "za">("az");
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [perPage, setPerPage] = useState(12), [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(BATCH);
+  const sentinel = useRef<HTMLDivElement | null>(null);
   const [menu, setMenu] = useState<"" | "more" | "add">("");
   const [modal, setModal] = useState<"" | "edit" | FolderType>("");
   const [lb, setLb] = useState<number | null>(null);
@@ -323,7 +318,7 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
   useEffect(() => { setSlot(document.getElementById("page-heading-slot")); }, []);
   useEffect(() => { setSet(stageSet(g)); setFilter(stageFilter(g)); }, [g.phase]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => setNotes(g.notes ?? ""), [g.notes]);
-  useEffect(() => setPage(1), [set, filter, sort, perPage]);
+  useEffect(() => setLimit(BATCH), [set, filter, sort]);
 
   const copy = () => copyText(link, "Link klien disalin.");
   const sendWA = () => {
@@ -355,9 +350,16 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
     const list = all.filter(p => filter === "all" ? true : filter === "edit" ? p.selected : filter === "raw" ? p.rawSelected : filter === "none" ? !p.selected && !p.rawSelected : !!p.note);
     return [...list].sort((a, b) => (sort === "az" ? byName(a, b) : byName(b, a)));
   }, [all, filter, sort]);
-  const pageCount = Math.max(1, Math.ceil(shown.length / perPage));
-  const current = Math.min(page, pageCount);
-  const visible = shown.slice((current - 1) * perPage, current * perPage);
+  const visible = shown.slice(0, limit);
+  const more = shown.length > limit;
+  // Infinite scroll: load the next batch when the end of the grid comes near the viewport.
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || !more || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(entries => { if (entries.some(e => e.isIntersecting)) setLimit(n => n + BATCH); }, { rootMargin: "600px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [more, limit, tab, view]);
   const filters: [string, string][] = set === "preview" ? [["all", "Semua status"], ["edit", "Dipilih Edit"], ["raw", "Dipilih RAW"], ["none", "Belum dipilih"], ["note", "Ada catatan"]] : [["all", "Semua foto"], ["note", "Ada catatan klien"]];
   const clientNotes = [...g.previewPhotos.filter(p => p.note).map(p => ({ p, set: "Preview" })), ...g.draftPhotos.filter(p => p.note).map(p => ({ p, set: "Draft" })), ...g.revisionPhotos.filter(p => p.note).map(p => ({ p, set: "Revisi" }))];
   const activity = [
@@ -449,10 +451,7 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
             </button>; })}</div>
           : <div className="dl-plist">{visible.map(p => { const i = shown.indexOf(p); return <button key={p.id} className="dl-prow" onClick={() => setLb(i)}><img src={p.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /><span className="dl-prow-name"><b>{p.name}</b>{p.section && <small>{p.section}</small>}</span><span className="dl-prow-note">{p.note || <span className="dl-muted">—</span>}</span>{p.selected ? <em className="dl-tag edit">Edit</em> : p.rawSelected ? <em className="dl-tag raw">Raw</em> : <em className="dl-tag none">—</em>}</button>; })}</div>}
 
-          {shown.length > 0 && <div className="dl-pager">
-            <label className="dl-perpage">Tampilkan <span className="dl-select"><select value={perPage} onChange={e => setPerPage(Number(e.target.value))} aria-label="Foto per halaman">{PER_PAGE.map(n => <option key={n} value={n}>{n} per halaman</option>)}</select><ChevronDown size={15} /></span></label>
-            {pageCount > 1 && <div className="dl-pages"><button onClick={() => setPage(current - 1)} disabled={current === 1} aria-label="Halaman sebelumnya"><ChevronLeft size={16} /></button>{pages(current, pageCount).map((n, i) => n === "…" ? <span key={`e${i}`}>…</span> : <button key={n} className={n === current ? "active" : ""} onClick={() => setPage(n)}>{n}</button>)}<button onClick={() => setPage(current + 1)} disabled={current === pageCount} aria-label="Halaman berikutnya"><ChevronRight size={16} /></button></div>}
-          </div>}
+          {shown.length > 0 && <div className="dl-loadmore" ref={sentinel}>{more ? <button className="outline-button" onClick={() => setLimit(n => n + BATCH)}>Muat {Math.min(BATCH, shown.length - limit)} foto lagi</button> : null}<small>Menampilkan {visible.length} dari {shown.length} foto</small></div>}
         </>}
 
         {tab === "revisi" && (g.revisions.length ? <div className="dl-revs">{[...g.revisions].reverse().map(r => <article key={r.id} className={r.status === "Open" ? "open" : ""}>
