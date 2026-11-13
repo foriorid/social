@@ -261,6 +261,14 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
   const resolve = (id: string, status: "Open" | "Resolved") => onSave({ ...g, revisions: g.revisions.map(r => (r.id === id ? { ...r, status } : r)) });
   const picked = g.previewPhotos.filter(p => p.selected), raw = g.previewPhotos.filter(p => p.rawSelected);
   const draftStage = ["Editing Progress", "Client Review", "Revision", "Done"].includes(g.phase);
+  // Primary photos follow the phase, mirroring what the client sees: final on Done, revision/draft
+  // while editing, and the client's picks before any editing. Falls back to the newest set that exists.
+  const stage: { title: string; tone: string; photos: Photo[]; empty: string } =
+    g.phase === "Done" ? { title: "Foto final", tone: "dl-green", photos: g.finalPhotos.length ? g.finalPhotos : g.revisionPhotos.length ? g.revisionPhotos : g.draftPhotos, empty: "Muat folder foto final di atas agar klien bisa mengunduhnya." }
+    : g.phase === "Revision" ? { title: "Foto hasil revisi", tone: "dl-orange", photos: g.revisionPhotos.length ? g.revisionPhotos : g.draftPhotos, empty: "Muat folder hasil revisi di atas." }
+    : g.phase === "Client Review" || g.phase === "Editing Progress" ? { title: "Foto draft (hasil edit)", tone: "dl-blue", photos: g.draftPhotos, empty: "Muat folder draft di atas agar klien bisa me-review." }
+    : g.phase === "Client Selection" ? { title: "Foto pilihan klien untuk Edit", tone: "dl-blue", photos: picked, empty: "Klien belum memilih foto." }
+    : { title: "Foto preview", tone: "dl-blue", photos: g.previewPhotos, empty: "Muat folder preview di atas agar klien bisa memilih." };
   const openRev = g.revisions.filter(r => r.status === "Open").length;
   const f = (k: keyof typeof form, label: string, type = "text") => <div className="settings-field"><label htmlFor={`e-${k}`}>{label}</label><input id={`e-${k}`} type={type} value={form[k]} onChange={e => setForm(x => ({ ...x, [k]: e.target.value }))} /></div>;
 
@@ -315,10 +323,12 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
 
     {(g.quotaAddons?.length ?? 0) > 0 && <section className="panel"><div className="dl-section-head"><h3>Tambahan kuota dari klien</h3></div><ul className="dl-addons">{g.quotaAddons!.map(a => <li key={a.id}><span>{fmtDate(a.at)}</span><b>{a.custom ? "Bebas pilih (harga konfirmasi admin)" : `+${a.photos} foto edit`}</b><em>{a.price ? `Rp ${a.price.toLocaleString("id-ID")}` : "—"}</em></li>)}</ul></section>}
 
-    <PhotoStrip title="Foto pilihan untuk Edit" tone="dl-blue" photos={picked} />
-    <PhotoStrip title="Foto pilihan RAW" tone="dl-red" photos={raw} />
+    {stage.photos.length ? <PhotoStrip title={stage.title} tone={stage.tone} photos={stage.photos} /> : <section className="panel dl-wait"><Send size={18} /><p>{stage.empty}</p></section>}
     <PhotoStrip title="Catatan klien di hasil edit" photos={[...g.draftPhotos, ...g.revisionPhotos].filter(p => p.note)} />
-    {!picked.length && g.previewPhotos.length > 0 && <section className="panel dl-wait"><Send size={18} /><p>Klien belum memilih foto. Kirim link galeri lewat WhatsApp atau salin link-nya.</p></section>}
+    {/* Client's original picks kept as reference once editing has started (Preview/Selection already show them above). */}
+    {draftStage && <PhotoStrip title="Riwayat: foto pilihan untuk Edit" tone="dl-blue" photos={picked} />}
+    {draftStage && <PhotoStrip title="Riwayat: foto pilihan RAW" tone="dl-red" photos={raw} />}
+    {g.phase === "Client Selection" && <PhotoStrip title="Foto pilihan RAW" tone="dl-red" photos={raw} />}
   </div>;
 }
 
