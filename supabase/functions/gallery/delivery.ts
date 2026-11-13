@@ -19,6 +19,8 @@ export const ADDON_PACKAGES = [{ photos: 5, price: 500000 }, { photos: 10, price
 export type Photo = { id: string; name: string; section: string | null; thumbnailUrl: string; url: string; selected?: boolean; rawSelected?: boolean; note?: string };
 export type Revision = { id: string; text: string; photoNotes: { name: string; note: string }[]; status: "Open" | "Resolved"; createdAt: string };
 export type Addon = { id: string; photos: number | null; price: number | null; custom?: boolean; at: string };
+/** The project brief, usually filled by Photo Planner, so a project never has to be typed twice. */
+export type ProjectPlan = { source: "planner" | "manual"; propertyType?: string; propertyName?: string; size?: string; areas?: string[]; details?: string; estimatedPhotos?: number; packageName?: string; packagePrice?: string };
 export type Gallery = {
   id: string; slug: string; title: string; projectName?: string;
   client: { company?: string; contact?: string; whatsapp?: string; email?: string };
@@ -29,6 +31,7 @@ export type Gallery = {
   finalFolderUrl: string; finalPhotos: Photo[];
   selectByDate: string; feedbackByDate: string; downloadExpiry: string;
   quotaAddons?: Addon[]; notes?: string; createdAt: string; importedFrom?: string; importedAt?: string;
+  /** Planned shoot, local time "YYYY-MM-DDTHH:mm". */ shootDate?: string; plan?: ProjectPlan;
 };
 export type FolderType = "preview" | "draft" | "revision" | "final";
 

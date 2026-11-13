@@ -14,6 +14,8 @@ import { PHASES, PHASE_LABEL, PHASE_SHORT, fromWorkspace, newGallery, setPhase, 
 type Row = { id: string; slug: string; data: Gallery; updated_at: string };
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { numeric: true });
+/** "Sab, 21 Nov 2026 · 10:00" for a planned shoot (stored as local "YYYY-MM-DDTHH:mm"). */
+export const fmtShoot = (d?: string) => { if (!d) return "—"; const t = new Date(d); return Number.isNaN(t.getTime()) ? d : `${t.toLocaleDateString("id-ID", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })}${d.includes("T") ? ` · ${d.slice(11, 16)}` : ""}`; };
 export const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }) : "—");
 export const PHASE_CLASS: Record<Phase, string> = { Preview: "dl-p-preview", "Client Selection": "dl-p-selection", "Editing Progress": "dl-p-editing", "Client Review": "dl-p-review", Revision: "dl-p-revision", Done: "dl-p-done" };
 
@@ -69,7 +71,7 @@ export function nextActionOf(g: Gallery): { text: string; rank: number } {
   const openRev = g.revisions.filter(r => r.status === "Open").length;
   const days = (d?: string) => (d ? Math.ceil((new Date(d).getTime() - Date.now()) / 864e5) : 99);
   switch (g.phase) {
-    case "Preview": return !g.previewPhotos.length ? { text: "Muat folder foto preview", rank: 1 } : g.previewSubmittedAt && g.rawSelectionLimit && !g.rawSubmittedAt ? { text: "Klien sedang memilih foto RAW", rank: 5 } : { text: days(g.selectByDate) < 0 ? "Tenggat pilih foto lewat — ingatkan klien" : "Menunggu klien memilih foto", rank: days(g.selectByDate) < 0 ? 2 : 6 };
+    case "Preview": return !g.previewPhotos.length ? (g.shootDate && new Date(g.shootDate).getTime() > Date.now() ? { text: `Shoot ${fmtShoot(g.shootDate)}`, rank: 4 } : { text: g.shootDate ? "Shoot selesai — muat folder foto preview" : "Muat folder foto preview", rank: 1 }) : g.previewSubmittedAt && g.rawSelectionLimit && !g.rawSubmittedAt ? { text: "Klien sedang memilih foto RAW", rank: 5 } : { text: days(g.selectByDate) < 0 ? "Tenggat pilih foto lewat — ingatkan klien" : "Menunggu klien memilih foto", rank: days(g.selectByDate) < 0 ? 2 : 6 };
     case "Client Selection": return { text: `Klien memilih ${picked} foto — mulai editing`, rank: 0 };
     case "Editing Progress": return { text: g.draftPhotos.length ? "Draft siap — kirim untuk review" : `Sedang diedit (${picked} foto) — muat draft`, rank: g.draftPhotos.length ? 1 : 3 };
     case "Client Review": return { text: "Menunggu review klien", rank: 6 };
@@ -210,7 +212,7 @@ function ImportModal({ rows, onClose, onDone }: { rows: Row[]; onClose: () => vo
 }
 
 function NewGalleryModal({ taken, onClose, onCreated }: { taken: string[]; onClose: () => void; onCreated: (row: Row) => void }) {
-  const [form, setForm] = useState({ title: "", company: "", contact: "", whatsapp: "", email: "", selectionLimit: "", rawSelectionLimit: "", previewFolderUrl: "" });
+  const [form, setForm] = useState({ title: "", company: "", contact: "", whatsapp: "", email: "", selectionLimit: "", rawSelectionLimit: "", previewFolderUrl: "", shootDate: "" });
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
   const create = async () => {
@@ -219,6 +221,7 @@ function NewGalleryModal({ taken, onClose, onCreated }: { taken: string[]; onClo
     try {
       const id = crypto.randomUUID();
       let g = newGallery({ id, slug: uniqueSlug(slugify(form.title), taken), title: form.title.trim(), client: { company: form.company, contact: form.contact, whatsapp: form.whatsapp, email: form.email }, selectionLimit: Number(form.selectionLimit), rawSelectionLimit: Number(form.rawSelectionLimit), previewFolderUrl: form.previewFolderUrl.trim() });
+      if (form.shootDate) g = { ...g, shootDate: form.shootDate, plan: { source: "manual" } };
       let warning = "";
       if (g.previewFolderUrl) { try { g = withFolder(g, "preview", g.previewFolderUrl, await listSectioned(g.previewFolderUrl)); } catch (e) { warning = e instanceof Error ? e.message : String(e); } }
       const { data, error } = await supabase.from("galleries").insert({ id, slug: g.slug, data: g, workspace_id: readCloud().workspaceId }).select("id, slug, data, updated_at").single();
@@ -236,6 +239,7 @@ function NewGalleryModal({ taken, onClose, onCreated }: { taken: string[]; onClo
       <div className="settings-field"><label htmlFor="g-contact">Nama PIC</label><input id="g-contact" value={form.contact} onChange={set("contact")} /></div>
       <div className="settings-field"><label htmlFor="g-wa">WhatsApp</label><input id="g-wa" value={form.whatsapp} onChange={set("whatsapp")} placeholder="+62 …" /></div>
       <div className="settings-field"><label htmlFor="g-email">Email</label><input id="g-email" value={form.email} onChange={set("email")} /></div>
+      <div className="settings-field full"><label htmlFor="g-shoot">Jadwal shoot (opsional)</label><input id="g-shoot" type="datetime-local" value={form.shootDate} onChange={set("shootDate")} /><small className="dl-hint">Muncul di Jadwal Shoot dan dashboard. Rencana dari Photo Planner mengisi ini otomatis.</small></div>
       <div className="settings-field"><label htmlFor="g-limit">Kuota foto Edit</label><input id="g-limit" type="number" min="0" value={form.selectionLimit} onChange={set("selectionLimit")} placeholder="mis. 30 (0 = tanpa batas)" /></div>
       <div className="settings-field"><label htmlFor="g-raw">Kuota foto RAW</label><input id="g-raw" type="number" min="0" value={form.rawSelectionLimit} onChange={set("rawSelectionLimit")} placeholder="0 = tanpa tahap RAW" /></div>
       <div className="settings-field full"><label htmlFor="g-folder">Folder Google Drive — foto preview</label><input id="g-folder" value={form.previewFolderUrl} onChange={set("previewFolderUrl")} placeholder="https://drive.google.com/drive/folders/…" /><small className="dl-hint">Bagikan folder sebagai “Siapa saja yang memiliki link”. Sub-folder (mis. “Kamar 1”, “Lobby”) tampil sebagai bagian. Bisa juga diisi nanti.</small></div>
@@ -263,6 +267,7 @@ function stageSet(g: Gallery): FolderType {
 const stageFilter = (g: Gallery) => (g.phase === "Client Selection" || g.phase === "Editing Progress" ? "edit" : "all");
 /** The deadline that matters for the current phase. */
 function dueOf(g: Gallery): { label: string; date: string } {
+  if (g.phase === "Preview" && !g.previewPhotos.length && g.shootDate) return { label: "Shoot", date: g.shootDate };
   if (g.phase === "Preview" || g.phase === "Client Selection") return { label: "Pilih sebelum", date: g.selectByDate };
   if (g.phase === "Done") return { label: "Unduhan sampai", date: g.downloadExpiry };
   return { label: "Feedback sebelum", date: g.feedbackByDate };
@@ -284,7 +289,7 @@ function EditDetailsModal({ g, link, onSave, onClose }: { g: Gallery; link: stri
   const f = (k: keyof typeof form, label: string, type = "text") => <div className="settings-field"><label htmlFor={`e-${k}`}>{label}</label><input id={`e-${k}`} type={type} value={form[k]} onChange={e => setForm(x => ({ ...x, [k]: e.target.value }))} /></div>;
   const save = async () => {
     setBusy(true);
-    const next: Gallery = { ...g, title: form.title.trim() || g.title, slug: slugify(form.slug || form.title), client: { company: form.company, contact: form.contact, whatsapp: form.whatsapp, email: form.email }, selectionLimit: Math.max(0, Number(form.selectionLimit) || 0), rawSelectionLimit: Math.max(0, Number(form.rawSelectionLimit) || 0), selectByDate: form.selectByDate, feedbackByDate: form.feedbackByDate, downloadExpiry: form.downloadExpiry };
+    const next: Gallery = { ...g, title: form.title.trim() || g.title, slug: slugify(form.slug || form.title), client: { company: form.company, contact: form.contact, whatsapp: form.whatsapp, email: form.email }, selectionLimit: Math.max(0, Number(form.selectionLimit) || 0), rawSelectionLimit: Math.max(0, Number(form.rawSelectionLimit) || 0), selectByDate: form.selectByDate, feedbackByDate: form.feedbackByDate, downloadExpiry: form.downloadExpiry, shootDate: form.shootDate || undefined };
     const ok = await onSave(next); setBusy(false);
     if (ok) { notify("Detail galeri disimpan."); onClose(); }
   };
@@ -296,7 +301,7 @@ function EditDetailsModal({ g, link, onSave, onClose }: { g: Gallery; link: stri
       <div className="settings-field full"><label htmlFor="e-slug">Permalink</label><div className="dl-slug"><span>{link.replace(/^https?:\/\//, "").replace(/[^/=]*$/, "")}</span><input id="e-slug" value={form.slug} onChange={e => setForm(x => ({ ...x, slug: e.target.value }))} placeholder="nama-proyek" /></div></div>
       {f("company", "Klien / perusahaan")}{f("contact", "Nama PIC")}{f("whatsapp", "WhatsApp")}{f("email", "Email")}
       {f("selectionLimit", "Kuota Edit (0 = tanpa batas)", "number")}{f("rawSelectionLimit", "Kuota RAW (0 = nonaktif)", "number")}
-      {f("selectByDate", "Pilih foto sebelum", "date")}{f("feedbackByDate", "Feedback sebelum", "date")}{f("downloadExpiry", "Unduhan sampai", "date")}
+      {f("shootDate", "Jadwal shoot", "datetime-local")}{f("selectByDate", "Pilih foto sebelum", "date")}{f("feedbackByDate", "Feedback sebelum", "date")}{f("downloadExpiry", "Unduhan sampai", "date")}
     </div>
     <div className="cp-modal-actions"><button className="outline-button" onClick={onClose} disabled={busy}>Batal</button><button className="primary-button" onClick={save} disabled={busy}><Check size={15} /> {busy ? "Menyimpan…" : "Simpan"}</button></div>
   </div></div>;
@@ -402,7 +407,9 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
   const showPicks = () => { setTab("galeri"); setSet("preview"); setFilter("edit"); };
   // "Langkah berikutnya": the structured Workspace workflow, one clear next action per phase.
   const next: { title: string; text: string; icon: React.ReactNode; tone?: string; actions: React.ReactNode } | null =
-    g.phase === "Preview" ? (!g.previewPhotos.length
+    g.phase === "Preview" ? (!g.previewPhotos.length && g.shootDate && new Date(g.shootDate).getTime() > Date.now()
+      ? { title: `Shoot dijadwalkan ${fmtShoot(g.shootDate)}`, text: "Setelah shoot, unggah foto preview ke Google Drive lalu muat di sini agar klien bisa mulai memilih.", icon: <CalendarDays size={18} />, tone: "blue", actions: <><button className="outline-button dl-wa" onClick={sendWA}><MessageCircle size={15} /> Konfirmasi via WA</button><button className="outline-button" onClick={() => setModal("edit")}><Pencil size={15} /> Ubah jadwal</button><button className="primary-button" onClick={() => setModal("preview")}><FolderOpen size={15} /> Muat folder preview</button></> }
+      : !g.previewPhotos.length
       ? { title: "Muat foto preview", text: "Tempel link folder Drive berisi foto preview agar klien bisa mulai memilih.", icon: <FolderOpen size={18} />, actions: <button className="primary-button" onClick={() => setModal("preview")}><FolderOpen size={15} /> Muat folder preview</button> }
       : g.previewSubmittedAt && g.rawSelectionLimit && !g.rawSubmittedAt
         ? { title: "Klien sedang memilih foto RAW", text: `Pilihan Edit (${picked.length} foto) sudah masuk. Tahap otomatis pindah ke Pemilihan setelah klien mengirim pilihan RAW.`, icon: <Heart size={18} />, actions: <button className="outline-button dl-wa" onClick={sendWA}><MessageCircle size={15} /> Ingatkan via WA</button> }
@@ -418,7 +425,7 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
     <div className="dl-top-main">
       <nav className="dl-crumb" aria-label="Breadcrumb"><span>Workspace</span><ChevronRight size={13} /><button onClick={onBack}>Photo Delivery</button><ChevronRight size={13} /><b>{g.title}</b></nav>
       <h1>{g.title}</h1>
-      <div className="dl-top-chips">{g.client?.company && <span className="dl-chip"><Building2 size={13} /> {g.client.company}</span>}<span className={`dl-phase ${PHASE_CLASS[g.phase]}`}><Check size={12} /> {PHASE_SHORT[g.phase]}</span>{due.date && <span className="dl-due"><Clock size={13} /> {due.label}: {fmtDate(due.date)}</span>}</div>
+      <div className="dl-top-chips">{g.client?.company && <span className="dl-chip"><Building2 size={13} /> {g.client.company}</span>}<span className={`dl-phase ${PHASE_CLASS[g.phase]}`}><Check size={12} /> {PHASE_SHORT[g.phase]}</span>{due.date && <span className="dl-due"><Clock size={13} /> {due.label}: {due.label === "Shoot" ? fmtShoot(due.date) : fmtDate(due.date)}</span>}</div>
     </div>
     <div className="dl-top-actions">
       <div className="dropdown-wrap"><button className="outline-button dl-icon-btn" aria-label="Aksi lain" aria-expanded={menu === "more"} onClick={() => setMenu(menu === "more" ? "" : "more")}><MoreHorizontal size={17} /></button>
@@ -511,6 +518,18 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
             <div><dt><Heart size={15} /> Kuota</dt><dd>{g.selectionLimit ? `${g.selectionLimit} edit` : "Edit bebas"}{g.rawSelectionLimit ? ` · ${g.rawSelectionLimit} RAW` : ""}</dd></div>
           </dl>
         </section>
+        {(g.plan || g.shootDate) && <section className="panel dl-card-side">
+          <div className="dl-side-head"><h3>Brief project</h3>{g.plan?.source === "planner" && <span className="dl-badge blue">Photo Planner</span>}</div>
+          <dl className="dl-kv">
+            <div><dt><CalendarDays size={15} /> Jadwal shoot</dt><dd>{fmtShoot(g.shootDate)}</dd></div>
+            {g.plan?.propertyType && <div><dt><Building2 size={15} /> Properti</dt><dd>{[g.plan.propertyType, g.plan.propertyName].filter(Boolean).join(" · ")}</dd></div>}
+            {g.plan?.size && <div><dt><LayoutGrid size={15} /> Ukuran</dt><dd>{g.plan.size}</dd></div>}
+            {g.plan?.packageName && <div><dt><Heart size={15} /> Paket</dt><dd>{g.plan.packageName}{g.plan.packagePrice ? ` · ${g.plan.packagePrice}` : ""}</dd></div>}
+            {g.plan?.estimatedPhotos && <div><dt><Images size={15} /> Estimasi</dt><dd>{g.plan.estimatedPhotos} foto</dd></div>}
+          </dl>
+          {g.plan?.details && <p className="dl-brief-text">{g.plan.details}</p>}
+          {!!g.plan?.areas?.length && <div className="dl-areas">{g.plan.areas.map(a => <span key={a}>{a}</span>)}</div>}
+        </section>}
         <section className="panel dl-card-side">
           <div className="dl-side-head"><h3>Statistik Delivery</h3></div>
           <div className="dl-stat4">
@@ -535,5 +554,5 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
 }
 
 function toForm(g: Gallery) {
-  return { title: g.title, slug: g.slug, company: g.client?.company ?? "", contact: g.client?.contact ?? "", whatsapp: g.client?.whatsapp ?? "", email: g.client?.email ?? "", selectionLimit: String(g.selectionLimit || ""), rawSelectionLimit: String(g.rawSelectionLimit || ""), selectByDate: g.selectByDate?.slice(0, 10) ?? "", feedbackByDate: g.feedbackByDate?.slice(0, 10) ?? "", downloadExpiry: g.downloadExpiry?.slice(0, 10) ?? "" };
+  return { title: g.title, slug: g.slug, company: g.client?.company ?? "", contact: g.client?.contact ?? "", whatsapp: g.client?.whatsapp ?? "", email: g.client?.email ?? "", selectionLimit: String(g.selectionLimit || ""), rawSelectionLimit: String(g.rawSelectionLimit || ""), selectByDate: g.selectByDate?.slice(0, 10) ?? "", feedbackByDate: g.feedbackByDate?.slice(0, 10) ?? "", downloadExpiry: g.downloadExpiry?.slice(0, 10) ?? "", shootDate: g.shootDate?.slice(0, 16) ?? "" };
 }

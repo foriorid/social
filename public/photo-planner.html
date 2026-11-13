@@ -1,0 +1,1969 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FORIOR - Photo Planner</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+
+  <!-- html2canvas untuk Ekspor Gambar HD -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <script>
+    // Shown inside FORIOR Hub (iframe) → dashboard mode; opened directly → the public client planner.
+    var EMBED = window.self !== window.top;
+    if (EMBED) document.documentElement.classList.add('embedded');
+  </script>
+  <style>
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    
+    /* Sembunyikan scrollbar bawaan */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Variabel Warna FORIOR */
+    :root {
+      --primary: #7a45e0;
+      --primary-light: #f1ebfd;
+    }
+    /* FORIOR Hub theme (lavender ground, deep purple ink, Manrope headings) */
+    h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
+    .bg-slate-900 { background-color: #1c1230 !important; }
+    .text-slate-900 { color: #211936 !important; }
+    .shadow-primary\/25 { --tw-shadow-color: rgba(122,69,224,.25) !important; }
+    body.planner-body { background: #f7f4fc; }
+    /* Inside the dashboard (iframe): no device frame, the page around it provides the card. */
+    html.embedded body.planner-body { padding: 0 !important; background: #ffffff; align-items: stretch; }
+    html.embedded #app-frame { max-width: none; height: 100vh; max-height: none; border: 0; border-radius: 0; box-shadow: none; }
+    html.embedded .public-only { display: none !important; }
+    html:not(.embedded) .embed-only { display: none !important; }
+
+    .bg-primary { background-color: var(--primary); }
+    .text-primary { color: var(--primary); }
+    .border-primary { border-color: var(--primary); }
+    .bg-primary-light { background-color: var(--primary-light); }
+  </style>
+</head>
+<body class="planner-body flex items-center justify-center min-h-screen overflow-x-hidden p-0 sm:p-4">
+
+  <!-- Frame Simulator Mobile -->
+  <div id="app-frame" class="w-full max-w-[420px] h-screen sm:h-[860px] sm:max-h-[92vh] bg-white sm:rounded-[2rem] sm:shadow-[0_18px_50px_rgba(60,35,120,.10)] overflow-hidden relative flex flex-col sm:border sm:border-[#eee9f6] overflow-x-hidden">
+    
+    <!-- TOP NAVIGATION BAR -->
+    <header id="top-bar" class="flex items-center justify-between px-6 py-4 bg-white sticky top-0 z-30 border-b border-slate-50">
+      <div id="top-bar-left">
+        <!-- Logo atau Tombol Back dinamis -->
+      </div>
+      <div id="top-bar-title" class="text-[15px] font-bold text-slate-900 tracking-tight"></div>
+      <div id="top-bar-right">
+        <!-- Tombol Aksi Kontak atau Spacer -->
+      </div>
+    </header>
+
+    <!-- STEP PROGRESS TRACKER (Langkah 1 - 4) -->
+    <div id="progress-container" class="hidden px-6 pt-2 pb-4 bg-white border-b border-slate-50">
+      <div class="flex justify-between items-start relative px-2">
+        <!-- Garis background progress -->
+        <div class="absolute left-6 right-6 top-3.5 h-[1.5px] bg-slate-200 -z-10"></div>
+        <!-- Garis progress aktif -->
+        <div id="progress-line" class="absolute left-6 top-3.5 h-[1.5px] bg-primary -z-10 transition-all duration-300" style="width: 0%;"></div>
+        
+        <!-- Langkah 1 -->
+        <div class="flex flex-col items-center gap-1.5 step-indicator" data-step="1">
+          <div class="step-badge w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all shadow-sm bg-white border-2 border-slate-200 text-slate-400">1</div>
+          <span class="text-[10px] text-center w-14 font-medium text-slate-400">Tipe</span>
+        </div>
+
+        <!-- Langkah 2 -->
+        <div class="flex flex-col items-center gap-1.5 step-indicator" data-step="2">
+          <div class="step-badge w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all shadow-sm bg-white border-2 border-slate-200 text-slate-400">2</div>
+          <span class="text-[10px] text-center w-14 font-medium text-slate-400">Detail</span>
+        </div>
+
+        <!-- Langkah 3 -->
+        <div class="flex flex-col items-center gap-1.5 step-indicator" data-step="3">
+          <div class="step-badge w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all shadow-sm bg-white border-2 border-slate-200 text-slate-400">3</div>
+          <span class="text-[10px] text-center w-14 font-medium text-slate-400">Estimasi</span>
+        </div>
+
+        <!-- Langkah 4 -->
+        <div class="flex flex-col items-center gap-1.5 step-indicator" data-step="4">
+          <div class="step-badge w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all shadow-sm bg-white border-2 border-slate-200 text-slate-400">4</div>
+          <span class="text-[10px] text-center w-14 font-medium text-slate-400">Jadwal</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN SCROLLABLE CONTENT -->
+    <main id="main-content" class="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar pb-10">
+      
+      <!-- STEP 0: LANDING PAGE -->
+      <section id="step-0" class="step-view">
+        <div class="px-6 pt-4 pb-6">
+          <div class="text-slate-400 text-[10px] font-extrabold tracking-[0.18em] mb-2 uppercase flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full border-2 border-slate-400"></span> INTERIOR PHOTOGRAPHY
+          </div>
+          <h1 class="text-[40px] font-extrabold text-slate-900 leading-[1.08] tracking-tight mb-3">
+            Make Your<br/>Property<br/>Look Its Best.
+          </h1>
+          <p class="text-slate-500 text-[13px] leading-relaxed mb-6">
+            Professional interior photography for villas, hotels, residences and commercial spaces.
+          </p>
+          
+          <div class="flex items-center gap-3">
+            <button onclick="nextStep()" class="bg-slate-900 text-white px-7 py-4 rounded-full text-sm font-semibold flex items-center gap-2 shadow-lg shadow-slate-900/10 active:scale-95 transition-transform">
+              <i data-lucide="camera" class="w-4 h-4"></i> Plan Your Photoshoot <i data-lucide="arrow-right" class="w-4 h-4 ml-1"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Gambar Hero -->
+        <div class="w-full h-56 bg-slate-100 overflow-hidden relative mb-8 rounded-l-3xl ml-6">
+          <img 
+            src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" 
+            alt="Interior Properti" 
+            class="w-full h-full object-cover"
+          />
+        </div>
+
+        <!-- Bagian Kepercayaan Klien -->
+        <div class="px-6 mb-8">
+          <p class="text-center text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-wider">
+            Trusted by Property Owners Across Indonesia
+          </p>
+          <div class="flex justify-between items-center px-4 opacity-50 grayscale">
+            <span class="font-bold text-sm flex items-center gap-1 text-slate-800"><i data-lucide="home" class="w-3.5 h-3.5"></i> airbnb</span>
+            <span class="font-extrabold text-sm text-[#003580]">Booking.com</span>
+            <span class="font-bold text-sm text-slate-800">Expedia</span>
+          </div>
+        </div>
+
+        <!-- Kartu Planner CTA -->
+        <div class="mx-6 mb-8 bg-slate-50 rounded-[2rem] p-6 relative overflow-hidden border border-slate-100">
+          <div class="absolute -right-6 -top-6 w-28 h-28 bg-primary-light rounded-full blur-2xl opacity-70"></div>
+          <div class="relative z-10">
+            <p class="text-primary text-[10px] font-bold tracking-widest mb-2 uppercase">Photo Planner</p>
+            <h2 class="text-xl font-extrabold text-slate-900 mb-2 leading-tight">
+              Berapa banyak foto yang properti Anda butuhkan?
+            </h2>
+            <p class="text-slate-500 text-xs mb-5 leading-relaxed">
+              Beri tahu kami tentang properti Anda dan kami akan merekomendasikan paket yang tepat.
+            </p>
+            <button onclick="nextStep()" class="w-full bg-primary text-white py-3.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/25 active:scale-98 transition">
+              Mulai Perencanaan <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 1: PILIH TIPE PROPERTI -->
+      <section id="step-1" class="step-view hidden px-6 pt-3 pb-24">
+        <h2 class="text-2xl font-extrabold text-slate-900 mb-1 leading-tight">Apa jenis properti yang akan difoto?</h2>
+        <p class="text-slate-500 text-xs mb-6">Pilih opsi yang paling sesuai dengan properti Anda.</p>
+        
+        <div class="grid grid-cols-2 gap-3" id="property-types-grid">
+          <!-- Tipe properti dirender secara dinamis -->
+        </div>
+      </section>
+
+      <!-- STEP 2: DETAIL PROPERTI -->
+      <section id="step-2" class="step-view hidden pb-24">
+        <!-- Header Gambar & Judul Dinamis -->
+        <div class="relative mb-6 pl-6 h-36 flex items-center">
+          <div class="absolute right-0 top-0 w-3/5 h-full z-0">
+            <div class="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-transparent z-10"></div>
+            <img id="property-hero-img" src="https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" 
+                 class="w-full h-full object-cover rounded-l-[2rem]" alt="Detail Properti" />
+          </div>
+          <div class="relative z-10 w-[65%] pr-2">
+            <h2 id="property-details-title" class="text-[21px] font-extrabold text-slate-900 leading-[1.18] tracking-tight mb-1.5">
+              Ceritakan tentang properti Anda
+            </h2>
+            <p class="text-slate-500 text-[11px] leading-tight">Semakin detail informasi, semakin akurat estimasi foto kami.</p>
+          </div>
+        </div>
+
+        <div class="px-6 space-y-6">
+          
+          <!-- SECTION KHUSUS HOTEL -->
+          <div id="hotel-specific-section" class="hidden space-y-5">
+            <!-- Tipe Kamar Hotel -->
+            <div>
+              <div class="flex justify-between items-end mb-2">
+                <h3 class="font-bold text-slate-900 text-sm">Tipe Kamar yang Difoto</h3>
+                <span class="text-[10px] text-slate-400">4 foto per tipe kamar</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2" id="hotel-rooms-grid">
+                <!-- Tipe kamar hotel dirender via JS -->
+              </div>
+
+              <!-- Input Kustom Tipe Kamar Lainnya (Hotel) -->
+              <div id="hotel-custom-room-container" class="hidden mt-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                <label class="block text-[11px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <i data-lucide="edit-3" class="w-3.5 h-3.5 text-primary"></i> Nama Tipe Kamar Lainnya:
+                </label>
+                <input 
+                  type="text" 
+                  id="hotel-custom-room-input"
+                  placeholder="Contoh: Family Room, Connecting Room..."
+                  class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 bg-white placeholder:text-slate-400 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
+                  oninput="handleHotelCustomRoomChange(this.value)"
+                />
+              </div>
+            </div>
+
+            <!-- Kategori Hotel -->
+            <div>
+              <h3 class="font-bold text-slate-900 text-xs mb-2">Kategori Hotel <span class="font-normal text-slate-400">(Opsional)</span></h3>
+              <div class="flex flex-wrap gap-2" id="hotel-categories-grid">
+                <!-- Kategori hotel -->
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION COUNTER HUNIAN & KOST (Tipe Kamar Tidur & Kamar Mandi) -->
+          <div id="residential-counters" class="bg-white rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] p-5">
+            <!-- Counter Kamar Tidur / Tipe Kamar Kost -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-primary-light text-primary rounded-xl flex items-center justify-center">
+                  <i data-lucide="bed-double" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p id="bedroom-label" class="font-bold text-slate-900 text-sm">Kamar Tidur</p>
+                  <p id="bedroom-sublabel" class="text-[10px] text-slate-400">3 foto per kamar</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 text-lg">
+                <button onclick="updateCounter('bedrooms', -1)" class="w-8 h-8 rounded-lg bg-slate-50 text-slate-500 font-bold hover:bg-slate-100 flex items-center justify-center">-</button>
+                <span id="bedroom-count" class="font-extrabold w-4 text-center text-slate-900 text-base">3</span>
+                <button onclick="updateCounter('bedrooms', 1)" class="w-8 h-8 rounded-lg bg-slate-50 text-slate-500 font-bold hover:bg-slate-100 flex items-center justify-center">+</button>
+              </div>
+            </div>
+
+            <!-- Divider Kamar Mandi (Disembunyikan khusus Kost) -->
+            <div id="bathroom-divider" class="h-[1px] bg-slate-100 w-full my-4"></div>
+
+            <!-- Counter Kamar Mandi (Bisa 0, hanya untuk Rumah, Apartemen, Villa) -->
+            <div id="bathroom-container" class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-primary-light text-primary rounded-xl flex items-center justify-center">
+                  <i data-lucide="bath" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="font-bold text-slate-900 text-sm">Kamar Mandi</p>
+                  <p class="text-[10px] text-slate-400">1 foto per kamar mandi (bisa 0)</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 text-lg">
+                <button onclick="updateCounter('bathrooms', -1)" class="w-8 h-8 rounded-lg bg-slate-50 text-slate-500 font-bold hover:bg-slate-100 flex items-center justify-center">-</button>
+                <span id="bathroom-count" class="font-extrabold w-4 text-center text-slate-900 text-base">2</span>
+                <button onclick="updateCounter('bathrooms', 1)" class="w-8 h-8 rounded-lg bg-slate-50 text-slate-500 font-bold hover:bg-slate-100 flex items-center justify-center">+</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION COUNTER KANTOR (Ruang Meeting & Ruang Direksi) -->
+          <div id="office-counters" class="hidden bg-white rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] p-5 space-y-4">
+            <!-- Ruang Rapat -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-primary-light text-primary rounded-xl flex items-center justify-center">
+                  <i data-lucide="presentation" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="font-bold text-slate-900 text-sm">Ruang Meeting</p>
+                  <p class="text-[10px] text-slate-400">2 foto per ruangan</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 text-lg">
+                <button onclick="updateCounter('meetingRooms', -1)" class="w-8 h-8 rounded-lg bg-slate-50 text-slate-500 font-bold hover:bg-slate-100 flex items-center justify-center">-</button>
+                <span id="meeting-count" class="font-extrabold w-4 text-center text-slate-900 text-base">1</span>
+                <button onclick="updateCounter('meetingRooms', 1)" class="w-8 h-8 rounded-lg bg-slate-50 text-slate-500 font-bold hover:bg-slate-100 flex items-center justify-center">+</button>
+              </div>
+            </div>
+
+            <div class="h-[1px] bg-slate-100 w-full"></div>
+
+            <!-- Ruang Direksi / Privat -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-primary-light text-primary rounded-xl flex items-center justify-center">
+                  <i data-lucide="briefcase" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="font-bold text-slate-900 text-sm">Ruang Direksi Privat</p>
+                  <p class="text-[10px] text-slate-400">2 foto per ruangan</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 text-lg">
+                <button onclick="updateCounter('directorRooms', -1)" class="w-8 h-8 rounded-lg bg-slate-50 text-slate-500 font-bold hover:bg-slate-100 flex items-center justify-center">-</button>
+                <span id="director-count" class="font-extrabold w-4 text-center text-slate-900 text-base">1</span>
+                <button onclick="updateCounter('directorRooms', 1)" class="w-8 h-8 rounded-lg bg-slate-50 text-slate-500 font-bold hover:bg-slate-100 flex items-center justify-center">+</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- PILIHAN AREA YANG AKAN DIFOTO -->
+          <div>
+            <div class="flex justify-between items-end mb-3">
+              <div>
+                <h3 id="areas-heading-title" class="font-bold text-slate-900 text-sm">Area untuk difoto</h3>
+                <p id="areas-heading-subtitle" class="text-[10px] text-slate-400">Pilih semua area yang ingin diabadikan.</p>
+              </div>
+              <button id="btn-select-all-areas" onclick="selectAllAreas()" class="text-primary text-xs font-bold hover:underline">Pilih Semua</button>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-2.5" id="areas-grid">
+              <!-- Area dirender dinamis sesuai tipe properti -->
+            </div>
+
+            <!-- Input Multi-Area Lainnya (Muncul jika opsi Area Lainnya dipilih atau tipe properti Lainnya) -->
+            <div id="custom-area-input-container" class="hidden mt-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+              <div class="flex items-center justify-between">
+                <label id="custom-area-label" class="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                  <i data-lucide="edit-3" class="w-3.5 h-3.5 text-primary"></i> Tulis Nama Area Lainnya:
+                </label>
+                <span id="custom-area-counter-hint" class="text-[10px] text-slate-400 font-medium">1 s.d. 4 area</span>
+              </div>
+              
+              <!-- List input nama area kustom -->
+              <div id="custom-areas-list" class="space-y-2">
+                <!-- Dirender dinamis via JavaScript -->
+              </div>
+
+              <!-- Tombol Tambah Area Lainnya -->
+              <button 
+                type="button"
+                id="btn-add-custom-area"
+                onclick="addCustomAreaField()"
+                class="w-full py-2.5 px-3 bg-white border border-dashed border-primary/40 rounded-xl text-primary text-xs font-bold hover:bg-primary-light/30 flex items-center justify-center gap-1.5 transition active:scale-98 shadow-xs"
+              >
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Tambah Area Lainnya
+              </button>
+            </div>
+          </div>
+
+          <!-- UKURAN PROPERTI -->
+          <div>
+            <h3 class="font-bold text-slate-900 text-xs mb-1">Ukuran Properti <span class="font-normal text-slate-400">(Opsional)</span></h3>
+            <div class="flex flex-wrap gap-2" id="property-sizes-container">
+              <!-- Ukuran Properti -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 3: HASIL ESTIMASI & PAKET -->
+      <section id="step-3" class="step-view hidden px-6 pt-3 pb-24">
+        <div class="text-center mb-6">
+          <p class="text-slate-400 font-bold text-[10px] tracking-[0.2em] uppercase mb-2">YOUR PHOTO PLAN</p>
+          <div class="flex items-center justify-center">
+            <h2 id="total-photos-heading" class="text-5xl font-extrabold text-primary tracking-tight">19 Foto</h2>
+          </div>
+          <p class="text-slate-500 text-xs font-medium mt-1">Estimasi foto untuk properti Anda</p>
+        </div>
+
+        <!-- Rincian Jumlah Foto per Area -->
+        <div class="bg-slate-50 rounded-2xl p-4 mb-6 border border-slate-100">
+          <p class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Rincian Foto per Area:</p>
+          <div id="breakdown-list" class="space-y-2 text-xs">
+            <!-- Rincian foto dinamis -->
+          </div>
+        </div>
+
+        <!-- Tombol Download Ringkasan Foto -->
+        <div class="mb-6">
+          <button 
+            id="btn-download-image"
+            onclick="openDownloadNameModal()"
+            class="w-full bg-slate-900 hover:bg-slate-800 text-white py-3.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-slate-900/15 active:scale-98 transition"
+          >
+            <i data-lucide="download" class="w-4 h-4"></i> Download Ringkasan Foto
+          </button>
+        </div>
+
+        <!-- Kartu Paket Rekomendasi Terdekat / Custom -->
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-2 px-1">
+            <p class="font-bold text-slate-900 text-sm">Paket Rekomendasi</p>
+            <span id="pkg-tag" class="text-[10px] font-bold text-primary bg-primary-light px-2.5 py-0.5 rounded-full">TERDEKAT</span>
+          </div>
+          
+          <div id="recommended-card" class="bg-white rounded-3xl p-5 shadow-[0_10px_35px_rgba(81,56,238,0.12)] border-2 border-primary relative overflow-hidden">
+            <div class="absolute top-0 right-0 bg-primary text-white text-[9px] font-extrabold px-3 py-1 rounded-bl-xl tracking-wider uppercase">
+              RECOMMENDED
+            </div>
+            
+            <p id="pkg-name" class="text-slate-400 text-[10px] font-extrabold uppercase tracking-widest mb-0.5">MAX PACKAGE</p>
+            <h3 id="pkg-photos" class="text-2xl font-extrabold text-slate-900 mb-0.5">25 Photos</h3>
+            <p id="pkg-price" class="text-lg font-extrabold text-primary mb-4">Rp 3.500.000</p>
+            
+            <ul class="space-y-2 mb-5">
+              <li class="flex items-center gap-2 text-slate-600 text-xs">
+                <i data-lucide="check" class="w-3.5 h-3.5 text-primary flex-shrink-0"></i> Sempurna untuk properti & fasilitas Anda.
+              </li>
+              <li class="flex items-center gap-2 text-slate-600 text-xs">
+                <i data-lucide="check" class="w-3.5 h-3.5 text-primary flex-shrink-0"></i> Editing Resolusi Tinggi & Realistis.
+              </li>
+              <li class="flex items-center gap-2 text-slate-600 text-xs">
+                <i data-lucide="check" class="w-3.5 h-3.5 text-primary flex-shrink-0"></i> Siap untuk Iklan, Website & OTA.
+              </li>
+            </ul>
+
+            <!-- Tombol Lihat Semua Paket (Otomatis Sembunyi untuk Hotel) -->
+            <button id="btn-view-all-packages" onclick="openPackagesModal()" class="w-full bg-slate-50 hover:bg-slate-100 text-slate-700 py-3 rounded-xl text-xs font-bold border border-slate-200 transition">
+              Lihat Semua Paket
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 4: PILIH JADWAL PEMOTRETAN -->
+      <section id="step-4" class="step-view hidden px-6 pt-3 pb-24">
+        <h2 class="text-2xl font-extrabold text-slate-900 mb-1 leading-tight">Estimasi Jadwal Pemotretan</h2>
+        <p class="text-slate-500 text-xs mb-5">Pilih tanggal, bisa disesuaikan kemudian</p>
+        
+        <!-- Kalender Interaktif (3 Bulan ke Depan) dengan Dukungan Swipe -->
+        <div id="calendar-card" class="bg-white rounded-3xl border border-slate-100 p-5 shadow-[0_4px_20px_rgba(0,0,0,0.03)] mb-5">
+          <div class="flex items-center justify-between mb-4">
+            <h3 id="calendar-month-year" class="font-extrabold text-slate-900 text-sm capitalize">Agustus 2026</h3>
+            <div class="flex items-center gap-1.5">
+              <button id="btn-prev-month" onclick="prevMonth()" class="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:pointer-events-none">
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+              </button>
+              <button id="btn-next-month" onclick="nextMonth()" class="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:pointer-events-none">
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Header Hari -->
+          <div class="grid grid-cols-7 gap-1 text-center mb-2">
+            <div class="text-[10px] font-bold text-slate-400">Mg</div>
+            <div class="text-[10px] font-bold text-slate-400">Sn</div>
+            <div class="text-[10px] font-bold text-slate-400">Sl</div>
+            <div class="text-[10px] font-bold text-slate-400">Rb</div>
+            <div class="text-[10px] font-bold text-slate-400">Km</div>
+            <div class="text-[10px] font-bold text-slate-400">Jm</div>
+            <div class="text-[10px] font-bold text-slate-400">Sb</div>
+          </div>
+
+          <!-- Grid Tanggal -->
+          <div id="calendar-days-grid" class="grid grid-cols-7 gap-1 text-center">
+            <!-- Dirender via JavaScript -->
+          </div>
+        </div>
+
+        <!-- Pilihan Jam (09:00 - 16:00 rentang 1 jam) -->
+        <div class="mb-5">
+          <h3 class="font-bold text-slate-900 text-xs mb-2.5">Pilihan Waktu Tersedia</h3>
+          <div class="grid grid-cols-4 gap-2" id="time-slots-container">
+            <!-- 09:00 s.d. 16:00 -->
+          </div>
+        </div>
+
+        <!-- Catatan Fleksibilitas Jadwal -->
+        <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-2.5">
+          <i data-lucide="info" class="w-4 h-4 text-primary flex-shrink-0 mt-0.5"></i>
+          <p class="text-[11px] text-slate-600 leading-relaxed">
+            <span class="font-bold text-slate-900">Jadwal fleksibel:</span> Tanggal dan jam yang Anda pilih dapat disesuaikan kembali kapan saja bersama tim FORIOR via WhatsApp.
+          </p>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- STICKY BOTTOM ACTION BAR (Hanya Tampil di Step 1 s.d. 4) -->
+    <footer id="bottom-bar" class="hidden absolute bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-slate-100 z-30">
+      <div id="bottom-button-container">
+        <!-- Tombol aksi navigasi langkah -->
+      </div>
+    </footer>
+
+    <!-- MODAL: LIHAT SEMUA PAKET (Hanya untuk non-Hotel) -->
+    <div id="packages-modal" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-end justify-center hidden opacity-0 transition-opacity duration-300">
+      <div class="bg-white w-full max-w-[420px] rounded-t-[2.5rem] p-6 max-h-[85vh] overflow-y-auto no-scrollbar transform translate-y-full transition-transform duration-300 shadow-2xl">
+        <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-4"></div>
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-extrabold text-slate-900">Daftar Semua Paket</h3>
+          <button onclick="closePackagesModal()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="space-y-3" id="all-packages-list">
+          <!-- Paket dirender secara dinamis -->
+        </div>
+
+        <button onclick="closePackagesModal()" class="w-full mt-5 bg-slate-900 text-white py-3.5 rounded-xl text-xs font-bold">
+          Tutup
+        </button>
+      </div>
+    </div>
+
+    <!-- MODAL: POP UP NAMA KLIEN SEBELUM KE WHATSAPP -->
+    <div id="name-modal" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-end justify-center hidden opacity-0 transition-opacity duration-300">
+      <div class="bg-white w-full max-w-[420px] rounded-t-[2.5rem] p-6 transform translate-y-full transition-transform duration-300 shadow-2xl">
+        <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-4"></div>
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-lg font-extrabold text-slate-900"><span class="public-only">Konfirmasi Pemesanan</span><span class="embed-only">Simpan sebagai project</span></h3>
+          <button onclick="closeNameModal()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <p class="text-slate-500 text-xs mb-5"><span class="public-only">Masukkan nama Anda untuk melanjutkan pemesanan ke WhatsApp FORIOR.</span><span class="embed-only">Rencana ini menjadi project di Photo Delivery: brief, paket dan jadwal shoot terisi otomatis.</span></p>
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1.5"><span class="public-only">Nama Lengkap / Panggilan</span><span class="embed-only">Nama klien</span></label>
+            <input 
+              type="text" 
+              id="client-name-input"
+              placeholder="Contoh: Budi Santoso"
+              class="w-full px-4 py-3.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-800 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
+              onkeyup="if(event.key === 'Enter') (EMBED ? saveAsProject() : submitWhatsApp());"
+            />
+          </div>
+
+          <div class="embed-only">
+            <label class="block text-xs font-bold text-slate-700 mb-1.5">No. WhatsApp klien (opsional)</label>
+            <input type="tel" id="client-wa-input" placeholder="08xx atau +62…" class="w-full px-4 py-3.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-800 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light" />
+          </div>
+          <p id="save-project-status" class="embed-only hidden text-xs font-semibold rounded-xl px-3 py-2"></p>
+          <button onclick="saveAsProject()" id="save-project-btn" class="embed-only w-full bg-primary text-white py-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/25 active:scale-98 transition">
+            <i data-lucide="folder-plus" class="w-4 h-4"></i> Simpan sebagai project
+          </button>
+          <button onclick="submitWhatsApp()" class="public-only w-full bg-[#25D366] hover:bg-[#1EBE5D] text-white py-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-green-500/20 active:scale-98 transition">
+            <i data-lucide="message-circle" class="w-4 h-4"></i> Kirim Pesan ke WhatsApp
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: POP UP NAMA PROPERTI UNTUK DOWNLOAD RINGKASAN -->
+    <div id="download-modal" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-end justify-center hidden opacity-0 transition-opacity duration-300">
+      <div class="bg-white w-full max-w-[420px] rounded-t-[2.5rem] p-6 transform translate-y-full transition-transform duration-300 shadow-2xl">
+        <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-4"></div>
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-lg font-extrabold text-slate-900">Download Ringkasan Foto</h3>
+          <button onclick="closeDownloadNameModal()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <p class="text-slate-500 text-xs mb-5">Masukkan nama properti Anda agar tercetak di dalam dokumen ringkasan foto resmi.</p>
+
+        <div class="space-y-4">
+          <div>
+            <label id="property-name-label" class="block text-xs font-bold text-slate-700 mb-1.5">Nama Properti / Usaha</label>
+            <input 
+              type="text" 
+              id="property-name-input"
+              placeholder="Contoh: Villa Sunset Uluwatu"
+              class="w-full px-4 py-3.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-800 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
+              onkeyup="if(event.key === 'Enter') confirmDownloadImage();"
+            />
+          </div>
+
+          <button onclick="confirmDownloadImage()" class="w-full bg-slate-900 hover:bg-slate-800 text-white py-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-slate-900/20 active:scale-98 transition">
+            <i data-lucide="download" class="w-4 h-4"></i> Unduh Ringkasan Gambar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: PREVIEW GAMBAR UNTUK SIMPAN KE GALERI IPHONE -->
+    <div id="image-preview-modal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center hidden opacity-0 transition-opacity duration-300 p-4">
+      <div class="bg-white w-full max-w-[380px] rounded-3xl p-5 shadow-2xl flex flex-col items-center max-h-[90vh]">
+        <div class="flex items-center justify-between w-full mb-2">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+              <i data-lucide="image" class="w-4 h-4"></i>
+            </div>
+            <h3 class="text-sm font-extrabold text-slate-900">Simpan ke Galeri Foto</h3>
+          </div>
+          <button onclick="closeImagePreviewModal()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-3 text-left w-full leading-relaxed">
+          Sentuh dan tahan gambar di bawah ini, lalu pilih <b>"Simpan ke Foto"</b> (<i>Save to Photos</i>) agar langsung masuk ke Galeri Foto iPhone Anda.
+        </p>
+        <div class="w-full overflow-y-auto rounded-2xl border border-slate-100 mb-4 bg-slate-50 p-2 flex justify-center max-h-[52vh]">
+          <img id="preview-modal-img" src="" alt="Ringkasan Foto" class="w-full h-auto rounded-xl shadow-sm" />
+        </div>
+        <button onclick="closeImagePreviewModal()" class="w-full bg-slate-900 hover:bg-slate-800 text-white py-3.5 rounded-xl text-xs font-bold transition">
+          Selesai
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- TEMPLATE TERSEMBUNYI UNTUK EXPORT GAMBAR HD (DIBUAT DENGAN LEBAR TETAP & PROPORSIONAL) -->
+  <div id="export-summary-card" class="bg-white p-7 rounded-3xl shadow-none border border-slate-200 text-slate-900" style="position: fixed; left: -9999px; top: 0; width: 520px; min-width: 520px; max-width: 520px; z-index: -9999; opacity: 0; pointer-events: none; font-family: 'Plus Jakarta Sans', sans-serif; box-sizing: border-box;">
+    <!-- Header Branding -->
+    <div class="flex justify-between items-center pb-5 border-b border-slate-100 mb-5">
+      <div>
+        <h1 class="text-2xl font-extrabold tracking-[0.2em] text-slate-900 leading-none mb-1">FORIOR</h1>
+        <p class="text-[10px] font-bold text-slate-400 tracking-wider uppercase">Professional Interior Photography</p>
+      </div>
+      <div class="text-right shrink-0">
+        <p id="export-date-generated" class="text-xs font-bold text-slate-500 whitespace-nowrap">3 September 2026</p>
+        <span class="inline-block px-3 py-1 mt-1.5 bg-primary-light text-primary text-[10px] font-extrabold rounded-full tracking-wider whitespace-nowrap">PHOTO PLAN SUMMARY</span>
+      </div>
+    </div>
+
+    <!-- Info Tipe & Nama Properti -->
+    <div class="bg-slate-50 p-4 rounded-2xl mb-5 border border-slate-100">
+      <div class="flex items-center justify-between mb-1.5">
+        <span id="export-property-type" class="inline-block px-2.5 py-0.5 bg-primary/10 text-primary text-[10px] font-extrabold rounded-md uppercase">Rumah</span>
+      </div>
+      <h2 id="export-property-name" class="text-xl font-extrabold text-slate-900 mb-1 leading-tight">Nama Properti</h2>
+      <p id="export-property-specs" class="text-xs font-semibold text-slate-600">3 Kamar Tidur • 100 - 200 m²</p>
+    </div>
+
+    <!-- Total Estimasi -->
+    <div class="text-center bg-primary-light/50 py-4 px-6 rounded-2xl border border-primary/20 mb-5">
+      <p class="text-[10px] font-bold text-primary tracking-widest uppercase mb-1">Total Estimasi Kebutuhan</p>
+      <h3 id="export-total-photos" class="text-4xl font-extrabold text-primary leading-tight">19 Foto</h3>
+    </div>
+
+    <!-- Rincian Breakdown -->
+    <div class="bg-slate-50/70 p-4 rounded-2xl border border-slate-100 mb-5">
+      <p class="text-[11px] font-extrabold text-slate-800 uppercase tracking-wider mb-2.5">Rincian Foto per Area:</p>
+      <div id="export-breakdown-list" class="space-y-2 text-xs text-slate-700">
+        <!-- Disalin dinamis via JS -->
+      </div>
+    </div>
+
+    <!-- Rekomendasi Paket -->
+    <div class="p-5 bg-slate-900 text-white rounded-2xl mb-5 flex justify-between items-center">
+      <div>
+        <p id="export-pkg-name" class="text-[10px] font-extrabold text-primary-light uppercase tracking-widest mb-1">MAX PACKAGE</p>
+        <h4 id="export-pkg-photos" class="text-xl font-extrabold text-white leading-none">25 Photos</h4>
+      </div>
+      <div class="text-right shrink-0">
+        <span id="export-pkg-price" class="text-xl font-extrabold text-primary-light whitespace-nowrap">Rp 3.500.000</span>
+      </div>
+    </div>
+
+    <div class="text-center pt-3 border-t border-slate-100">
+      <p class="text-[10px] font-bold text-slate-400">www.forior.id • Professional Interior & Architectural Photography</p>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    const FORIOR_WA_NUMBER = '6281542048268';
+
+    // --- DATA TIPE PROPERTI ---
+    const PROPERTY_TYPES = [
+      { id: 'Rumah', label: 'Rumah', icon: 'home', image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' },
+      { id: 'Apartemen', label: 'Apartemen', icon: 'layout-grid', image: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' },
+      { id: 'Villa', label: 'Villa', icon: 'home', image: 'https://images.unsplash.com/photo-1613490493576-7fde63acd811?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' },
+      { id: 'Kost', label: 'Kost', icon: 'key', image: 'https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' },
+      { id: 'Hotel', label: 'Hotel', icon: 'building', image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' },
+      { id: 'Kantor', label: 'Kantor', icon: 'briefcase', image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' },
+      { id: 'Resto', label: 'Resto', icon: 'utensils', image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' },
+      { id: 'Store', label: 'Store', icon: 'store', image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' },
+      { id: 'Lainnya', label: 'Lainnya', icon: 'more-horizontal', image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' },
+    ];
+
+    const PROPERTY_AREAS_CONFIG = {
+      'Rumah': [
+        { id: 'facade', label: 'Fasad Depan', weight: 2, icon: 'home' },
+        { id: 'living', label: 'Living Room', weight: 3, icon: 'tv' },
+        { id: 'dining', label: 'Dining Area', weight: 2, icon: 'utensils' },
+        { id: 'kitchen', label: 'Kitchen', weight: 2, icon: 'layers' },
+        { id: 'laundry', label: 'Laundry Area', weight: 1, icon: 'disc' },
+        { id: 'pool', label: 'Swimming Pool', weight: 2, icon: 'waves' },
+        { id: 'backyard', label: 'Backyard Taman Belakang', weight: 1, icon: 'trees' },
+        { id: 'carport', label: 'Garage Carport', weight: 1, icon: 'car' },
+        { id: 'balcony', label: 'Balkon Teras', weight: 1, icon: 'layers' },
+        { id: 'other_custom', label: 'Area Lainnya', weight: 2, icon: 'plus-circle' }
+      ],
+      'Apartemen': [
+        { id: 'living', label: 'Living Room', weight: 2, icon: 'tv' },
+        { id: 'kitchen', label: 'Kitchen Pantry', weight: 1, icon: 'layers' },
+        { id: 'dining', label: 'Dining Area', weight: 1, icon: 'utensils' },
+        { id: 'balcony', label: 'Balkon View Kota', weight: 1, icon: 'layers' },
+        { id: 'workspace', label: 'Ruang Kerja Meja Belajar', weight: 1, icon: 'monitor' },
+        { id: 'facility', label: 'Fasilitas Kolam Gym Gedung', weight: 2, icon: 'waves' },
+        { id: 'lobby', label: 'Lobby Apartemen', weight: 1, icon: 'building' },
+        { id: 'other_custom', label: 'Area Lainnya', weight: 2, icon: 'plus-circle' }
+      ],
+      'Villa': [
+        { id: 'facade', label: 'Fasad Eksterior', weight: 2, icon: 'home' },
+        { id: 'living', label: 'Living Room Lounge', weight: 2, icon: 'tv' },
+        { id: 'dining', label: 'Dining Area', weight: 1, icon: 'utensils' },
+        { id: 'kitchen', label: 'Kitchen Bar', weight: 1, icon: 'layers' },
+        { id: 'pool', label: 'Private Pool Sun Deck', weight: 3, icon: 'waves' },
+        { id: 'garden', label: 'Tropical Garden View', weight: 2, icon: 'trees' },
+        { id: 'playroom', label: 'Playroom', weight: 2, icon: 'gamepad-2' },
+        { id: 'cinema', label: 'Cinema Room', weight: 1, icon: 'film' },
+        { id: 'rooftop', label: 'Rooftop', weight: 2, icon: 'sun-medium' },
+        { id: 'bbq', label: 'BBQ Area', weight: 1, icon: 'flame' },
+        { id: 'jacuzzi', label: 'Jacuzzi', weight: 1, icon: 'sparkles' },
+        { id: 'sauna', label: 'Sauna', weight: 1, icon: 'flame' },
+        { id: 'gazebo', label: 'Gazebo Outdoor Sitting', weight: 1, icon: 'sun' },
+        { id: 'entrance', label: 'Entrance Gate Carport', weight: 1, icon: 'car' },
+        { id: 'other_custom', label: 'Area Lainnya', weight: 2, icon: 'plus-circle' }
+      ],
+      'Kost': [
+        { id: 'facade', label: 'Fasad Tampak Depan', weight: 2, icon: 'home' },
+        { id: 'kitchen', label: 'Dapur Bersama Pantry', weight: 2, icon: 'layers' },
+        { id: 'communal', label: 'Ruang Tamu Komunal', weight: 2, icon: 'tv' },
+        { id: 'parking', label: 'Parkir Motor Mobil', weight: 1, icon: 'car' },
+        { id: 'laundry', label: 'Area Cuci Jemur', weight: 1, icon: 'disc' },
+        { id: 'corridor', label: 'Lorong Koridor Kamar', weight: 1, icon: 'layers' },
+        { id: 'rooftop', label: 'Balkon Rooftop Santai', weight: 1, icon: 'sun' },
+        { id: 'security', label: 'Pos Jaga Resepsionis', weight: 1, icon: 'check-circle-2' },
+        { id: 'other_custom', label: 'Area Lainnya', weight: 2, icon: 'plus-circle' }
+      ],
+      'Hotel': [
+        { id: 'facade', label: 'Fasad Eksterior Gedung', weight: 2, icon: 'home' },
+        { id: 'lobby', label: 'Grand Lobby', weight: 2, icon: 'building' },
+        { id: 'reception', label: 'Reception Waiting Area', weight: 1, icon: 'check-circle-2' },
+        { id: 'restaurant', label: 'Restaurant', weight: 3, icon: 'utensils' },
+        { id: 'dining_hall', label: 'Dining Hall', weight: 3, icon: 'utensils' },
+        { id: 'pool', label: 'Main Swimming Pool', weight: 2, icon: 'waves' },
+        { id: 'bar', label: 'Lounge Bar', weight: 2, icon: 'wine' },
+        { id: 'gym', label: 'Fitness Center Gym', weight: 2, icon: 'activity' },
+        { id: 'spa', label: 'Spa Wellness', weight: 2, icon: 'sparkles' },
+        { id: 'meeting', label: 'Meeting Room', weight: 3, icon: 'presentation' },
+        { id: 'ballroom', label: 'Ballroom', weight: 3, icon: 'building' },
+        { id: 'garden', label: 'Garden Courtyard', weight: 1, icon: 'trees' },
+        { id: 'other_custom', label: 'Area Lainnya', weight: 2, icon: 'plus-circle' }
+      ],
+      'Kantor': [
+        { id: 'facade', label: 'Fasad Entrance Kantor', weight: 2, icon: 'home' },
+        { id: 'reception', label: 'Lobby Resepsionis', weight: 2, icon: 'building' },
+        { id: 'openspace', label: 'Open Space Workstation', weight: 3, icon: 'monitor' },
+        { id: 'pantry', label: 'Pantry Breakout Room', weight: 1, icon: 'coffee' },
+        { id: 'lounge', label: 'Lounge Area Tamu', weight: 1, icon: 'tv' },
+        { id: 'hallway', label: 'Lorong Fasilitas Kantor', weight: 1, icon: 'layers' },
+        { id: 'other_custom', label: 'Area Lainnya', weight: 2, icon: 'plus-circle' }
+      ],
+      'Resto': [
+        { id: 'facade', label: 'Fasad Signage Resto', weight: 2, icon: 'home' },
+        { id: 'main_dining', label: 'Main Dining Hall', weight: 3, icon: 'utensils' },
+        { id: 'bar_counter', label: 'Bar Cashier Counter', weight: 2, icon: 'coffee' },
+        { id: 'outdoor', label: 'Outdoor Terrace Area', weight: 2, icon: 'sun' },
+        { id: 'vip_room', label: 'VIP Private Dining', weight: 2, icon: 'sparkles' },
+        { id: 'kitchen', label: 'Open Kitchen Prep Area', weight: 1, icon: 'layers' },
+        { id: 'details', label: 'Detail Estetika Makanan', weight: 2, icon: 'camera' },
+        { id: 'other_custom', label: 'Area Lainnya', weight: 2, icon: 'plus-circle' }
+      ],
+      'Store': [
+        { id: 'storefront', label: 'Storefront Display Kaca', weight: 2, icon: 'store' },
+        { id: 'retail_floor', label: 'Area Display Produk Utama', weight: 3, icon: 'shopping-bag' },
+        { id: 'cashier', label: 'Meja Kasir Backwall', weight: 1, icon: 'check-circle-2' },
+        { id: 'fitting_room', label: 'Fitting Room Lounge', weight: 1, icon: 'layers' },
+        { id: 'shelves', label: 'Detail Rak Visual Merchandising', weight: 2, icon: 'sparkles' },
+        { id: 'other_custom', label: 'Area Lainnya', weight: 2, icon: 'plus-circle' }
+      ],
+      'Lainnya': [
+        { id: 'facade', label: 'Fasad Tampak Depan', weight: 2, icon: 'home' },
+        { id: 'main_room', label: 'Area Utama', weight: 3, icon: 'layers' },
+        { id: 'detail', label: 'Sudut Detail Fasilitas', weight: 2, icon: 'sparkles' },
+        { id: 'service', label: 'Area Pendukung Servis', weight: 1, icon: 'disc' },
+        { id: 'other_custom', label: 'Area Lainnya', weight: 2, icon: 'plus-circle' }
+      ]
+    };
+
+    const HOTEL_ROOM_TYPES = [
+      { id: 'superior', label: 'Superior Room', weight: 4 },
+      { id: 'deluxe', label: 'Deluxe Room', weight: 4 },
+      { id: 'executive', label: 'Executive Suite', weight: 4 },
+      { id: 'junior_suite', label: 'Junior Suite', weight: 4 },
+      { id: 'suite', label: 'Suite Room', weight: 4 },
+      { id: 'penthouse', label: 'Penthouse', weight: 5 },
+      { id: 'other_room', label: 'Lainnya', weight: 4 }
+    ];
+
+    const HOTEL_CATEGORIES = ['Budget Economy', 'Bintang 3', 'Bintang 4', 'Bintang 5', 'Resort Luxury'];
+    const SIZES = ['< 100 m²', '100 - 200 m²', '200 - 400 m²', '400 m²+'];
+
+    const PACKAGES = [
+      { id: 'BASIC', name: 'BASIC', count: 10, price: 'Rp 1.500.000', label: '10 Photos' },
+      { id: 'PRO', name: 'PRO', count: 15, price: 'Rp 2.500.000', label: '15 Photos' },
+      { id: 'MAX', name: 'MAX', count: 25, price: 'Rp 3.500.000', label: '25 Photos' },
+      { id: 'ULTRA', name: 'ULTRA', count: 40, price: 'Rp 4.500.000', label: '40 Photos' },
+    ];
+
+    const TIME_SLOTS = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
+
+    let currentStep = 0;
+    let formData = {
+      propertyType: 'Rumah',
+      propertyName: '',
+      bedrooms: 3,
+      bathrooms: 2,
+      meetingRooms: 1,
+      directorRooms: 1,
+      selectedHotelRooms: ['superior', 'deluxe'],
+      hotelCustomRoom: '',
+      hotelCategory: 'Bintang 4',
+      selectedAreas: ['facade', 'living', 'dining', 'kitchen'],
+      customAreas: [''],
+      size: '100 - 200 m²',
+      selectedDate: '',
+      selectedTime: '10:00',
+      clientName: '',
+      estimatedPhotos: 17,
+      recommendedPackage: null
+    };
+
+    // State Kalender
+    const today = new Date();
+    let currentCalMonth = today.getMonth();
+    let currentCalYear = today.getFullYear();
+    const minMonthOffset = 0;
+    const maxMonthOffset = 3;
+    let currentMonthOffset = 0;
+
+    formData.selectedDate = formatDateYMD(today);
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderPropertyTypes();
+      renderHotelRooms();
+      renderHotelCategories();
+      renderAreas();
+      renderSizes();
+      renderCalendar();
+      renderTimeSlots();
+      initCalendarSwipe();
+      updateUI();
+    });
+
+    function formatDateYMD(d) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function nextStep() {
+      if (currentStep < 4) {
+        currentStep++;
+        updateUI();
+        const mainContent = document.getElementById('main-content');
+        if (mainContent) mainContent.scrollTop = 0;
+        window.scrollTo(0, 0);
+      }
+    }
+
+    function handleBack() {
+      if (currentStep > 0) {
+        currentStep--;
+        updateUI();
+        const mainContent = document.getElementById('main-content');
+        if (mainContent) mainContent.scrollTop = 0;
+        window.scrollTo(0, 0);
+      }
+    }
+
+    function updateUI() {
+      // 1. Tampilkan step aktif
+      document.querySelectorAll('.step-view').forEach(el => el.classList.add('hidden'));
+      const activeSection = document.getElementById(`step-${currentStep}`);
+      if (activeSection) {
+        activeSection.classList.remove('hidden');
+      }
+
+      // Pastikan posisi scroll berada di puncak paling atas setiap kali pindah halaman
+      const mainContent = document.getElementById('main-content');
+      if (mainContent) {
+        mainContent.scrollTop = 0;
+      }
+      window.scrollTo(0, 0);
+
+      // 2. Update Header
+      const leftBar = document.getElementById('top-bar-left');
+      const titleBar = document.getElementById('top-bar-title');
+      const rightBar = document.getElementById('top-bar-right');
+      const progressContainer = document.getElementById('progress-container');
+      const bottomBar = document.getElementById('bottom-bar');
+
+      if (currentStep === 0) {
+        leftBar.innerHTML = `<div class="font-extrabold text-xl tracking-[0.2em] text-slate-900">FORIOR</div>`;
+        titleBar.textContent = '';
+        rightBar.innerHTML = `
+          <a href="https://wa.me/${FORIOR_WA_NUMBER}" target="_blank" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+            <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Hubungi
+          </a>`;
+        progressContainer.classList.add('hidden');
+        bottomBar.classList.add('hidden');
+      } else {
+        leftBar.innerHTML = `
+          <button onclick="handleBack()" class="p-1.5 -ml-2 rounded-full hover:bg-slate-100 text-slate-800">
+            <i data-lucide="chevron-left" class="w-6 h-6"></i>
+          </button>`;
+        titleBar.textContent = 'Photo Planner';
+        rightBar.innerHTML = `<div class="w-8"></div>`;
+        progressContainer.classList.remove('hidden');
+        bottomBar.classList.remove('hidden');
+      }
+
+      // 3. Update Progress Bar
+      if (currentStep >= 1 && currentStep <= 4) {
+        const percent = ((currentStep - 1) / 3) * 100;
+        document.getElementById('progress-line').style.width = `${percent}%`;
+
+        document.querySelectorAll('.step-indicator').forEach(ind => {
+          const stepNum = parseInt(ind.getAttribute('data-step'));
+          const badge = ind.querySelector('.step-badge');
+          const label = ind.querySelector('span');
+
+          if (stepNum < currentStep) {
+            badge.className = 'step-badge w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shadow-sm bg-primary text-white';
+            badge.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5 stroke-[3]"></i>';
+            label.className = 'text-[10px] text-center w-14 font-bold text-slate-800';
+          } else if (stepNum === currentStep) {
+            badge.className = 'step-badge w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shadow-sm bg-primary text-white ring-4 ring-primary-light';
+            badge.textContent = stepNum;
+            label.className = 'text-[10px] text-center w-14 font-extrabold text-primary';
+          } else {
+            badge.className = 'step-badge w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shadow-sm bg-white border-2 border-slate-200 text-slate-400';
+            badge.textContent = stepNum;
+            label.className = 'text-[10px] text-center w-14 font-medium text-slate-400';
+          }
+        });
+      }
+
+      // 4. Update Tombol Aksi Bawah
+      const btnContainer = document.getElementById('bottom-button-container');
+      if (currentStep >= 1 && currentStep < 3) {
+        btnContainer.innerHTML = `
+          <button onclick="nextStep()" class="w-full bg-primary text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/25 active:scale-98 transition">
+            Langkah Selanjutnya <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>`;
+      } else if (currentStep === 3) {
+        calculateAndRenderEstimate();
+        btnContainer.innerHTML = `
+          <button onclick="nextStep()" class="w-full bg-primary text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/25 active:scale-98 transition">
+            Pilih Jadwal Pemotretan <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>`;
+      } else if (currentStep === 4) {
+        btnContainer.innerHTML = EMBED ? `
+          <button onclick="openNameModal()" class="w-full bg-primary text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/25 active:scale-98 transition text-sm">
+            <i data-lucide="folder-plus" class="w-4 h-4"></i> Simpan sebagai project
+          </button>` : `
+          <button onclick="openNameModal()" class="w-full bg-[#25D366] hover:bg-[#1EBE5D] text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-green-500/25 active:scale-98 transition text-sm">
+            <i data-lucide="message-circle" class="w-4 h-4"></i> Konfirmasi via WhatsApp
+          </button>`;
+      }
+
+      lucide.createIcons();
+    }
+
+    function renderPropertyTypes() {
+      const grid = document.getElementById('property-types-grid');
+      grid.innerHTML = PROPERTY_TYPES.map(type => {
+        const isSelected = formData.propertyType === type.id;
+        return `
+          <button 
+            onclick="selectPropertyType('${type.id}')"
+            class="relative p-4 rounded-2xl border-[1.5px] flex flex-col items-center justify-center gap-2 transition-all active:scale-98
+              ${isSelected ? 'border-primary bg-[#F8F7FF] text-primary shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}"
+          >
+            ${isSelected ? `
+              <div class="absolute top-2.5 right-2.5 w-5 h-5 bg-primary rounded-full flex items-center justify-center shadow-xs">
+                <i data-lucide="check" class="w-3.5 h-3.5 text-white stroke-[3]"></i>
+              </div>` : ''}
+            <i data-lucide="${type.icon}" class="w-7 h-7 ${isSelected ? 'text-primary' : 'text-slate-400'}" stroke-width="1.5"></i>
+            <span class="font-bold text-xs">${type.label}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selectPropertyType(typeId) {
+      formData.propertyType = typeId;
+      const typeObj = PROPERTY_TYPES.find(p => p.id === typeId);
+      
+      document.getElementById('property-hero-img').src = typeObj.image;
+      
+      if (typeId === 'Lainnya') {
+        document.getElementById('property-details-title').innerHTML = `Ceritakan tentang<br/>properti Anda`;
+      } else {
+        document.getElementById('property-details-title').innerHTML = `Ceritakan tentang<br/>${typeObj.label.toLowerCase()} Anda`;
+      }
+
+      const isResidential = ['Rumah', 'Apartemen', 'Villa', 'Kost'].includes(typeId);
+      const isKost = typeId === 'Kost';
+      const isHotel = typeId === 'Hotel';
+      const isOffice = typeId === 'Kantor';
+
+      document.getElementById('residential-counters').style.display = isResidential ? 'block' : 'none';
+      document.getElementById('hotel-specific-section').style.display = isHotel ? 'block' : 'none';
+      document.getElementById('office-counters').style.display = isOffice ? 'block' : 'none';
+
+      // Pengaturan label khusus Kost vs Hunian lain
+      const bedroomLabel = document.getElementById('bedroom-label');
+      const bedroomSublabel = document.getElementById('bedroom-sublabel');
+      const bathroomContainer = document.getElementById('bathroom-container');
+      const bathroomDivider = document.getElementById('bathroom-divider');
+
+      if (isKost) {
+        if (bedroomLabel) bedroomLabel.textContent = 'Tipe Kamar Tidur';
+        if (bedroomSublabel) bedroomSublabel.textContent = '3 foto per tipe kamar';
+        if (bathroomContainer) bathroomContainer.style.display = 'none';
+        if (bathroomDivider) bathroomDivider.style.display = 'none';
+      } else {
+        if (bedroomLabel) bedroomLabel.textContent = 'Kamar Tidur';
+        if (bedroomSublabel) bedroomSublabel.textContent = '3 foto per kamar';
+        if (bathroomContainer) bathroomContainer.style.display = 'flex';
+        if (bathroomDivider) bathroomDivider.style.display = 'block';
+      }
+
+      if (typeId === 'Lainnya') {
+        formData.customAreas = ['', ''];
+        formData.selectedAreas = [];
+      } else {
+        const areaList = getActiveAreasList();
+        formData.selectedAreas = areaList.slice(0, Math.min(4, areaList.length)).map(a => a.id);
+        if (!formData.customAreas || formData.customAreas.length === 0) {
+          formData.customAreas = [''];
+        }
+      }
+
+      renderPropertyTypes();
+      renderAreas();
+      lucide.createIcons();
+    }
+
+    function getActiveAreasList() {
+      return PROPERTY_AREAS_CONFIG[formData.propertyType] || PROPERTY_AREAS_CONFIG['Lainnya'];
+    }
+
+    function renderAreas() {
+      const isLainnya = formData.propertyType === 'Lainnya';
+      const areasGrid = document.getElementById('areas-grid');
+      const selectAllBtn = document.getElementById('btn-select-all-areas');
+      const titleEl = document.getElementById('areas-heading-title');
+      const subTitleEl = document.getElementById('areas-heading-subtitle');
+      const customInputContainer = document.getElementById('custom-area-input-container');
+      const customAreaLabel = document.getElementById('custom-area-label');
+
+      if (isLainnya) {
+        areasGrid.classList.add('hidden');
+        selectAllBtn.classList.add('hidden');
+        titleEl.textContent = 'Area Ruangan yang Difoto';
+        subTitleEl.textContent = 'Tuliskan nama-nama area atau ruangan yang ingin diabadikan (2 foto per area).';
+        customInputContainer.classList.remove('hidden');
+        if (customAreaLabel) {
+          customAreaLabel.innerHTML = '<i data-lucide="edit-3" class="w-3.5 h-3.5 text-primary"></i> Daftar Nama Area Ruangan:';
+        }
+        if (!formData.customAreas || formData.customAreas.length === 0) {
+          formData.customAreas = ['', ''];
+        }
+        renderCustomAreaInputs();
+      } else {
+        areasGrid.classList.remove('hidden');
+        selectAllBtn.classList.remove('hidden');
+        titleEl.textContent = 'Area untuk difoto';
+        subTitleEl.textContent = 'Pilih semua area yang ingin diabadikan.';
+        if (customAreaLabel) {
+          customAreaLabel.innerHTML = '<i data-lucide="edit-3" class="w-3.5 h-3.5 text-primary"></i> Tulis Nama Area Lainnya:';
+        }
+
+        const areaList = getActiveAreasList();
+        areasGrid.innerHTML = areaList.map(area => {
+          const isSelected = formData.selectedAreas.includes(area.id);
+          const displayWeight = `${area.weight} Foto`;
+          return `
+            <button 
+              onclick="toggleArea('${area.id}')"
+              class="relative p-3 rounded-xl border flex items-center gap-2.5 text-left transition-all active:scale-98
+                ${isSelected ? 'border-primary bg-[#F8F7FF]' : 'border-slate-200 bg-white hover:border-slate-300'}"
+            >
+              <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isSelected ? 'text-primary' : 'text-slate-400'}">
+                <i data-lucide="${area.icon}" class="w-4 h-4" stroke-width="1.75"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-bold text-xs truncate leading-tight ${isSelected ? 'text-primary' : 'text-slate-700'}">${area.label}</p>
+                <p class="text-[10px] ${isSelected ? 'text-primary/70' : 'text-slate-400'} mt-0.5">${displayWeight}</p>
+              </div>
+              ${isSelected ? `
+                <div class="w-4 h-4 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+                  <i data-lucide="check" class="w-2.5 h-2.5 text-white stroke-[3]"></i>
+                </div>` : ''}
+            </button>
+          `;
+        }).join('');
+
+        if (formData.selectedAreas.includes('other_custom')) {
+          customInputContainer.classList.remove('hidden');
+          if (!formData.customAreas || formData.customAreas.length === 0) {
+            formData.customAreas = [''];
+          }
+          renderCustomAreaInputs();
+        } else {
+          customInputContainer.classList.add('hidden');
+        }
+      }
+      
+      lucide.createIcons();
+    }
+
+    function renderCustomAreaInputs() {
+      const container = document.getElementById('custom-areas-list');
+      if (!container) return;
+
+      const isLainnya = formData.propertyType === 'Lainnya';
+      const maxLimit = isLainnya ? 6 : 4;
+      const placeholderText = isLainnya 
+        ? "Contoh: Studio Foto, Ruang Workshop, Area Galeri, Musholla..." 
+        : "Contoh: Musholla, Rooftop, Gym Privat...";
+
+      container.innerHTML = formData.customAreas.map((areaName, idx) => `
+        <div class="flex items-center gap-2">
+          <div class="relative flex-1">
+            <input 
+              type="text" 
+              placeholder="${placeholderText}"
+              value="${areaName || ''}"
+              class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 bg-white placeholder:text-slate-400 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
+              oninput="handleCustomAreaItemChange(${idx}, this.value)"
+            />
+          </div>
+          ${formData.customAreas.length > 1 ? `
+            <button 
+              type="button" 
+              onclick="removeCustomAreaField(${idx})" 
+              class="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-400 hover:text-red-500 hover:border-red-200 flex items-center justify-center flex-shrink-0 transition"
+              title="Hapus Area"
+            >
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          ` : ''}
+        </div>
+      `).join('');
+
+      const addBtn = document.getElementById('btn-add-custom-area');
+      const counterHint = document.getElementById('custom-area-counter-hint');
+      if (addBtn) {
+        if (formData.customAreas.length >= maxLimit) {
+          addBtn.classList.add('hidden');
+        } else {
+          addBtn.classList.remove('hidden');
+        }
+      }
+      if (counterHint) {
+        counterHint.textContent = `${formData.customAreas.length}/${maxLimit} area`;
+      }
+
+      lucide.createIcons();
+    }
+
+    function addCustomAreaField() {
+      const maxLimit = formData.propertyType === 'Lainnya' ? 6 : 4;
+      if (formData.customAreas.length < maxLimit) {
+        formData.customAreas.push('');
+        renderCustomAreaInputs();
+      }
+    }
+
+    function removeCustomAreaField(index) {
+      if (formData.customAreas.length > 1) {
+        formData.customAreas.splice(index, 1);
+        renderCustomAreaInputs();
+      }
+    }
+
+    function handleCustomAreaItemChange(index, value) {
+      formData.customAreas[index] = value;
+    }
+
+    function toggleArea(areaId) {
+      if (formData.selectedAreas.includes(areaId)) {
+        formData.selectedAreas = formData.selectedAreas.filter(id => id !== areaId);
+      } else {
+        formData.selectedAreas.push(areaId);
+      }
+      renderAreas();
+    }
+
+    function selectAllAreas() {
+      const areaList = getActiveAreasList();
+      if (formData.selectedAreas.length === areaList.length) {
+        formData.selectedAreas = [];
+      } else {
+        formData.selectedAreas = areaList.map(a => a.id);
+      }
+      renderAreas();
+    }
+
+    function renderHotelRooms() {
+      const grid = document.getElementById('hotel-rooms-grid');
+      grid.innerHTML = HOTEL_ROOM_TYPES.map(room => {
+        const isSelected = formData.selectedHotelRooms.includes(room.id);
+        const isOther = room.id === 'other_room';
+        return `
+          <button 
+            onclick="toggleHotelRoom('${room.id}')"
+            class="${isOther ? 'col-span-2 ' : ''}p-3 rounded-xl border flex items-center justify-between text-left text-xs font-bold transition-all
+              ${isSelected ? 'border-primary bg-[#F8F7FF] text-primary' : 'border-slate-200 bg-white text-slate-600'}"
+          >
+            <span>${room.label}</span>
+            <div class="w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? 'border-primary bg-primary text-white' : 'border-slate-300'}">
+              ${isSelected ? '<i data-lucide="check" class="w-2.5 h-2.5 stroke-[3]"></i>' : ''}
+            </div>
+          </button>
+        `;
+      }).join('');
+
+      const customRoomContainer = document.getElementById('hotel-custom-room-container');
+      if (customRoomContainer) {
+        if (formData.selectedHotelRooms.includes('other_room')) {
+          customRoomContainer.classList.remove('hidden');
+          const inputEl = document.getElementById('hotel-custom-room-input');
+          if (inputEl && !inputEl.value) {
+            inputEl.value = formData.hotelCustomRoom || '';
+          }
+        } else {
+          customRoomContainer.classList.add('hidden');
+        }
+      }
+      lucide.createIcons();
+    }
+
+    function handleHotelCustomRoomChange(val) {
+      formData.hotelCustomRoom = val;
+    }
+
+    function toggleHotelRoom(roomId) {
+      if (formData.selectedHotelRooms.includes(roomId)) {
+        formData.selectedHotelRooms = formData.selectedHotelRooms.filter(id => id !== roomId);
+      } else {
+        formData.selectedHotelRooms.push(roomId);
+      }
+      renderHotelRooms();
+      lucide.createIcons();
+    }
+
+    function renderHotelCategories() {
+      const grid = document.getElementById('hotel-categories-grid');
+      grid.innerHTML = HOTEL_CATEGORIES.map(cat => `
+        <button 
+          onclick="selectHotelCategory('${cat}')"
+          class="px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-all
+            ${formData.hotelCategory === cat ? 'border-primary text-primary bg-primary-light' : 'border-slate-200 text-slate-500 bg-white'}"
+        >
+          ${cat}
+        </button>
+      `).join('');
+    }
+
+    function selectHotelCategory(cat) {
+      formData.hotelCategory = cat;
+      renderHotelCategories();
+    }
+
+    function updateCounter(field, delta) {
+      if (field === 'bedrooms') {
+        formData.bedrooms = Math.max(1, formData.bedrooms + delta);
+        document.getElementById('bedroom-count').textContent = formData.bedrooms;
+      } else if (field === 'bathrooms') {
+        // Kamar mandi fleksibel bisa bernilai 0
+        formData.bathrooms = Math.max(0, formData.bathrooms + delta);
+        document.getElementById('bathroom-count').textContent = formData.bathrooms;
+      } else if (field === 'meetingRooms') {
+        formData.meetingRooms = Math.max(0, formData.meetingRooms + delta);
+        document.getElementById('meeting-count').textContent = formData.meetingRooms;
+      } else if (field === 'directorRooms') {
+        formData.directorRooms = Math.max(0, formData.directorRooms + delta);
+        document.getElementById('director-count').textContent = formData.directorRooms;
+      }
+    }
+
+    function renderSizes() {
+      const container = document.getElementById('property-sizes-container');
+      container.innerHTML = SIZES.map(s => `
+        <button 
+          onclick="selectSize('${s}')"
+          class="px-3.5 py-2 rounded-xl border text-[11px] font-bold transition-all
+            ${formData.size === s ? 'border-primary text-primary bg-primary-light' : 'border-slate-200 text-slate-500 bg-white hover:border-slate-300'}"
+        >
+          ${s}
+        </button>
+      `).join('');
+    }
+
+    function selectSize(s) {
+      formData.size = s;
+      renderSizes();
+    }
+
+    function calculateAndRenderEstimate() {
+      let totalPhotos = 0;
+      let breakdownItems = [];
+      const isResidential = ['Rumah', 'Apartemen', 'Villa'].includes(formData.propertyType);
+      const isKost = formData.propertyType === 'Kost';
+      const isHotel = formData.propertyType === 'Hotel';
+      const isOffice = formData.propertyType === 'Kantor';
+      const isLainnya = formData.propertyType === 'Lainnya';
+
+      if (isResidential) {
+        const bedPhotos = formData.bedrooms * 3;
+        totalPhotos += bedPhotos;
+        breakdownItems.push({ label: `Kamar Tidur (${formData.bedrooms} kamar)`, photos: bedPhotos });
+
+        if (formData.bathrooms > 0) {
+          const bathPhotos = formData.bathrooms * 1;
+          totalPhotos += bathPhotos;
+          breakdownItems.push({ label: `Kamar Mandi (${formData.bathrooms} ruangan)`, photos: bathPhotos });
+        }
+      }
+
+      if (isKost) {
+        const bedPhotos = formData.bedrooms * 3;
+        totalPhotos += bedPhotos;
+        breakdownItems.push({ label: `Tipe Kamar Tidur (${formData.bedrooms} tipe kamar)`, photos: bedPhotos });
+      }
+
+      if (isHotel) {
+        formData.selectedHotelRooms.forEach(rId => {
+          if (rId === 'other_room') {
+            const customName = formData.hotelCustomRoom ? formData.hotelCustomRoom.trim() : '';
+            totalPhotos += 4;
+            breakdownItems.push({ label: `Tipe Kamar: ${customName ? `Lainnya (${customName})` : 'Tipe Kamar Lainnya'}`, photos: 4 });
+          } else {
+            const rObj = HOTEL_ROOM_TYPES.find(r => r.id === rId);
+            if (rObj) {
+              totalPhotos += rObj.weight;
+              breakdownItems.push({ label: `Tipe Kamar: ${rObj.label}`, photos: rObj.weight });
+            }
+          }
+        });
+      }
+
+      if (isOffice) {
+        if (formData.meetingRooms > 0) {
+          const mPhotos = formData.meetingRooms * 2;
+          totalPhotos += mPhotos;
+          breakdownItems.push({ label: `Ruang Meeting (${formData.meetingRooms} ruangan)`, photos: mPhotos });
+        }
+        if (formData.directorRooms > 0) {
+          const dPhotos = formData.directorRooms * 2;
+          totalPhotos += dPhotos;
+          breakdownItems.push({ label: `Ruang Direksi Privat (${formData.directorRooms} ruangan)`, photos: dPhotos });
+        }
+      }
+
+      if (isLainnya) {
+        const filledCustom = (formData.customAreas || [])
+          .map(a => a.trim())
+          .filter(a => a.length > 0);
+
+        if (filledCustom.length > 0) {
+          filledCustom.forEach(name => {
+            totalPhotos += 2;
+            breakdownItems.push({ label: `Area: ${name}`, photos: 2 });
+          });
+        } else {
+          totalPhotos = 10;
+          breakdownItems.push({ label: 'Area Kustom Properti', photos: 10 });
+        }
+      } else {
+        const activeAreaConfigs = getActiveAreasList();
+        formData.selectedAreas.forEach(areaId => {
+          if (areaId === 'other_custom') {
+            const filledCustom = formData.customAreas
+              .map(a => a.trim())
+              .filter(a => a.length > 0);
+
+            if (filledCustom.length > 0) {
+              filledCustom.forEach(name => {
+                totalPhotos += 2;
+                breakdownItems.push({ label: `Area Lainnya (${name})`, photos: 2 });
+              });
+            } else {
+              totalPhotos += 2;
+              breakdownItems.push({ label: 'Area Lainnya', photos: 2 });
+            }
+          } else {
+            const areaObj = activeAreaConfigs.find(a => a.id === areaId);
+            if (areaObj) {
+              totalPhotos += areaObj.weight;
+              breakdownItems.push({ label: areaObj.label, photos: areaObj.weight });
+            }
+          }
+        });
+      }
+
+      if (totalPhotos === 0) totalPhotos = 10;
+
+      document.getElementById('total-photos-heading').textContent = `${totalPhotos} Foto`;
+
+      const breakdownContainer = document.getElementById('breakdown-list');
+      breakdownContainer.innerHTML = breakdownItems.map(item => `
+        <div class="flex justify-between items-center py-1 border-b border-slate-100 last:border-0">
+          <span class="text-slate-600 font-medium">${item.label}</span>
+          <span class="font-extrabold text-slate-900">${item.photos} Foto</span>
+        </div>
+      `).join('') + `
+        <div class="flex justify-between items-center pt-2 font-extrabold text-slate-900 text-xs border-t border-slate-200 mt-1">
+          <span>Total Kebutuhan</span>
+          <span class="text-primary text-sm">${totalPhotos} Foto</span>
+        </div>
+      `;
+
+      const viewAllBtn = document.getElementById('btn-view-all-packages');
+
+      if (isHotel) {
+        document.getElementById('pkg-name').textContent = `HOTEL CUSTOM PACKAGE`;
+        document.getElementById('pkg-photos').textContent = `${totalPhotos}+ Photos Coverage`;
+        document.getElementById('pkg-price').textContent = `Penawaran Khusus`;
+        document.getElementById('pkg-tag').textContent = `CUSTOM HOTEL`;
+
+        if (viewAllBtn) {
+          viewAllBtn.classList.add('hidden');
+        }
+
+        formData.estimatedPhotos = totalPhotos;
+        formData.recommendedPackage = {
+          name: 'HOTEL CUSTOM',
+          label: `${totalPhotos}+ Photos Coverage`,
+          price: 'Penawaran Khusus'
+        };
+      } else {
+        if (viewAllBtn) {
+          viewAllBtn.classList.remove('hidden');
+        }
+
+        let closestPackage = PACKAGES[0];
+        let smallestDiff = Math.abs(PACKAGES[0].count - totalPhotos);
+
+        PACKAGES.forEach(pkg => {
+          const diff = Math.abs(pkg.count - totalPhotos);
+          if (diff < smallestDiff) {
+            smallestDiff = diff;
+            closestPackage = pkg;
+          }
+        });
+
+        document.getElementById('pkg-name').textContent = `${closestPackage.name} PACKAGE`;
+        document.getElementById('pkg-photos').textContent = closestPackage.label;
+        document.getElementById('pkg-price').textContent = closestPackage.price;
+        document.getElementById('pkg-tag').textContent = `TERDEKAT`;
+
+        formData.estimatedPhotos = totalPhotos;
+        formData.recommendedPackage = closestPackage;
+      }
+    }
+
+    function renderCalendar() {
+      const monthNames = [
+        "Januari", "Februari", "Maret", "April", "Mei", "Juni", 
+        "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+      ];
+
+      const calDate = new Date(today.getFullYear(), today.getMonth() + currentMonthOffset, 1);
+      const year = calDate.getFullYear();
+      const month = calDate.getMonth();
+
+      document.getElementById('calendar-month-year').textContent = `${monthNames[month]} ${year}`;
+
+      document.getElementById('btn-prev-month').disabled = currentMonthOffset <= minMonthOffset;
+      document.getElementById('btn-next-month').disabled = currentMonthOffset >= maxMonthOffset;
+
+      const firstDayIndex = new Date(year, month, 1).getDay();
+      const totalDays = new Date(year, month + 1, 0).getDate();
+
+      const grid = document.getElementById('calendar-days-grid');
+      let html = '';
+
+      for (let i = 0; i < firstDayIndex; i++) {
+        html += `<div></div>`;
+      }
+
+      for (let d = 1; d <= totalDays; d++) {
+        const thisDate = new Date(year, month, d);
+        const ymd = formatDateYMD(thisDate);
+        const isPast = thisDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const isSelected = formData.selectedDate === ymd;
+
+        if (isPast) {
+          html += `<div class="w-8 h-8 mx-auto flex items-center justify-center text-xs font-semibold text-slate-200 cursor-not-allowed">${d}</div>`;
+        } else {
+          html += `
+            <button 
+              onclick="selectDate('${ymd}')"
+              class="w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-semibold transition-all
+                ${isSelected ? 'bg-primary text-white font-bold shadow-md shadow-primary/30' : 'text-slate-700 hover:bg-slate-100'}"
+            >
+              ${d}
+            </button>
+          `;
+        }
+      }
+
+      grid.innerHTML = html;
+    }
+
+    function prevMonth() {
+      if (currentMonthOffset > minMonthOffset) {
+        currentMonthOffset--;
+        renderCalendar();
+      }
+    }
+
+    function nextMonth() {
+      if (currentMonthOffset < maxMonthOffset) {
+        currentMonthOffset++;
+        renderCalendar();
+      }
+    }
+
+    function selectDate(ymd) {
+      formData.selectedDate = ymd;
+      renderCalendar();
+    }
+
+    function renderTimeSlots() {
+      const container = document.getElementById('time-slots-container');
+      container.innerHTML = TIME_SLOTS.map(t => `
+        <button 
+          onclick="selectTime('${t}')"
+          class="py-2.5 rounded-xl border text-xs font-bold transition-all
+            ${formData.selectedTime === t ? 'bg-primary border-primary text-white shadow-sm shadow-primary/25' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}"
+        >
+          ${t}
+        </button>
+      `).join('');
+    }
+
+    function selectTime(t) {
+      formData.selectedTime = t;
+      renderTimeSlots();
+    }
+
+    function initCalendarSwipe() {
+      const calCard = document.getElementById('calendar-card');
+      if (!calCard) return;
+
+      let startX = 0;
+      let startY = 0;
+
+      calCard.addEventListener('touchstart', (e) => {
+        startX = e.changedTouches[0].screenX;
+        startY = e.changedTouches[0].screenY;
+      }, { passive: true });
+
+      calCard.addEventListener('touchend', (e) => {
+        const endX = e.changedTouches[0].screenX;
+        const endY = e.changedTouches[0].screenY;
+        const diffX = endX - startX;
+        const diffY = endY - startY;
+
+        // Pastikan gerakan horizontal lebih dominan daripada scroll vertikal
+        if (Math.abs(diffX) > 45 && Math.abs(diffX) > Math.abs(diffY)) {
+          if (diffX < 0) {
+            // Swipe ke kiri -> Bulan berikutnya
+            nextMonth();
+          } else {
+            // Swipe ke kanan -> Bulan sebelumnya
+            prevMonth();
+          }
+        }
+      }, { passive: true });
+    }
+
+    function openPackagesModal() {
+      if (formData.propertyType === 'Hotel') return;
+
+      const modal = document.getElementById('packages-modal');
+      const list = document.getElementById('all-packages-list');
+      
+      list.innerHTML = PACKAGES.map(pkg => `
+        <div class="p-4 rounded-2xl border ${pkg.id === formData.recommendedPackage?.id ? 'border-primary bg-primary-light/40' : 'border-slate-100 bg-slate-50'} flex items-center justify-between">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-extrabold text-sm text-slate-900">${pkg.name}</span>
+              ${pkg.id === formData.recommendedPackage?.id ? '<span class="text-[9px] font-extrabold bg-primary text-white px-2 py-0.5 rounded-md">REKOMENDASI</span>' : ''}
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">${pkg.label}</p>
+          </div>
+          <span class="font-extrabold text-sm text-primary">${pkg.price}</span>
+        </div>
+      `).join('');
+
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.firstElementChild.classList.remove('translate-y-full');
+      }, 10);
+    }
+
+    function closePackagesModal() {
+      const modal = document.getElementById('packages-modal');
+      modal.firstElementChild.classList.add('translate-y-full');
+      modal.classList.add('opacity-0');
+      setTimeout(() => modal.classList.add('hidden'), 300);
+    }
+
+    function openNameModal() {
+      const modal = document.getElementById('name-modal');
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.firstElementChild.classList.remove('translate-y-full');
+        document.getElementById('client-name-input').focus();
+      }, 10);
+      lucide.createIcons();
+    }
+
+    function closeNameModal() {
+      const modal = document.getElementById('name-modal');
+      modal.firstElementChild.classList.add('translate-y-full');
+      modal.classList.add('opacity-0');
+      setTimeout(() => modal.classList.add('hidden'), 300);
+    }
+
+    function openDownloadNameModal() {
+      const modal = document.getElementById('download-modal');
+      const label = document.getElementById('property-name-label');
+      const input = document.getElementById('property-name-input');
+      
+      const type = formData.propertyType;
+      let placeholderText = 'Contoh: Villa Sunset Uluwatu';
+      if (type === 'Hotel') placeholderText = 'Contoh: Hotel Grand Mulia';
+      else if (type === 'Villa') placeholderText = 'Contoh: Villa Ombak Bali';
+      else if (type === 'Kost') placeholderText = 'Contoh: Kost Exclusive Melati';
+      else if (type === 'Resto') placeholderText = 'Contoh: Resto Cafe Harmoni';
+      else if (type === 'Store') placeholderText = 'Contoh: Butik Kencana Store';
+      else if (type === 'Kantor') placeholderText = 'Contoh: Kantor PT Maju Sukses';
+      else if (type === 'Apartemen') placeholderText = 'Contoh: Apartemen Bassura Tower A';
+      else if (type === 'Rumah') placeholderText = 'Contoh: Rumah Bpk. Hendra';
+
+      label.textContent = `Nama ${type} Properti Anda:`;
+      input.placeholder = placeholderText;
+      if (formData.propertyName) {
+        input.value = formData.propertyName;
+      }
+
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.firstElementChild.classList.remove('translate-y-full');
+        input.focus();
+      }, 10);
+      lucide.createIcons();
+    }
+
+    function closeDownloadNameModal() {
+      const modal = document.getElementById('download-modal');
+      modal.firstElementChild.classList.add('translate-y-full');
+      modal.classList.add('opacity-0');
+      setTimeout(() => modal.classList.add('hidden'), 300);
+    }
+
+    function confirmDownloadImage() {
+      const input = document.getElementById('property-name-input');
+      const propName = input.value.trim();
+      formData.propertyName = propName || `${formData.propertyType} Anda`;
+      closeDownloadNameModal();
+      downloadPhotoPlanImage();
+    }
+
+    function openImagePreviewModal(dataUrl) {
+      const modal = document.getElementById('image-preview-modal');
+      const img = document.getElementById('preview-modal-img');
+      img.src = dataUrl;
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        modal.classList.remove('opacity-0');
+      }, 10);
+      lucide.createIcons();
+    }
+
+    function closeImagePreviewModal() {
+      const modal = document.getElementById('image-preview-modal');
+      modal.classList.add('opacity-0');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+      }, 300);
+    }
+
+    async function downloadPhotoPlanImage() {
+      const btn = document.getElementById('btn-download-image');
+      const originalHtml = btn.innerHTML;
+      
+      try {
+        btn.disabled = true;
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin text-primary"></i> Menyiapkan Gambar...`;
+        lucide.createIcons();
+
+        document.getElementById('export-property-type').textContent = formData.propertyType;
+        document.getElementById('export-property-name').textContent = formData.propertyName || `${formData.propertyType} Anda`;
+        
+        const now = new Date();
+        const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+        document.getElementById('export-date-generated').textContent = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+        
+        document.getElementById('export-total-photos').textContent = `${formData.estimatedPhotos || 19} Foto`;
+        
+        let specsText = '';
+        if (['Rumah', 'Apartemen', 'Villa'].includes(formData.propertyType)) {
+          const bathText = formData.bathrooms > 0 ? ` • ${formData.bathrooms} Kamar Mandi` : '';
+          specsText = `${formData.bedrooms} Kamar Tidur${bathText} • ${formData.size}`;
+        } else if (formData.propertyType === 'Kost') {
+          specsText = `${formData.bedrooms} Tipe Kamar • ${formData.size}`;
+        } else if (formData.propertyType === 'Hotel') {
+          const roomCount = formData.selectedHotelRooms.length;
+          specsText = `${formData.hotelCategory || 'Hotel'} • ${roomCount} Tipe Kamar • ${formData.size}`;
+        } else if (formData.propertyType === 'Kantor') {
+          specsText = `${formData.meetingRooms} R. Meeting • ${formData.directorRooms} R. Direksi • ${formData.size}`;
+        } else {
+          specsText = `${formData.propertyType} • ${formData.size}`;
+        }
+        document.getElementById('export-property-specs').textContent = specsText;
+
+        const breakdownContainer = document.getElementById('breakdown-list');
+        document.getElementById('export-breakdown-list').innerHTML = breakdownContainer.innerHTML;
+
+        if (formData.propertyType === 'Hotel') {
+          document.getElementById('export-pkg-name').textContent = 'HOTEL CUSTOM PACKAGE';
+          document.getElementById('export-pkg-photos').textContent = `${formData.estimatedPhotos}+ Photos Coverage`;
+          document.getElementById('export-pkg-price').textContent = 'Penawaran Khusus';
+        } else {
+          document.getElementById('export-pkg-name').textContent = `${formData.recommendedPackage?.name || 'MAX'} PACKAGE`;
+          document.getElementById('export-pkg-photos').textContent = formData.recommendedPackage?.label || '25 Photos';
+          document.getElementById('export-pkg-price').textContent = formData.recommendedPackage?.price || 'Rp 3.500.000';
+        }
+
+        const targetElement = document.getElementById('export-summary-card');
+        
+        // Render menggunakan html2canvas dengan ukuran window virtual tetap (540px)
+        // Menjamin rendering di Safari iOS memiliki tata letak & proporsi yang sama persis dengan Desktop
+        const canvas = await html2canvas(targetElement, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          width: 520,
+          windowWidth: 540,
+          onclone: (clonedDoc) => {
+            clonedDoc.body.style.width = '540px';
+            clonedDoc.body.style.minWidth = '540px';
+            clonedDoc.body.style.padding = '0';
+            clonedDoc.body.style.margin = '0';
+            const el = clonedDoc.getElementById('export-summary-card');
+            if (el) {
+              el.style.position = 'absolute';
+              el.style.left = '0px';
+              el.style.top = '0px';
+              el.style.width = '520px';
+              el.style.minWidth = '520px';
+              el.style.maxWidth = '520px';
+              el.style.margin = '0';
+              el.style.opacity = '1';
+              el.style.display = 'block';
+              el.style.boxSizing = 'border-box';
+            }
+          }
+        });
+
+        const safeName = (formData.propertyName || formData.propertyType).replace(/[^a-zA-Z0-9]/g, '_');
+        const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+        const fileName = `FORIOR_Photo_Plan_${safeName}_${dateStr}.png`;
+
+        // Deteksi khusus iOS (iPhone / iPad)
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+        // Convert canvas ke Blob
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png', 0.95));
+
+        // 1. Khusus HP (iPhone / iPad): Gunakan Web Share API agar ada opsi "Simpan Gambar" langsung ke Galeri Foto
+        if (isIOS && blob && navigator.canShare) {
+          const file = new File([blob], fileName, { type: 'image/png' });
+          if (navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({
+                files: [file],
+                title: 'Ringkasan Rencana Foto FORIOR',
+                text: `Rencana foto untuk ${formData.propertyName || formData.propertyType}`
+              });
+              return;
+            } catch (shareErr) {
+              if (shareErr.name === 'AbortError') {
+                return;
+              }
+              console.warn('Web Share dibatalkan atau tidak didukung:', shareErr);
+            }
+          }
+        }
+
+        // 2. Fallback khusus iPhone / iPad jika Web Share diblokir browser: Tampilkan Preview Modal
+        if (isIOS) {
+          const dataUrl = canvas.toDataURL('image/png');
+          openImagePreviewModal(dataUrl);
+          return;
+        }
+
+        // 3. Desktop (MacBook, iMac, Windows, dll.) & Android: Langsung unduh berkas
+        const dataUrl = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.download = fileName;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+        }, 250);
+
+      } catch (err) {
+        console.error('Gagal mengunduh gambar rangkuman:', err);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        lucide.createIcons();
+      }
+    }
+
+    /** Areas and property details as text, shared by the WhatsApp message and the saved project. */
+    function collectPlanSummary() {
+      const areaConfigs = getActiveAreasList();
+      const areaNamesList = [];
+
+      if (formData.propertyType === 'Lainnya') {
+        const filled = (formData.customAreas || [])
+          .map(a => a.trim())
+          .filter(a => a.length > 0);
+        if (filled.length > 0) {
+          filled.forEach(name => areaNamesList.push(name));
+        } else {
+          areaNamesList.push('Area Kustom');
+        }
+      } else {
+        formData.selectedAreas.forEach(id => {
+          if (id === 'other_custom') {
+            const filledCustom = formData.customAreas
+              .map(a => a.trim())
+              .filter(a => a.length > 0);
+            
+            if (filledCustom.length > 0) {
+              filledCustom.forEach(name => areaNamesList.push(`Area Lainnya (${name})`));
+            } else {
+              areaNamesList.push('Area Lainnya');
+            }
+          } else {
+            const label = areaConfigs.find(a => a.id === id)?.label;
+            if (label) areaNamesList.push(label);
+          }
+        });
+      }
+
+
+      let detailSpecificText = '';
+      if (['Rumah', 'Apartemen', 'Villa'].includes(formData.propertyType)) {
+        detailSpecificText = `• Kamar Tidur: ${formData.bedrooms}\n${formData.bathrooms > 0 ? `• Kamar Mandi: ${formData.bathrooms}\n` : ''}`;
+      } else if (formData.propertyType === 'Kost') {
+        detailSpecificText = `• Tipe Kamar Tidur: ${formData.bedrooms}\n`;
+      } else if (formData.propertyType === 'Hotel') {
+        const roomNames = formData.selectedHotelRooms.map(id => {
+          if (id === 'other_room') {
+            return formData.hotelCustomRoom ? `Lainnya (${formData.hotelCustomRoom.trim()})` : 'Tipe Kamar Lainnya';
+          }
+          return HOTEL_ROOM_TYPES.find(r => r.id === id)?.label;
+        }).filter(Boolean).join(', ');
+        detailSpecificText = `• Kategori: ${formData.hotelCategory}\n• Tipe Kamar: ${roomNames || '-'}\n`;
+      } else if (formData.propertyType === 'Kantor') {
+        detailSpecificText = `• Ruang Meeting: ${formData.meetingRooms}\n• Ruang Direksi Privat: ${formData.directorRooms}\n`;
+      }
+
+      return { areaNamesList, detailSpecificText };
+    }
+
+    function readClientName() {
+      const nameInput = document.getElementById('client-name-input');
+      const clientName = nameInput.value.trim();
+      if (!clientName) { nameInput.focus(); nameInput.classList.add('border-red-500'); return ''; }
+      nameInput.classList.remove('border-red-500');
+      formData.clientName = clientName;
+      return clientName;
+    }
+
+    /** Dashboard only: hands the plan to FORIOR Hub, which creates the project (gallery) in Photo Delivery. */
+    function saveAsProject() {
+      if (!readClientName()) return;
+      const { areaNamesList, detailSpecificText } = collectPlanSummary();
+      const pkg = formData.recommendedPackage || PACKAGES.find(p => p.id === 'MAX');
+      const btn = document.getElementById('save-project-btn');
+      btn.disabled = true; btn.style.opacity = '.7';
+      window.parent.postMessage({ type: 'forior-planner:save', plan: {
+        clientName: formData.clientName,
+        clientWhatsapp: (document.getElementById('client-wa-input').value || '').trim(),
+        propertyType: formData.propertyType,
+        propertyName: (formData.propertyName || '').trim(),
+        size: formData.size,
+        areas: areaNamesList,
+        details: detailSpecificText.replace(/• /g, '').trim(),
+        estimatedPhotos: formData.estimatedPhotos || pkg.count,
+        packageName: pkg.name, packagePrice: pkg.price, packageCount: pkg.count,
+        shootDate: formData.selectedDate, shootTime: formData.selectedTime
+      } }, window.location.origin);
+    }
+
+    window.addEventListener('message', (e) => {
+      if (e.origin !== window.location.origin || !e.data || e.data.type !== 'forior-planner:saved') return;
+      const status = document.getElementById('save-project-status'), btn = document.getElementById('save-project-btn');
+      btn.disabled = false; btn.style.opacity = '';
+      status.classList.remove('hidden');
+      status.textContent = e.data.message;
+      status.className = 'embed-only text-xs font-semibold rounded-xl px-3 py-2 ' + (e.data.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700');
+      if (e.data.ok) setTimeout(closeNameModal, 1200);
+    });
+
+    function submitWhatsApp() {
+      if (!readClientName()) return;
+      const { areaNamesList, detailSpecificText } = collectPlanSummary();
+      const areaNames = areaNamesList.join(', ');
+
+      const message = 
+`Halo FORIOR, saya *${formData.clientName}* ingin memesan jadwal pemotretan properti via Photo Planner.
+
+*Detail Properti:*
+• Jenis Properti: ${formData.propertyType}
+${detailSpecificText}• Area Foto: ${areaNames || '-'}
+• Ukuran Properti: ${formData.size}
+• Estimasi Kebutuhan: *${formData.estimatedPhotos || 17} Foto*
+
+*Paket & Jadwal:*
+• Paket Rekomendasi: *${formData.recommendedPackage?.name || 'MAX'} (${formData.recommendedPackage?.price || 'Rp 3.500.000'})*
+• Tanggal: *${formData.selectedDate}*
+• Waktu: *${formData.selectedTime} WIB*
+
+Mohon informasi konfirmasi ketersediaan jadwalnya. Terima kasih!`;
+
+      const encodedUrl = `https://wa.me/${FORIOR_WA_NUMBER}?text=${encodeURIComponent(message)}`;
+      window.open(encodedUrl, '_blank');
+      closeNameModal();
+    }
+  </script>
+</body>
+</html>
