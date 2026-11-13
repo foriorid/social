@@ -58,6 +58,26 @@ function useGalleries() {
   return { rows, setRows, state, error, load };
 }
 
+/** Lets another page (the FORIOR dashboard) open a gallery's detail when Photo Delivery mounts. */
+let pendingOpen: string | null = null;
+export const openGallerySoon = (id: string) => { pendingOpen = id; };
+const takePendingOpen = () => { const id = pendingOpen; pendingOpen = null; return id; };
+
+/** The one thing the team should do next for a gallery, and how urgent it is (lower = sooner). */
+export function nextActionOf(g: Gallery): { text: string; rank: number } {
+  const picked = g.previewPhotos.filter(p => p.selected).length;
+  const openRev = g.revisions.filter(r => r.status === "Open").length;
+  const days = (d?: string) => (d ? Math.ceil((new Date(d).getTime() - Date.now()) / 864e5) : 99);
+  switch (g.phase) {
+    case "Preview": return !g.previewPhotos.length ? { text: "Muat folder foto preview", rank: 1 } : g.previewSubmittedAt && g.rawSelectionLimit && !g.rawSubmittedAt ? { text: "Klien sedang memilih foto RAW", rank: 5 } : { text: days(g.selectByDate) < 0 ? "Tenggat pilih foto lewat — ingatkan klien" : "Menunggu klien memilih foto", rank: days(g.selectByDate) < 0 ? 2 : 6 };
+    case "Client Selection": return { text: `Klien memilih ${picked} foto — mulai editing`, rank: 0 };
+    case "Editing Progress": return { text: g.draftPhotos.length ? "Draft siap — kirim untuk review" : `Sedang diedit (${picked} foto) — muat draft`, rank: g.draftPhotos.length ? 1 : 3 };
+    case "Client Review": return { text: "Menunggu review klien", rank: 6 };
+    case "Revision": return { text: g.revisionPhotos.length ? "Hasil revisi menunggu review klien" : `Kerjakan revisi${openRev ? ` (${openRev} permintaan)` : ""}`, rank: g.revisionPhotos.length ? 6 : 0 };
+    default: return !g.finalPhotos.length ? { text: "Disetujui — muat foto final", rank: 1 } : days(g.downloadExpiry) < 0 ? { text: "Masa unduh berakhir", rank: 9 } : { text: `Selesai · unduhan sampai ${fmtDate(g.downloadExpiry)}`, rank: 9 };
+  }
+}
+
 export function DeliveryPage() {
   const [cloud] = useCloud();
   const ws = activeWorkspace(cloud);
@@ -71,7 +91,7 @@ export function DeliveryPage() {
 
 function DeliveryInner() {
   const { rows, setRows, state, error, load } = useGalleries();
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(() => takePendingOpen());
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [query, setQuery] = useState(""), [phase, setPhaseFilter] = useState<"" | Phase>("");

@@ -9,7 +9,7 @@ import {
   Search, Send, Settings, Sparkles, Target, Users, Video, X, Youtube,
   ChartNoAxesCombined, Clock3, Layers3, BriefcaseBusiness, TrendingUp, Bookmark,
   Hash, Eye, Flame, WandSparkles, PlusCircle, ChevronRight, Filter, CirclePlay,
-  MessageSquareText, ChartLine, Lightbulb as LightbulbIcon, Cloud, Database, UploadCloud, Music2, UserCircle2, UserPlus, History, ShieldCheck, Info, ExternalLink, FolderPlus, AtSign, Zap, Images, LogOut
+  MessageSquareText, ChartLine, Lightbulb as LightbulbIcon, Cloud, Database, UploadCloud, Music2, UserCircle2, UserPlus, History, ShieldCheck, Info, ExternalLink, FolderPlus, AtSign, Zap, Images, LogOut, ClipboardList, CalendarClock
 } from "lucide-react";
 
 import { AiButton, AiCostBadge, AiError, ApiSettingsTab, ApprovalList, InboxLeadsPage, ModelRouterPanel, notify, runAgentTask, useAI, useCloud } from "./modules";
@@ -27,32 +27,34 @@ import { GateLoading, LoginScreen, NoWorkspaceScreen, SetPasswordScreen } from "
 import { AssetLibraryPage } from "./assets";
 import { ContentPlanPage } from "./plan";
 import { StudioPage } from "./studio";
-import { DeliveryPage } from "./delivery";
+import { DeliveryPage, openGallerySoon } from "./delivery";
+import { BusinessDashboard, CalendarPage, PhotoPlannerPage } from "./business";
+import { TeamSettings } from "./team";
 
 type Platform = "All channels" | "Instagram" | "TikTok" | "YouTube";
 type Range = "Last 7 Days" | "Last 30 Days" | "Last 90 Days";
 
-const navGroups = [
-  {
-    label: "WORKSPACE",
-    items: [
-      { name: "Dashboard", icon: Home },
-      { name: "Research & Insight", icon: Compass },
-      { name: "Content Plan", icon: CalendarDays },
-      { name: "Production Studio", icon: Clapperboard },
-      { name: "Photo Delivery", icon: Images }
-    ]
-  },
-  {
-    label: "MANAGEMENT",
-    items: [
-      { name: "AI Agent Team", icon: Sparkles },
-      { name: "Analytics", icon: ChartNoAxesCombined },
-      { name: "Asset Library", icon: ImageIcon },
-      { name: "Inbox & Leads", icon: MessageCircle },
-    ]
-  }
-];
+type NavItem = { name: string; icon: typeof Home; label?: string };
+/** Menu per workspace: the personal brand gets social tools; FORIOR adds a Project group above them. */
+function navGroupsFor(kind: "personal" | "business" | undefined): { label: string; items: NavItem[] }[] {
+  const sosmed: NavItem[] = [
+    { name: "Research & Insight", icon: Compass },
+    { name: "Content Plan", icon: CalendarDays },
+    { name: "Production Studio", icon: Clapperboard },
+    { name: "AI Agent Team", icon: Sparkles },
+    { name: "Analytics", icon: ChartNoAxesCombined },
+    { name: "Asset Library", icon: ImageIcon }
+  ];
+  if (kind === "business") return [
+    { label: "WORKSPACE", items: [{ name: "Dashboard", icon: Home }] },
+    { label: "PROJECT", items: [{ name: "Photo Delivery", icon: Images }, { name: "Photo Planner", icon: ClipboardList }, { name: "Calendar", icon: CalendarClock }, { name: "Inbox & Leads", icon: MessageCircle, label: "Leads & Klien" }] },
+    { label: "SOSMED", items: sosmed }
+  ];
+  return [
+    { label: "WORKSPACE", items: [{ name: "Dashboard", icon: Home }] },
+    { label: "SOSMED", items: [...sosmed, { name: "Inbox & Leads", icon: MessageCircle, label: "Inbox (DM)" }] }
+  ];
+}
 
 const schedules = [
   { day: "Rab, 11 Nov", time: "10:00", platform: "Instagram", type: "Feed", title: "Interior Details — Living Area", color: "green" },
@@ -265,7 +267,6 @@ function AnalyticsPage({ onAddToPlan }: {onAddToPlan:(idea:string)=>void}) {
 function SettingsPage() {
   const [integrationValues,setIntegrationValues]=useState<Record<string,string>>({});
   const [tab,setTab]=useState("Workspace");
-  const [workspaceName,setWorkspaceName]=useState("Alvian · Personal Brand");
   const [settings,setSettings]=useSettings();
   const brandName=settings.brandName,handle=settings.handle;
   const setBrandName=(v:string)=>setSettings(o=>({...o,brandName:v})),setHandle=(v:string)=>setSettings(o=>({...o,handle:v}));
@@ -277,16 +278,21 @@ function SettingsPage() {
   const [model,setModel]=useState("Auto · Cost efficient");
   const [provider,setProvider]=useState("OpenAI");
   const [saved,setSaved]=useState(false);
-  const tabs=["Workspace","Brand identity","Social accounts","AI & Models","Integrations & API","Notifications","Security"];
+  const [cloud]=useCloud();
+  const ws=activeWorkspace(cloud);
+  const roleLabel=ws?.role==="owner"?"Owner":ws?.role==="admin"?"Admin":"Editor";
+  // Editors don't manage keys or integrations; the server refuses those changes anyway.
+  const tabs=["Workspace","Anggota tim","Brand identity","Social accounts","AI & Models","Integrations & API","Notifications","Security"].filter(t=>ws?.role!=="editor"||(t!=="AI & Models"&&t!=="Integrations & API"));
   const Toggle=({checked,onChange}:{checked:boolean;onChange:(v:boolean)=>void})=><button className={`settings-toggle ${checked?"on":""}`} onClick={()=>onChange(!checked)} aria-pressed={checked}><i/></button>;
   return <div className="module-page settings-page">
     <div className="settings-toolbar"><div><span className="agent-badge"><i/> Workspace configuration</span><span className="muted-chip">Owner access</span></div><button className="primary-button" onClick={()=>{setSaved(true);setTimeout(()=>setSaved(false),1800);}}><Check size={14}/>{saved?"Tersimpan":"Save changes"}</button></div>
-    <div className="settings-layout"><aside className="panel settings-nav"><div className="settings-profile"><span className="avatar avatar-main">A</span><div><b>Alvian</b><small>Owner · Personal Brand</small></div></div>{tabs.map(t=><button key={t} className={tab===t?"active":""} onClick={()=>setTab(t)}>{t==="Workspace"?<BriefcaseBusiness size={15}/>:t==="Brand identity"?<Sparkles size={15}/>:t==="Social accounts"?<Instagram size={15}/>:t==="AI & Models"?<WandSparkles size={15}/>:t==="Integrations & API"?<Database size={15}/>:t==="Notifications"?<Bell size={15}/>:<ShieldCheck size={15}/>}{t}<ChevronRight size={13}/></button>)}</aside>
+    <div className="settings-layout"><aside className="panel settings-nav"><div className="settings-profile"><span className="avatar avatar-main">{(cloud.email??"?").charAt(0).toUpperCase()}</span><div><b>{cloud.email}</b><small>{roleLabel} · {ws?.name}</small></div></div>{tabs.map(t=><button key={t} className={tab===t?"active":""} onClick={()=>setTab(t)}>{t==="Workspace"?<BriefcaseBusiness size={15}/>:t==="Anggota tim"?<Users size={15}/>:t==="Brand identity"?<Sparkles size={15}/>:t==="Social accounts"?<Instagram size={15}/>:t==="AI & Models"?<WandSparkles size={15}/>:t==="Integrations & API"?<Database size={15}/>:t==="Notifications"?<Bell size={15}/>:<ShieldCheck size={15}/>}{t}<ChevronRight size={13}/></button>)}</aside>
       <section className="panel settings-content"><div className="settings-content-heading"><div><h3>{tab}</h3><p>Configure how FORIOR Creator OS works for your team.</p></div><span className="muted-chip">Brand & AI tersimpan di browser ini</span></div>
-        {tab==="Workspace"&&<><div className="settings-field"><label>WORKSPACE NAME</label><input value={workspaceName} onChange={e=>setWorkspaceName(e.target.value)}/><small>This name appears in the workspace switcher.</small></div><div className="settings-field"><label>WORKSPACE TYPE</label><select><option>Personal Brand</option><option>Business Workspace</option><option>Client Project</option></select></div><div className="settings-field"><label>DEFAULT TIMEZONE</label><select><option>Asia/Jakarta (GMT+7)</option><option>Asia/Makassar (GMT+8)</option><option>Asia/Jayapura (GMT+9)</option></select></div><div className="settings-divider"/><div className="settings-option-row"><div><b>Require approval before publishing</b><small>Content must be approved by workspace owner before scheduling or publishing.</small></div><Toggle checked={defaultApproval} onChange={setDefaultApproval}/></div></>}
+        {tab==="Workspace"&&<><div className="settings-field"><label>WORKSPACE NAME</label><input value={ws?.name??""} readOnly/><small>Nama workspace tampil di pemilih workspace. Perubahan nama menyusul.</small></div><div className="settings-field"><label>WORKSPACE TYPE</label><select><option>Personal Brand</option><option>Business Workspace</option><option>Client Project</option></select></div><div className="settings-field"><label>DEFAULT TIMEZONE</label><select><option>Asia/Jakarta (GMT+7)</option><option>Asia/Makassar (GMT+8)</option><option>Asia/Jayapura (GMT+9)</option></select></div><div className="settings-divider"/><div className="settings-option-row"><div><b>Require approval before publishing</b><small>Content must be approved by workspace owner before scheduling or publishing.</small></div><Toggle checked={defaultApproval} onChange={setDefaultApproval}/></div></>}
         {tab==="Brand identity"&&<><div className="settings-field"><label>BRAND / CREATOR NAME</label><input value={brandName} onChange={e=>setBrandName(e.target.value)}/></div><div className="settings-field"><label>PRIMARY SOCIAL HANDLE</label><input value={handle} onChange={e=>setHandle(e.target.value)}/></div><div className="settings-field"><label>BRAND VOICE</label><select value={tone} onChange={e=>setTone(e.target.value)}><option>Educative, warm & confident</option><option>Premium, minimal & aspirational</option><option>Friendly, conversational & witty</option><option>Professional & informative</option></select></div><div className="settings-field"><label>BRAND GUIDELINES</label><textarea rows={4} value={settings.brandVoice} onChange={e=>setSettings(o=>({...o,brandVoice:e.target.value}))}/><small>Dipakai sebagai gaya bahasa di setiap permintaan AI.</small></div><div className="settings-option-row"><div><b>Use workspace brand kit in production</b><small>Apply approved logo, colors, and typography to generated assets.</small></div><Toggle checked={true} onChange={()=>{}}/></div></>}
         {tab==="Social accounts"&&<div className="connected-accounts">{[{name:"Instagram",user:"@alvian.indonesia",icon:Instagram},{name:"TikTok",user:"@alvian.indonesia",icon:Music2},{name:"YouTube",user:"Alvian Indonesia",icon:Youtube}].map(a=>{const Icon=a.icon;return <div className="connected-account-row" key={a.name}><span><Icon size={18}/></span><div><b>{a.name}</b><small>{a.user}</small></div><em>Not connected</em><button className="outline-button" onClick={()=>notify("Koneksi akun lewat OAuth resmi membutuhkan server. Untuk bedah akun Instagram, isi token Meta di tab AI & Models.")}>Connect</button></div>})}<p>Social account connections will use official OAuth permissions. Passwords are never stored in this workspace.</p></div>}
         {tab==="AI & Models"&&<ApiSettingsTab/>}
+        {tab==="Anggota tim"&&<TeamSettings/>}
         {tab==="Integrations & API"&&<div className="integration-settings"><div className="integration-warning"><ShieldCheck size={18}/><div><b>Credential fields are ready for setup</b><p>Semua field sengaja dikosongkan. Nilai yang diketik di sini hanya berada di memori halaman saat ini dan belum dikirim atau disimpan. Setelah backend dan encrypted secret vault tersedia, penyimpanan aman dapat diaktifkan.</p></div></div><p className="x-ok">API key Anthropic dan token Meta yang sudah berfungsi (tersimpan di browser ini) ada di tab “AI & Models”. Field di bawah belum terhubung.</p><h4>AI providers</h4>{[{key:"openai",label:"OpenAI API Key",placeholder:"sk-..."},{key:"anthropic",label:"Anthropic API Key",placeholder:"sk-ant-..."},{key:"gemini",label:"Google Gemini API Key",placeholder:"AIza..."}].map(f=><div className="settings-field" key={f.key}><label>{f.label}</label><input type="password" autoComplete="off" value={integrationValues[f.key]||""} onChange={e=>setIntegrationValues(v=>({...v,[f.key]:e.target.value}))} placeholder={f.placeholder}/></div>)}<h4>Database & storage</h4>{[{key:"supabaseUrl",label:"Supabase Project URL",placeholder:"https://your-project.supabase.co"},{key:"supabaseAnon",label:"Supabase Anon / Publishable Key",placeholder:""},{key:"supabaseService",label:"Supabase Service Role Key (server only)",placeholder:""},{key:"googleClientId",label:"Google OAuth Client ID",placeholder:""},{key:"googleClientSecret",label:"Google OAuth Client Secret",placeholder:""}].map(f=><div className="settings-field" key={f.key}><label>{f.label}</label><input type="password" autoComplete="off" value={integrationValues[f.key]||""} onChange={e=>setIntegrationValues(v=>({...v,[f.key]:e.target.value}))} placeholder={f.placeholder}/></div>)}<h4>Social platform APIs</h4>{[{key:"metaAppId",label:"Meta App ID"},{key:"metaAppSecret",label:"Meta App Secret"},{key:"tiktokClientKey",label:"TikTok Client Key"},{key:"tiktokClientSecret",label:"TikTok Client Secret"},{key:"youtubeClientId",label:"YouTube OAuth Client ID"},{key:"youtubeClientSecret",label:"YouTube OAuth Client Secret"}].map(f=><div className="settings-field" key={f.key}><label>{f.label}</label><input type="password" autoComplete="off" value={integrationValues[f.key]||""} onChange={e=>setIntegrationValues(v=>({...v,[f.key]:e.target.value}))} placeholder=""/></div>)}<div className="integration-warning subtle"><Info size={17}/><div><b>Important security note</b><p>Jangan simpan service-role key atau secret di browser. Semua credential harus dipindahkan ke server-side environment variables atau encrypted vault sebelum fitur API diaktifkan.</p></div></div></div>}
         {tab==="Notifications"&&<>{[{title:"Email notifications",desc:"Important workspace activity and invitations.",value:emailNotif,change:setEmailNotif},{title:"Approval reminders",desc:"Notify reviewers when content needs their attention.",value:approvalNotif,change:setApprovalNotif},{title:"Weekly performance report",desc:"Receive a summary of content and channel performance.",value:weeklyReport,change:setWeeklyReport}].map(n=><div className="settings-option-row" key={n.title}><div><b>{n.title}</b><small>{n.desc}</small></div><Toggle checked={n.value} onChange={n.change}/></div>)}</>}
         {tab==="Security"&&<><div className="security-summary"><ShieldCheck size={22}/><div><b>Workspace security</b><small>Security controls will be enforced by the backend.</small></div></div>{[{t:"Role-based access control",d:"Restrict projects, assets, and settings by team role."},{t:"Session management",d:"Review active sessions and revoke access."},{t:"Activity audit log",d:"Track approvals, edits, exports, and integration changes."},{t:"Two-factor authentication",d:"Require an additional verification step for team members."}].map(item=><div className="settings-option-row" key={item.t}><div><b>{item.t}</b><small>{item.d}</small></div><span className="muted-chip">Planned</span></div>)}</>}
@@ -308,6 +314,8 @@ function AppShell() {
   const [cloud] = useCloud();
   const ws = activeWorkspace(cloud);
   const wsLabel = (w: { kind: string }) => (w.kind === "personal" ? "Personal Brand" : "Business");
+  const isBiz = ws?.kind === "business";
+  const currentItem = navGroupsFor(ws?.kind).flatMap(g => g.items).find(i => i.name === activeNav);
   const pickWorkspace = (id: string) => { setShowWorkspace(false); setShowProfile(false); if (id !== cloud.workspaceId) switchWorkspace(id); };
   const [mobileNav, setMobileNav] = useState(false);
   const [quickAction, setQuickAction] = useState("");
@@ -380,7 +388,7 @@ function AppShell() {
         </div>
 
         <nav className="side-nav">
-          {navGroups.map((group) => (
+          {navGroupsFor(ws?.kind).map((group) => (
             <div className="nav-group" key={group.label}>
               <span className="eyebrow nav-label">{group.label}</span>
               {group.items.map((item) => {
@@ -389,7 +397,7 @@ function AppShell() {
                   <div key={item.name}>
                     <button className={`nav-item ${activeNav === item.name ? "active" : ""}`} onClick={() => { setActiveNav(item.name); setMobileNav(false); }}>
                       <Icon size={18} strokeWidth={1.8} />
-                      <span>{item.name}</span>
+                      <span>{item.label ?? item.name}</span>
                     </button>
                   </div>
                 );
@@ -414,12 +422,12 @@ function AppShell() {
         <header className="topbar">
           <button className="mobile-menu" onClick={() => setMobileNav(true)} aria-label="Open navigation"><Menu size={21} /></button>
           <div className="page-heading" id="page-heading-slot">
-            <span>{activeNav === "Dashboard" ? "Good Afternoon," : "WORKSPACE / ALVIAN"}</span>
-            <h1>{activeNav === "Dashboard" ? <>Alvian <span className="wave">👋</span></> : activeNav}</h1>
-            <p>{activeNav === "Dashboard" ? "Personal Brand Content Command Center" : "Personal Brand Content Workspace"}</p>
+            <span>{activeNav === "Dashboard" && !isBiz ? "Good Afternoon," : `WORKSPACE / ${(ws?.name ?? "").toUpperCase()}`}</span>
+            <h1>{activeNav === "Dashboard" ? (isBiz ? "Dashboard" : <>Alvian <span className="wave">👋</span></>) : (currentItem?.label ?? activeNav)}</h1>
+            <p>{isBiz ? (activeNav === "Dashboard" ? "Project berjalan dan ringkasan sosmed FORIOR" : "FORIOR · Business Workspace") : (activeNav === "Dashboard" ? "Personal Brand Content Command Center" : "Personal Brand Content Workspace")}</p>
           </div>
 
-          {(activeNav === "Dashboard") && <div className="top-filters">
+          {(activeNav === "Dashboard" && !isBiz) && <div className="top-filters">
             <div className="dropdown-wrap">
               <button className="select-button" aria-label={`Rentang waktu: ${range}`} aria-expanded={showRange} onClick={() => { setShowRange(!showRange); setShowPlatform(false); setShowNotifications(false); setShowProfile(false); }}><CalendarDays size={16} /> <span className="select-label">{range}</span> <ChevronDown size={15} /></button>
               {showRange && <div className="floating-menu">
@@ -459,14 +467,14 @@ function AppShell() {
           </div>
         </header>
 
-        {activeNav !== "Dashboard" && activeNav !== "Research & Insight" && activeNav !== "Content Plan" && activeNav !== "Production Studio" && activeNav !== "Photo Delivery" && activeNav !== "Feed & Carousel" && activeNav !== "Reels & Video" && activeNav !== "Templates" && activeNav !== "Asset Library" && activeNav !== "AI Agent Team" && activeNav !== "Analytics" && activeNav !== "Asset Library" && activeNav !== "Settings" && activeNav !== "Automation" && activeNav !== "Inbox & Leads" && (
+        {activeNav !== "Dashboard" && activeNav !== "Research & Insight" && activeNav !== "Content Plan" && activeNav !== "Production Studio" && activeNav !== "Photo Delivery" && activeNav !== "Photo Planner" && activeNav !== "Calendar" && activeNav !== "Feed & Carousel" && activeNav !== "Reels & Video" && activeNav !== "Templates" && activeNav !== "Asset Library" && activeNav !== "AI Agent Team" && activeNav !== "Analytics" && activeNav !== "Asset Library" && activeNav !== "Settings" && activeNav !== "Automation" && activeNav !== "Inbox & Leads" && (
           <div className="section-notice">
             <div><b>{activeNav}</b><span>Preview navigasi — modul ini akan dikembangkan pada tahap berikutnya.</span></div>
             <button onClick={() => setActiveNav("Dashboard")}>Kembali ke Dashboard <ArrowRight size={15} /></button>
           </div>
         )}
 
-        {activeNav === "Research & Insight" ? <ResearchPage /> : activeNav === "Content Plan" ? <ContentPlanPage onOpenStudio={(campaignId,day)=>{setStudioTarget({campaignId,day});setActiveNav("Production Studio");}} onShare={(data)=>{const token=btoa(unescape(encodeURIComponent(JSON.stringify(data))));const link=window.location.origin+window.location.pathname+"#share="+token;navigator.clipboard?.writeText(link);window.open(link,"_blank","noopener,noreferrer");}} /> : activeNav === "AI Agent Team" ? <AgentsPage /> : activeNav === "Asset Library" ? <AssetLibraryPage /> : activeNav === "Analytics" ? <AnalyticsPage onAddToPlan={(idea)=>{addIdea(idea);notify("Ide masuk ke inbox ide di Content Plan.");setActiveNav("Content Plan");}} /> : activeNav === "Inbox & Leads" ? <InboxLeadsPage /> : activeNav === "Automation" ? <div className="module-page automation-simple"><section className="panel automation-simple-card"><span className="automation-simple-icon"><Zap size={24}/></span><div><h2>Automation</h2><p>Atur pengingat dan workflow sederhana. Trigger otomatis akan diaktifkan setelah backend tersedia.</p></div><button className="primary-button" onClick={()=>setQuickAction("Create automation")}><Plus size={14}/> New automation</button></section><div className="automation-simple-grid"><article><Clock3 size={18}/><b>Content reminder</b><p>Pengingat jadwal konten yang akan tayang.</p><span>Coming soon</span></article><article><MessageCircle size={18}/><b>Approval reminder</b><p>Pengingat untuk brief yang menunggu review.</p><span>Coming soon</span></article></div></div> : activeNav === "Settings" ? <SettingsPage /> : activeNav === "Photo Delivery" ? <DeliveryPage /> : activeNav === "Production Studio" ? <StudioPage target={studioTarget} onOpenPlan={()=>setActiveNav("Content Plan")} /> : <div className="dashboard-content">
+        {activeNav === "Research & Insight" ? <ResearchPage /> : activeNav === "Content Plan" ? <ContentPlanPage onOpenStudio={(campaignId,day)=>{setStudioTarget({campaignId,day});setActiveNav("Production Studio");}} onShare={(data)=>{const token=btoa(unescape(encodeURIComponent(JSON.stringify(data))));const link=window.location.origin+window.location.pathname+"#share="+token;navigator.clipboard?.writeText(link);window.open(link,"_blank","noopener,noreferrer");}} /> : activeNav === "AI Agent Team" ? <AgentsPage /> : activeNav === "Asset Library" ? <AssetLibraryPage /> : activeNav === "Analytics" ? <AnalyticsPage onAddToPlan={(idea)=>{addIdea(idea);notify("Ide masuk ke inbox ide di Content Plan.");setActiveNav("Content Plan");}} /> : activeNav === "Inbox & Leads" ? <InboxLeadsPage /> : activeNav === "Automation" ? <div className="module-page automation-simple"><section className="panel automation-simple-card"><span className="automation-simple-icon"><Zap size={24}/></span><div><h2>Automation</h2><p>Atur pengingat dan workflow sederhana. Trigger otomatis akan diaktifkan setelah backend tersedia.</p></div><button className="primary-button" onClick={()=>setQuickAction("Create automation")}><Plus size={14}/> New automation</button></section><div className="automation-simple-grid"><article><Clock3 size={18}/><b>Content reminder</b><p>Pengingat jadwal konten yang akan tayang.</p><span>Coming soon</span></article><article><MessageCircle size={18}/><b>Approval reminder</b><p>Pengingat untuk brief yang menunggu review.</p><span>Coming soon</span></article></div></div> : activeNav === "Settings" ? <SettingsPage /> : activeNav === "Photo Delivery" ? <DeliveryPage /> : activeNav === "Photo Planner" ? <PhotoPlannerPage /> : activeNav === "Calendar" ? <CalendarPage /> : activeNav === "Dashboard" && isBiz ? <BusinessDashboard go={setActiveNav} openGallery={id => { openGallerySoon(id); setActiveNav("Photo Delivery"); }} /> : activeNav === "Production Studio" ? <StudioPage target={studioTarget} onOpenPlan={()=>setActiveNav("Content Plan")} /> : <div className="dashboard-content">
           <section className="metrics-row">
             {metrics.map((metric) => {
               const Icon = metric.icon;
@@ -562,7 +570,7 @@ function AppShell() {
       </section>
 
       <nav className="f-bottomnav" aria-label="Navigasi cepat">
-        {[["Dashboard","Beranda",Home],["Content Plan","Plan",CalendarDays],["Production Studio","Studio",Clapperboard],["AI Agent Team","Agen",Sparkles]].map(([nav,label,Icon]: any) => <button key={nav} className={activeNav===nav?"active":""} onClick={() => setActiveNav(nav)}><Icon size={20} /><span>{label}</span>{nav==="AI Agent Team" && pendingApprovals>0 && <i>{pendingApprovals}</i>}</button>)}
+        {(isBiz ? [["Dashboard","Beranda",Home],["Photo Delivery","Delivery",Images],["Content Plan","Plan",CalendarDays],["Production Studio","Studio",Clapperboard]] : [["Dashboard","Beranda",Home],["Content Plan","Plan",CalendarDays],["Production Studio","Studio",Clapperboard],["AI Agent Team","Agen",Sparkles]]).map(([nav,label,Icon]: any) => <button key={nav} className={activeNav===nav?"active":""} onClick={() => setActiveNav(nav)}><Icon size={20} /><span>{label}</span>{nav==="AI Agent Team" && pendingApprovals>0 && <i>{pendingApprovals}</i>}</button>)}
         <button onClick={() => setMobileNav(true)}><Menu size={20} /><span>Menu</span></button>
       </nav>
 

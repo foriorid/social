@@ -2536,3 +2536,42 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .lg-mobile-head { display:flex; flex-direction:column; gap:14px; width:100%; box-sizing:border-box; padding:40px 24px 28px; background:#1c1230; border-radius:0 0 28px 28px; color:#fff; } .lg-mobile-head p { margin:0; color:#d6cdee; font-size:14.5px; }
   .lg-card { max-width:none; border:0; box-shadow:none; background:transparent; padding:24px; border-radius:0; }
 }
+
+/* FORIOR workspace */
+.biz-page { display:flex; flex-direction:column; gap:18px; } .biz-page > .panel, .biz-page > section, .biz-page > div { margin:0; }
+.biz-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }
+.biz-stats button { margin:0; display:flex; flex-direction:column; align-items:flex-start; gap:4px; border:1px solid var(--line); text-align:left; cursor:pointer; color:var(--purple); font:inherit; background:#fff; }
+.biz-stats button:hover { border-color:#c9b8f2; } .biz-stats b { font-size:28px; color:var(--ink); margin-top:4px; } .biz-stats small { font-size:13px; color:var(--muted); }
+.biz-stats .hot { background:#fffaf0; border-color:#f3dfb4; color:#9a5b00; }
+.biz-card { display:flex; flex-direction:column; gap:12px; margin:0; }
+.biz-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; } .biz-head h2 { margin:0; font-size:17px; font-weight:700; } .biz-head .outline-button { min-height:36px; font-size:13px; }
+.biz-list { display:flex; flex-direction:column; gap:8px; }
+.biz-row { display:grid; grid-template-columns:minmax(0,1.3fr) auto minmax(0,2fr) 18px; gap:14px; align-items:center; padding:12px 14px; border:1px solid transparent; border-radius:12px; background:#faf8fe; text-align:left; font:inherit; color:var(--ink); cursor:pointer; }
+.biz-row:hover { border-color:#e1d5f8; } .biz-row b { font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .biz-row span { font-size:13.5px; color:#5d5470; } .biz-row svg { color:#8a80a0; }
+.biz-row.urgent { background:#fffaf0; } .biz-row.urgent span { color:#9a5b00; font-weight:600; }
+.biz-two { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }
+.biz-mini { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; } .biz-mini span { display:flex; flex-direction:column; padding:10px; border-radius:10px; background:#faf8fe; font-size:12.5px; color:var(--muted); } .biz-mini b { font-size:20px; color:var(--ink); }
+.planner-page { padding:0; } .planner-frame { width:100%; height:calc(100vh - 180px); min-height:620px; border:1px solid var(--line); border-radius:16px; background:#fff; }
+.nav-group .nav-badge { margin-left:auto; min-width:20px; height:20px; padding:0 6px; display:inline-grid; place-items:center; border-radius:999px; background:#fdf1dc; color:#9a5b00; font-size:11.5px; font-weight:700; }
+@media (max-width:760px) { .biz-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } .biz-row { grid-template-columns:minmax(0,1fr) auto; } .biz-row span { grid-column:1 / -1; } .biz-row svg { display:none; } .biz-mini { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+/* Settings › Anggota tim */
+.tm { display:flex; flex-direction:column; gap:16px; }
+.tm h4 { margin:0; font-size:16px; font-weight:700; } .tm p { margin:4px 0 0; font-size:13.5px; color:var(--muted); line-height:1.55; }
+.tm-invite { display:flex; flex-direction:column; gap:12px; padding:18px; border-radius:16px; background:#faf8fe; border:1px solid #eee9f6; }
+.tm-invite-row { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+.tm-invite-row label { display:flex; flex-direction:column; gap:6px; font-size:13px; font-weight:600; color:#4a4060; flex:2 1 240px; } .tm-invite-row label:nth-child(2) { flex:1 1 140px; }
+.tm-invite-row input, .tm-invite-row select, .tm-role { min-height:44px; padding:0 12px; border:1px solid #ddd5f0; border-radius:10px; font:inherit; font-size:14.5px; background:#fff; color:var(--ink); }
+.tm-invite-row .primary-button { min-height:44px; display:inline-flex; align-items:center; gap:7px; }
+.tm-link { padding:16px 18px; border-radius:16px; background:#f3fbf6; border:1px solid #c9ecd6; display:flex; flex-direction:column; gap:10px; }
+.tm-link-head { display:flex; justify-content:space-between; align-items:center; } .tm-link .x-row a { text-decoration:none; }
+.tm-list-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+.tm-list { display:flex; flex-direction:column; border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+.tm-row { display:grid; grid-template-columns:38px minmax(0,1fr) 120px 110px auto; gap:12px; align-items:center; padding:12px 14px; border-bottom:1px solid var(--line); background:#fff; } .tm-row:last-child { border-bottom:0; }
+.tm-avatar { width:38px; height:38px; display:grid; place-items:center; border-radius:50%; background:#efe8fc; color:#5b34b8; font-weight:800; }
+.tm-who { min-width:0; display:flex; flex-direction:column; } .tm-who b { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .tm-who em { font-style:normal; color:var(--muted); font-weight:500; } .tm-who small { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tm-role { min-height:38px; font-size:13.5px; } .tm-role-chip { padding:4px 10px; border-radius:8px; background:#f3f0f9; font-weight:600; font-size:13px; color:#4a4060; justify-self:start; }
+.tm-actions { display:flex; gap:6px; justify-content:flex-end; } .tm-actions .outline-button { min-height:36px; font-size:13px; white-space:nowrap; }
+.tm-empty { display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; padding:32px 16px; color:var(--muted); } .tm-empty h3 { margin:4px 0 0; color:var(--ink); font-size:17px; } .tm-empty p { margin:0 0 6px; max-width:420px; font-size:14px; }
+@media (max-width:760px) { .tm-row { grid-template-columns:38px minmax(0,1fr) auto; } .tm-row .dl-badge { grid-column:2; justify-self:start; } .tm-role, .tm-role-chip { grid-column:3; grid-row:1; } .tm-actions { grid-column:1 / -1; justify-content:flex-start; } }
+.tm-row .dl-badge { justify-self:start; }
