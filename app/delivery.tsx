@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import { ArrowUpDown, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Download, ExternalLink, FileText, FolderOpen, Heart, History, Images, LayoutGrid, Link2, List, Mail, MessageCircle, MessageSquare, MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, User, X } from "lucide-react";
 import { listDriveFolder } from "./assets";
 import { driveFolderId } from "./lib/flow";
-import { callServer, supabase } from "./lib/cloud";
+import { activeWorkspace, callServer, readCloud, supabase, switchWorkspace } from "./lib/cloud";
 import { notify, useCloud } from "./modules";
 import { PHASES, PHASE_LABEL, PHASE_SHORT, fromWorkspace, newGallery, setPhase, slugify, uniqueSlug, withFolder, type FolderType, type Gallery, type Phase, type Photo } from "../supabase/functions/gallery/delivery";
 
@@ -51,22 +51,47 @@ function useGalleries() {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from("galleries").select("id, slug, data, updated_at").order("created_at", { ascending: false });
+    const { data, error } = await supabase.from("galleries").select("id, slug, data, updated_at").eq("workspace_id", readCloud().workspaceId ?? "").order("created_at", { ascending: false });
     if (error) { setError(error.message); setState("error"); } else { setRows((data ?? []) as Row[]); setState("ready"); }
   }, []);
   useEffect(() => { load(); }, [load]);
   return { rows, setRows, state, error, load };
 }
 
+/** Lets another page (the FORIOR dashboard) open a gallery's detail when Photo Delivery mounts. */
+let pendingOpen: string | null = null;
+export const openGallerySoon = (id: string) => { pendingOpen = id; };
+const takePendingOpen = () => { const id = pendingOpen; pendingOpen = null; return id; };
+
+/** The one thing the team should do next for a gallery, and how urgent it is (lower = sooner). */
+export function nextActionOf(g: Gallery): { text: string; rank: number } {
+  const picked = g.previewPhotos.filter(p => p.selected).length;
+  const openRev = g.revisions.filter(r => r.status === "Open").length;
+  const days = (d?: string) => (d ? Math.ceil((new Date(d).getTime() - Date.now()) / 864e5) : 99);
+  switch (g.phase) {
+    case "Preview": return !g.previewPhotos.length ? { text: "Muat folder foto preview", rank: 1 } : g.previewSubmittedAt && g.rawSelectionLimit && !g.rawSubmittedAt ? { text: "Klien sedang memilih foto RAW", rank: 5 } : { text: days(g.selectByDate) < 0 ? "Tenggat pilih foto lewat — ingatkan klien" : "Menunggu klien memilih foto", rank: days(g.selectByDate) < 0 ? 2 : 6 };
+    case "Client Selection": return { text: `Klien memilih ${picked} foto — mulai editing`, rank: 0 };
+    case "Editing Progress": return { text: g.draftPhotos.length ? "Draft siap — kirim untuk review" : `Sedang diedit (${picked} foto) — muat draft`, rank: g.draftPhotos.length ? 1 : 3 };
+    case "Client Review": return { text: "Menunggu review klien", rank: 6 };
+    case "Revision": return { text: g.revisionPhotos.length ? "Hasil revisi menunggu review klien" : `Kerjakan revisi${openRev ? ` (${openRev} permintaan)` : ""}`, rank: g.revisionPhotos.length ? 6 : 0 };
+    default: return !g.finalPhotos.length ? { text: "Disetujui — muat foto final", rank: 1 } : days(g.downloadExpiry) < 0 ? { text: "Masa unduh berakhir", rank: 9 } : { text: `Selesai · unduhan sampai ${fmtDate(g.downloadExpiry)}`, rank: 9 };
+  }
+}
+
 export function DeliveryPage() {
   const [cloud] = useCloud();
-  if (!cloud.email) return <div className="module-page"><section className="panel dl-empty"><Images size={28} /><h3>Masuk dulu untuk memakai Photo Delivery</h3><p>Galeri klien disimpan di database akun Anda. Buka Settings → Akun, masuk, lalu kembali ke sini.</p></section></div>;
+  const ws = activeWorkspace(cloud);
+  // Photo Delivery is client work, so it lives in the business workspace (FORIOR).
+  if (ws?.kind !== "business") {
+    const biz = cloud.workspaces.find(w => w.kind === "business");
+    return <div className="module-page"><section className="panel dl-empty"><Images size={28} /><h3>Photo Delivery ada di workspace {biz?.name ?? "bisnis"}</h3><p>Galeri klien dikelola di workspace bisnis, terpisah dari workspace pribadi.</p>{biz ? <button className="primary-button" onClick={() => switchWorkspace(biz.id)}>Pindah ke {biz.name}</button> : <p>Anda belum menjadi anggota workspace bisnis.</p>}</section></div>;
+  }
   return <DeliveryInner />;
 }
 
 function DeliveryInner() {
   const { rows, setRows, state, error, load } = useGalleries();
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(() => takePendingOpen());
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [query, setQuery] = useState(""), [phase, setPhaseFilter] = useState<"" | Phase>("");
@@ -153,7 +178,7 @@ function ImportModal({ rows, onClose, onDone }: { rows: Row[]; onClose: () => vo
         const slug = old?.slug ?? uniqueSlug(slugify(String(doc.slug || doc.projectName || doc.title || "galeri")), taken);
         taken.add(slug);
         const data = { ...fromWorkspace({ ...doc, id }, slug), importedFrom: "app.forior.id", importedAt: new Date().toISOString() };
-        const { error } = old ? await supabase.from("galleries").update({ data, updated_at: new Date().toISOString() }).eq("id", id) : await supabase.from("galleries").insert({ id, slug, data });
+        const { error } = old ? await supabase.from("galleries").update({ data, updated_at: new Date().toISOString() }).eq("id", id) : await supabase.from("galleries").insert({ id, slug, data, workspace_id: readCloud().workspaceId });
         if (error) throw new Error(`${doc.title}: ${error.message}`);
         if (old) updated++; else added++;
       }
@@ -196,7 +221,7 @@ function NewGalleryModal({ taken, onClose, onCreated }: { taken: string[]; onClo
       let g = newGallery({ id, slug: uniqueSlug(slugify(form.title), taken), title: form.title.trim(), client: { company: form.company, contact: form.contact, whatsapp: form.whatsapp, email: form.email }, selectionLimit: Number(form.selectionLimit), rawSelectionLimit: Number(form.rawSelectionLimit), previewFolderUrl: form.previewFolderUrl.trim() });
       let warning = "";
       if (g.previewFolderUrl) { try { g = withFolder(g, "preview", g.previewFolderUrl, await listSectioned(g.previewFolderUrl)); } catch (e) { warning = e instanceof Error ? e.message : String(e); } }
-      const { data, error } = await supabase.from("galleries").insert({ id, slug: g.slug, data: g }).select("id, slug, data, updated_at").single();
+      const { data, error } = await supabase.from("galleries").insert({ id, slug: g.slug, data: g, workspace_id: readCloud().workspaceId }).select("id, slug, data, updated_at").single();
       if (error) throw new Error(error.message);
       notify(warning ? `Galeri dibuat, tapi foto belum termuat: ${warning}` : `Galeri dibuat${g.previewPhotos.length ? ` dengan ${g.previewPhotos.length} foto` : ""}.`);
       onCreated(data as Row);
@@ -302,6 +327,7 @@ const BATCH = 25;
 
 function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: () => void; onSave: (g: Gallery) => Promise<boolean>; onDelete: () => void }) {
   const g = row.data;
+  const canDelete = activeWorkspace()?.role !== "editor"; // database also refuses deletes from editors
   const link = galleryLink(g.slug);
   const [tab, setTab] = useState<"galeri" | "revisi" | "catatan" | "aktivitas">("galeri");
   const [set, setSet] = useState<FolderType>(() => stageSet(g));
@@ -400,7 +426,7 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
           <button onClick={() => { setModal("edit"); setMenu(""); }}><Pencil size={14} /> Edit detail</button>
           {g.previewSubmittedAt && <button onClick={() => { changePhase("Preview"); setMenu(""); }}><RotateCcw size={14} /> Buka kembali pemilihan</button>}
           <button onClick={() => { onBack(); setMenu(""); }}><ChevronLeft size={14} /> Kembali ke daftar</button>
-          <button className="x-danger" onClick={() => { setMenu(""); onDelete(); }}><Trash2 size={14} /> Hapus galeri</button>
+          {canDelete && <button className="x-danger" onClick={() => { setMenu(""); onDelete(); }}><Trash2 size={14} /> Hapus galeri</button>}
         </div>}
       </div>
       <button className="outline-button" onClick={copy}><Link2 size={15} /> Salin link</button>

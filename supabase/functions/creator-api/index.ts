@@ -1,5 +1,7 @@
-// Server side of FORIOR Creator OS: keeps the user's API keys in Vault and makes the calls that need them.
-// Every request carries the signed-in user's JWT (verify_jwt is on); keys are looked up per user.
+// Server side of FORIOR Hub: keeps the API keys in Vault and makes the calls that need them.
+// Every request carries the signed-in user's JWT (verify_jwt is on) and the active workspace; the caller must
+// be a member of it. One set of keys is shared: they belong to the workspace owners (today Alvian owns both
+// workspaces), while usage and cost are recorded per workspace by the client.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@1.8.0";
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
@@ -11,11 +13,22 @@ const fail = (code: string, error: string, status = 400) => json({ code, error }
 
 const sql = postgres(Deno.env.get("SUPABASE_DB_URL")!, { prepare: false, max: 1 });
 const auth = createClient(Deno.env.get("SUPABASE_URL")!, JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!).default);
+// Admin client for invitations only (creates the invited account and its sign-in link; sends no email).
+const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default ?? "";
+const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 const NAMES = ["anthropic", "google", "meta_token", "ig_user_id"] as const;
 const MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"];
 
-async function secret(user: string, name: string): Promise<string | null> {
-  const [row] = await sql`select private.get_secret(${user}::uuid, ${name}) as v`;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const RANK: Record<string, number> = { editor: 1, admin: 2, owner: 3 };
+
+/** The workspace's key: the first owner of the workspace who saved one. */
+async function secret(ws: string, name: string): Promise<string | null> {
+  const [row] = await sql`
+    select private.get_secret(m.user_id, ${name}) as v
+    from public.workspace_members m
+    where m.workspace_id = ${ws}::uuid and m.role = 'owner' and private.get_secret(m.user_id, ${name}) is not null
+    order by m.created_at limit 1`;
   return row?.v ?? null;
 }
 
@@ -28,14 +41,33 @@ Deno.serve(async req => {
   const user = who.user.id;
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return fail("input", "Body harus JSON."); }
+  const ws = String(body.workspaceId ?? "");
+  if (!UUID.test(ws)) return fail("input", "Workspace tidak dikenal. Muat ulang halaman.");
+  const [member] = await sql`select m.role, w.kind from public.workspace_members m join public.workspaces w on w.id = m.workspace_id where m.workspace_id = ${ws}::uuid and m.user_id = ${user}::uuid`;
+  if (!member) return fail("forbidden", "Anda bukan anggota workspace ini.", 403);
+  const role = String(member.role), kind = String(member.kind);
+  const redirectTo = typeof body.redirectTo === "string" && /^https:\/\/[^\s]+$/.test(body.redirectTo) ? body.redirectTo : undefined;
+  /** A fresh sign-in link that lands on "choose a password": invite for new accounts, recovery once confirmed. */
+  const inviteLink = async (email: string) => {
+    const first = await admin.auth.admin.generateLink({ type: "invite", email, options: { redirectTo } });
+    if (!first.error) return { link: first.data.properties.action_link, userId: first.data.user.id };
+    const again = await admin.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo } });
+    if (again.error) throw new Error(again.error.message);
+    return { link: again.data.properties.action_link, userId: again.data.user.id };
+  };
 
   try {
     switch (body.action) {
       case "secrets.status": {
-        const rows = await sql`select name, updated_at from private.secret_status(${user}::uuid)`;
+        const rows = await sql`
+          select s.name, max(s.updated_at) as updated_at
+          from public.workspace_members m cross join lateral private.secret_status(m.user_id) s
+          where m.workspace_id = ${ws}::uuid and m.role = 'owner'
+          group by s.name`;
         return json({ saved: Object.fromEntries(rows.map(r => [r.name, r.updated_at])) });
       }
       case "secrets.set": {
+        if (RANK[role] < RANK.owner) return fail("forbidden", "Hanya Owner yang bisa mengubah API key.", 403);
         const name = String(body.name ?? ""), value = typeof body.value === "string" ? body.value.trim() : "";
         if (!NAMES.includes(name as typeof NAMES[number])) return fail("input", "Nama key tidak dikenal.");
         if (value.length > 4000) return fail("input", "Key terlalu panjang.");
@@ -43,7 +75,7 @@ Deno.serve(async req => {
         return json({ ok: true });
       }
       case "ai": {
-        const key = await secret(user, "anthropic");
+        const key = await secret(ws, "anthropic");
         if (!key) return fail("no_key", "API key Anthropic belum disimpan. Buka Settings → AI & Models.");
         const model = String(body.model ?? "");
         if (!MODELS.includes(model)) return fail("input", `Model "${model}" tidak diizinkan.`);
@@ -65,7 +97,7 @@ Deno.serve(async req => {
         }
       }
       case "drive": {
-        const key = await secret(user, "google");
+        const key = await secret(ws, "google");
         if (!key) return fail("no_key", "Google API key belum disimpan. Buka Settings → AI & Models.");
         const folder = String(body.folderId ?? "");
         if (!/^[A-Za-z0-9_-]{10,}$/.test(folder)) return fail("input", "ID folder tidak valid.");
@@ -84,6 +116,7 @@ Deno.serve(async req => {
         return json({ files });
       }
       case "workspace.galleries": {
+        if (RANK[role] < RANK.admin) return fail("forbidden", "Hanya Owner/Admin yang bisa mengimpor dari Workspace.", 403);
         // Read-only copy of Photo Delivery galleries from the FORIOR Workspace app (app.forior.id).
         // The Workspace password is used once to get a token and is never stored or logged.
         const email = String(body.email ?? "").trim(), password = String(body.password ?? "");
@@ -97,8 +130,49 @@ Deno.serve(async req => {
         if (!r.ok || !Array.isArray(list)) return fail("upstream", `Gagal membaca galeri Workspace (${r.status}).`, 502);
         return json({ galleries: list });
       }
+      case "members.list": {
+        const rows = await sql`
+          select m.user_id, m.role, m.created_at, u.email, u.last_sign_in_at
+          from public.workspace_members m join auth.users u on u.id = m.user_id
+          where m.workspace_id = ${ws}::uuid
+          order by case m.role when 'owner' then 0 when 'admin' then 1 else 2 end, m.created_at`;
+        return json({ kind, you: role, members: rows.map(r => ({ userId: r.user_id, email: r.email, role: r.role, joinedAt: r.created_at, active: !!r.last_sign_in_at, self: r.user_id === user })) });
+      }
+      case "members.invite": {
+        if (kind !== "business") return fail("forbidden", "Workspace pribadi tidak bisa mengundang anggota.", 403);
+        if (RANK[role] < RANK.admin) return fail("forbidden", "Hanya Owner/Admin yang bisa mengundang.", 403);
+        const email = String(body.email ?? "").trim().toLowerCase(), newRole = String(body.role ?? "editor");
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) return fail("input", "Email belum valid.");
+        if (!["editor", "admin"].includes(newRole)) return fail("input", "Peran tidak dikenal.");
+        if (newRole === "admin" && role !== "owner") return fail("forbidden", "Hanya Owner yang bisa menambah Admin.", 403);
+        const [existing] = await sql`select u.id, u.last_sign_in_at, m.role from auth.users u left join public.workspace_members m on m.user_id = u.id and m.workspace_id = ${ws}::uuid where lower(u.email) = ${email}`;
+        if (existing?.role) return fail("input", "Email ini sudah menjadi anggota workspace.");
+        let userId = existing?.id as string | undefined, link: string | null = null;
+        if (!existing || !existing.last_sign_in_at) { const made = await inviteLink(email); userId = made.userId; link = made.link; }
+        await sql`insert into public.workspace_members (workspace_id, user_id, role) values (${ws}::uuid, ${userId!}::uuid, ${newRole}) on conflict do nothing`;
+        return json({ added: true, link, existingAccount: !!existing?.last_sign_in_at });
+      }
+      case "members.link":
+      case "members.role":
+      case "members.remove": {
+        if (RANK[role] < RANK.admin) return fail("forbidden", "Hanya Owner/Admin yang bisa mengelola anggota.", 403);
+        const target = String(body.userId ?? "");
+        if (!UUID.test(target)) return fail("input", "Anggota tidak dikenal.");
+        const [t] = await sql`select m.role, u.email, u.last_sign_in_at from public.workspace_members m join auth.users u on u.id = m.user_id where m.workspace_id = ${ws}::uuid and m.user_id = ${target}::uuid`;
+        if (!t) return fail("input", "Anggota tidak ditemukan.");
+        if (body.action === "members.link") return json({ link: (await inviteLink(String(t.email))).link });
+        if (target === user) return fail("forbidden", "Anda tidak bisa mengubah akses Anda sendiri.", 403);
+        if (t.role === "owner") return fail("forbidden", "Owner tidak bisa diubah atau dikeluarkan.", 403);
+        if (role !== "owner" && t.role !== "editor") return fail("forbidden", "Admin hanya bisa mengelola Editor.", 403);
+        if (body.action === "members.remove") { await sql`delete from public.workspace_members where workspace_id = ${ws}::uuid and user_id = ${target}::uuid`; return json({ ok: true }); }
+        const newRole = String(body.role ?? "");
+        if (!["editor", "admin"].includes(newRole)) return fail("input", "Peran tidak dikenal.");
+        if (newRole === "admin" && role !== "owner") return fail("forbidden", "Hanya Owner yang bisa menjadikan Admin.", 403);
+        await sql`update public.workspace_members set role = ${newRole} where workspace_id = ${ws}::uuid and user_id = ${target}::uuid`;
+        return json({ ok: true });
+      }
       case "instagram": {
-        const [token, igId] = await Promise.all([secret(user, "meta_token"), secret(user, "ig_user_id")]);
+        const [token, igId] = await Promise.all([secret(ws, "meta_token"), secret(ws, "ig_user_id")]);
         if (!token || !igId) return fail("no_key", "Token Meta belum disimpan.");
         const username = String(body.username ?? "");
         if (!/^[A-Za-z0-9._]{1,30}$/.test(username)) return fail("input", "Username tidak valid.");

@@ -6,7 +6,7 @@ import { askAI, CHEAP_MODEL, type Tier } from "./lib/ai";
 import { costIdr, monthKey, rupiah } from "./lib/logic";
 import { parseLines } from "./lib/logic";
 import { patchItem } from "./plan-data";
-import { aiReady, CLOUD_OFF, saveSecret, signInWithEmail, signInWithPassword, signOut, signUpWithPassword, type Cloud } from "./lib/cloud";
+import { activeWorkspace, aiReady, CLOUD_OFF, saveSecret, signOut, type Cloud } from "./lib/cloud";
 import { useCallLog, addApproval, useApprovals, useIdeas, useLeads, useSettings, useStored, useUsage, writeStored, type Lead } from "./lib/store";
 
 /** Runs an AI action and tracks busy/error state for the button that triggered it. */
@@ -70,27 +70,12 @@ export const useCloud = () => useStored<Cloud>("cloud", CLOUD_OFF);
 /** AI can run when the signed-in user has a key on the server, or a key is kept in this browser. */
 export function useAiReady() { const [cloud] = useCloud(); const [settings] = useSettings(); return aiReady(cloud, settings.apiKey); }
 
+/** Signed-in account and active workspace. Access is by invitation, so there is no sign-up here. */
 export function AccountPanel() {
   const [cloud] = useCloud();
-  const [mode, setMode] = useState<"password" | "signup" | "link">("password");
-  const [email, setEmail] = useState(""), [password, setPassword] = useState(""), [notice, setNotice] = useState("");
-  const ai = useAI();
-  if (cloud.email) return <section className="f-account"><div><b>Masuk sebagai {cloud.email}</b><small>{cloud.sync === "syncing" ? "Menyinkronkan…" : cloud.sync === "error" ? `Sinkronisasi gagal: ${cloud.error}` : "Data tersinkron ke database. Bisa dibuka dari perangkat lain."}</small></div><button className="outline-button" onClick={() => signOut()}>Keluar</button></section>;
-  const validEmail = () => { if (!/^\S+@\S+\.\S+$/.test(email.trim())) throw new Error("Email belum valid."); };
-  const submit = () => ai.run("login", async () => {
-    validEmail(); setNotice("");
-    if (mode === "link") { await signInWithEmail(email.trim()); setNotice(`Link masuk dikirim ke ${email.trim()}. Buka email itu di perangkat ini.`); return; }
-    if (password.length < 8) throw new Error("Kata sandi minimal 8 karakter.");
-    if (mode === "password") { await signInWithPassword(email.trim(), password); return; }
-    const needsConfirm = await signUpWithPassword(email.trim(), password);
-    if (needsConfirm) { setNotice("Akun dibuat. Klik link konfirmasi di email Anda — kalau halaman tujuannya error, abaikan saja, akun tetap terkonfirmasi. Lalu kembali ke sini dan pilih “Masuk”."); setMode("password"); }
-  });
-  return <section className="f-account"><div><b>Masuk untuk menyimpan ke database</b><small>Data dan API key tersimpan aman di server, dan sama di ponsel maupun laptop. Tanpa masuk, data hanya ada di browser ini.</small></div>
-    <div className="f-chips f-account-modes" role="tablist">{([["password", "Masuk"], ["signup", "Buat akun"], ["link", "Link email"]] as const).map(([m, label]) => <button key={m} role="tab" aria-selected={mode === m} className={mode === m ? "active" : ""} onClick={() => { setMode(m); setNotice(""); }}>{label}</button>)}</div>
-    <div className="f-account-form"><input type="email" aria-label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="nama@email.com" autoComplete="email" />
-      {mode !== "link" && <input type="password" aria-label="Kata sandi" value={password} onChange={e => setPassword(e.target.value)} placeholder="Kata sandi (min. 8 karakter)" autoComplete={mode === "signup" ? "new-password" : "current-password"} onKeyDown={e => { if (e.key === "Enter") submit(); }} />}
-      <AiButton className="primary-button" label={mode === "password" ? "Masuk" : mode === "signup" ? "Buat akun" : "Kirim link masuk"} busyLabel="Memproses…" busy={ai.busy === "login"} onClick={submit} /></div>
-    {notice && <p className="x-ok">{notice}</p>}<AiError message={ai.error} /></section>;
+  const ws = activeWorkspace(cloud);
+  const role = ws?.role === "owner" ? "Owner" : ws?.role === "admin" ? "Admin" : "Editor";
+  return <section className="f-account"><div><b>Masuk sebagai {cloud.email}</b><small>{ws ? `Workspace ${ws.name} · ${role}. ` : ""}{cloud.sync === "syncing" ? "Menyinkronkan…" : cloud.sync === "error" ? `Sinkronisasi gagal: ${cloud.error}` : "Data tersinkron ke database workspace ini."}</small></div><button className="outline-button" onClick={() => signOut()}>Keluar</button></section>;
 }
 
 /** A key field: saved encrypted on the server when signed in, otherwise kept in this browser. */
@@ -99,6 +84,8 @@ function KeyField({ id, label, hint, placeholder, server, local, setLocal }: { i
   const [draft, setDraft] = useState(""), [show, setShow] = useState(false);
   const ai = useAI();
   const savedAt = cloud.keys[server];
+  const isOwner = activeWorkspace(cloud)?.role === "owner";
+  if (cloud.email && !isOwner) return <div className="settings-field"><label>{label}</label><p className={savedAt ? "x-ok" : "x-empty"}>{savedAt ? "Tersedia — dikelola oleh Owner workspace." : "Belum diisi. Minta Owner workspace mengisinya."}</p></div>;
   if (!cloud.email) return <div className="settings-field"><label htmlFor={id}>{label}</label><div className="x-row"><input id={id} type={show ? "text" : "password"} value={local} onChange={e => setLocal(e.target.value)} placeholder={placeholder} autoComplete="off" /><button className="outline-button" onClick={() => setShow(!show)} aria-label={show ? "Sembunyikan" : "Tampilkan"}>{show ? <EyeOff size={15} /> : <Eye size={15} />}</button></div><small>{hint} Tersimpan hanya di browser ini.</small></div>;
   const save = (value: string) => ai.run(id, async () => { await saveSecret(server, value); setDraft(""); if (value) setLocal(""); });
   return <div className="settings-field"><label htmlFor={id}>{label}</label>
@@ -151,7 +138,7 @@ export function ApiSettingsTab() {
   const set = <K extends keyof typeof settings>(key: K, value: (typeof settings)[K]) => setSettings(old => ({ ...old, [key]: value }));
   return <>
     <AccountPanel />
-    <p className="settings-security-note"><ShieldCheck size={16} /> {cloud.email ? "Key disimpan terenkripsi (Supabase Vault) dan hanya dipakai oleh server. Browser tidak pernah menerimanya kembali." : "Belum masuk: key disimpan di browser ini saja dan dikirim langsung ke penyedia API. Jangan isi di komputer bersama."}</p>
+    <p className="settings-security-note"><ShieldCheck size={16} /> {cloud.email ? "Satu set key dipakai bersama oleh semua workspace, disimpan terenkripsi (Supabase Vault) dan hanya dipakai server. Pemakaian dan biaya AI dicatat terpisah per workspace." : "Belum masuk: key disimpan di browser ini saja dan dikirim langsung ke penyedia API. Jangan isi di komputer bersama."}</p>
     <KeyField id="apikey" label="ANTHROPIC API KEY" server="anthropic" placeholder="sk-ant-…" local={settings.apiKey} setLocal={v => set("apiKey", v)} hint="Dibuat di console.anthropic.com → API Keys. Wajib untuk semua fitur AI." />
     <div className="x-row"><AiButton className="primary-button" label="Tes koneksi AI" busyLabel="Mengetes…" busy={ai.busy === "test"} onClick={() => ai.run("test", async () => { setTestResult(""); const text = await askAI({ tier: "light", role: "asisten", label: "Tes koneksi", prompt: "Balas dengan satu kata: OK", maxTokens: 300 }); setTestResult("Terhubung. Balasan model: " + text); })} /></div>
     {testResult && <p className="x-ok">{testResult}</p>}<AiError message={ai.error} />

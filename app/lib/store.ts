@@ -2,8 +2,15 @@
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 
-// Browser-only persistence: GitHub Pages has no backend, so everything lives in localStorage.
-const PREFIX = "forior-os:";
+// Browser cache of the app's data, mirrored to Supabase by cloud.ts.
+// Each workspace has its own space ("forior-os:ws:<id>:<key>") so switching never shows another workspace's data.
+// A few keys are about the device or session, not a workspace, and stay global ("forior-os:<key>").
+const BASE = "forior-os:";
+const GLOBAL_KEYS = new Set(["cloud", "toast", "workspace"]);
+let space = "";
+export const isGlobalKey = (key: string) => GLOBAL_KEYS.has(key);
+export const storeSpace = () => space;
+const storageKey = (key: string) => (GLOBAL_KEYS.has(key) || !space ? BASE + key : `${BASE}ws:${space}:${key}`);
 const cache = new Map<string, unknown>();
 const fallbacks = new Map<string, unknown>();
 const listeners = new Set<() => void>();
@@ -25,7 +32,7 @@ export function readStored<T>(key: string, initial: T): T {
   if (cache.has(key)) return cache.get(key) as T;
   let value = fallbackFor(key, initial);
   try {
-    const raw = window.localStorage.getItem(PREFIX + key);
+    const raw = window.localStorage.getItem(storageKey(key));
     if (raw !== null) value = JSON.parse(raw) as T;
   } catch { /* private mode or corrupt entry: keep the default */ }
   cache.set(key, value);
@@ -36,9 +43,47 @@ export function writeStored<T>(key: string, next: T | ((old: T) => T), initial: 
   const old = readStored(key, initial);
   const value = typeof next === "function" ? (next as (old: T) => T)(old) : next;
   cache.set(key, value);
-  try { window.localStorage.setItem(PREFIX + key, JSON.stringify(value)); } catch { /* storage full or blocked: state still works for this session */ }
+  try { window.localStorage.setItem(storageKey(key), JSON.stringify(value)); } catch { /* storage full or blocked: state still works for this session */ }
   listeners.forEach(l => l());
   writeHooks.forEach(h => h(key, value));
+}
+
+/** Switches the store to a workspace: workspace keys are re-read from that workspace's space. */
+export function setStoreSpace(id: string) {
+  if (id === space) return;
+  space = id;
+  for (const key of [...cache.keys()]) if (!GLOBAL_KEYS.has(key)) cache.delete(key);
+  dropLegacyKeys();
+  listeners.forEach(l => l());
+}
+
+/** Lists the keys cached in this browser for a workspace (used to upload data made before the first sync). */
+export function localKeysOf(id: string): string[] {
+  const prefix = `${BASE}ws:${id}:`, out: string[] = [];
+  try { for (let i = 0; i < window.localStorage.length; i++) { const k = window.localStorage.key(i) ?? ""; if (k.startsWith(prefix)) out.push(k.slice(prefix.length)); } } catch { /* storage blocked */ }
+  return out;
+}
+
+/** Data cached before workspaces existed ("forior-os:<key>") is stale: the server copy was migrated. */
+function dropLegacyKeys() {
+  try {
+    const stale: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) { const k = window.localStorage.key(i) ?? ""; if (k.startsWith(BASE) && !k.startsWith(`${BASE}ws:`) && !GLOBAL_KEYS.has(k.slice(BASE.length))) stale.push(k); }
+    stale.forEach(k => window.localStorage.removeItem(k));
+    window.localStorage.removeItem("forior.creatoros.campaigns.v6");
+  } catch { /* storage blocked */ }
+}
+
+/** Removes every workspace's cached data from this browser (sign-out on a shared device). */
+export function clearWorkspaceCache() {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) { const k = window.localStorage.key(i) ?? ""; if (k.startsWith(`${BASE}ws:`)) keys.push(k); }
+    keys.forEach(k => window.localStorage.removeItem(k));
+  } catch { /* storage blocked */ }
+  for (const key of [...cache.keys()]) if (!GLOBAL_KEYS.has(key)) cache.delete(key);
+  space = "";
+  listeners.forEach(l => l());
 }
 
 /** useState that survives reloads and stays in sync across every component using the same key. */
