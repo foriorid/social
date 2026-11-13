@@ -412,7 +412,7 @@ export default function DashboardPage() {
       <section className="main-area">
         <header className="topbar">
           <button className="mobile-menu" onClick={() => setMobileNav(true)} aria-label="Open navigation"><Menu size={21} /></button>
-          <div className="page-heading">
+          <div className="page-heading" id="page-heading-slot">
             <span>{activeNav === "Dashboard" ? "Good Afternoon," : "WORKSPACE / ALVIAN"}</span>
             <h1>{activeNav === "Dashboard" ? <>Alvian <span className="wave">👋</span></> : activeNav}</h1>
             <p>{activeNav === "Dashboard" ? "Personal Brand Content Command Center" : "Personal Brand Content Workspace"}</p>

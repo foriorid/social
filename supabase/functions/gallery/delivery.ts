@@ -28,7 +28,7 @@ export type Gallery = {
   revisionFolderUrl: string; revisionPhotos: Photo[]; revisions: Revision[];
   finalFolderUrl: string; finalPhotos: Photo[];
   selectByDate: string; feedbackByDate: string; downloadExpiry: string;
-  quotaAddons?: Addon[]; notes?: string; createdAt: string;
+  quotaAddons?: Addon[]; notes?: string; createdAt: string; importedFrom?: string; importedAt?: string;
 };
 export type FolderType = "preview" | "draft" | "revision" | "final";
 
