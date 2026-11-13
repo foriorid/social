@@ -96,7 +96,8 @@ async function createProjectFromPlan(plan: PlannerPlan): Promise<string> {
 export function PhotoPlannerPage({ openGallery }: { openGallery: (id: string) => void }) {
   const frame = useRef<HTMLIFrameElement | null>(null);
   const base = typeof window === "undefined" ? "" : window.location.origin + window.location.pathname.replace(/\/$/, "");
-  const src = `${base}/photo-planner.html`;
+  // Vercel serves exported .html files without the extension; GitHub Pages needs it.
+  const src = `${base}/photo-planner${typeof window !== "undefined" && window.location.hostname.endsWith("github.io") ? ".html" : ""}`;
   const [created, setCreated] = useState<string | null>(null);
   useEffect(() => {
     const onMessage = async (e: MessageEvent) => {
