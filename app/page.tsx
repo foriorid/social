@@ -80,7 +80,7 @@ const pipelineSteps: Array<{ label: string; count: string; icon: typeof Lightbul
   { label: "Ide", count: "", icon: Lightbulb },
   { label: "Brief", count: "", icon: FileText },
   { label: "Produksi", count: "", icon: Camera, current: true },
-  { label: "Draft", count: "", icon: CheckCircle2 },
+  { label: "Review", count: "", icon: CheckCircle2 },
   { label: "Publish", count: "", icon: Send, done: true }
 ];
 
@@ -332,7 +332,7 @@ function AppShell() {
   const counts: Record<string,number> = {};
   plan.campaigns.forEach(c=>c.items.forEach(i=>{const s=stageOf(i.status);counts[s]=(counts[s]||0)+1;}));
   const pendingApprovals = approvals.filter(a=>a.status==="pending").length;
-  const liveCounts: Record<string,number> = { "Ide": ideas.length, "Brief": counts["Brief"]||0, "Produksi": counts["Produksi"]||0, "Draft": counts["Draft"]||0, "Publish": counts["Publish"]||0 };
+  const liveCounts: Record<string,number> = { "Ide": ideas.length, "Brief": (counts["Draft"]||0)+(counts["Brief Siap"]||0), "Produksi": counts["Produksi"]||0, "Review": counts["Review"]||0, "Publish": (counts["Terjadwal"]||0)+(counts["Dipublish"]||0) };
   const [tasks] = useTasks();
   const failedTasks = tasks.filter(t=>t.status==="failed").length, runningTasks = tasks.filter(t=>t.status==="queued"||t.status==="running").length;
   const newLeads = leads.filter(l=>l.status==="Baru").length;
