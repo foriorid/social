@@ -3,13 +3,14 @@
 // Content Plan: pick a client and a batch, see its content as a calendar, timeline or list, and open one
 // content item into Brief / Storyboard / Desain. Clients are plan.accounts and batches are plan.campaigns.
 import { useState } from "react";
-import { ArrowLeft, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock, Code2, Copy, FileText, Film, Image as ImageIcon, Layers3, List, MoreHorizontal, Pencil, Play, Plus, Printer, Search, Send, Share2, Sparkles, Trash2, Users, X, Zap } from "lucide-react";
+import { ArrowLeft, Palette, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock, Code2, Copy, FileText, Film, Image as ImageIcon, Layers3, List, MoreHorizontal, Pencil, Play, Plus, Printer, Search, Send, Share2, Sparkles, Trash2, Users, X, Zap } from "lucide-react";
 import { DriveBrowser } from "./assets";
 import { enqueue, enqueueCampaign } from "./agents";
 import { KIND_LABEL, PIPELINE, STAGES, clock, dateOf, isVideo, monthGrid, nextStep, sceneTimes, secOf, stageKey, stageOf, type Stage } from "./lib/flow";
 import { addApproval, useIdeas, useStored, useTasks, writeStored, type Task } from "./lib/store";
 import { notify, useAiReady } from "./modules";
 import { campaignHtml, defaultKind, patchCampaign, patchItem, storyboardHtml, usePlan, type CampaignContent, type CampaignData, type CampaignKind, type Scene } from "./plan-data";
+import { BrandKitCard, BrandKitModal } from "./brandkit";
 import { CLIENT_LABEL, ClientFeedback, ReviewPanel, clientStatusOf, useReviewLink } from "./review";
 import { StudioPage } from "./studio";
 import { ImageTile } from "./ui";
@@ -19,6 +20,14 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const FORMATS: CampaignContent["format"][] = ["Reels", "Carousel", "Feed"];
 const FORMAT_ICON = { Reels: Play, Carousel: Layers3, Feed: ImageIcon } as const;
 const GOALS = ["Awareness & engagement", "Lead generation", "Bookings", "Sales conversion"];
+/** Ready-made carousel structures (label, title, subtitle); text is a starting point to edit. */
+const SLIDE_PRESETS: { name: string; hint: string; slides: [string, string, string][] }[] = [
+  { name: "Facilities Highlight", hint: "fitur unggulan berurutan", slides: [["Cover", "5 Fasilitas Favorit", "Yang bikin tamu betah"], ["Fasilitas 1", "Private Pool", "Kolam renang pribadi"], ["Fasilitas 2", "Ruang Keluarga", "Luas untuk kumpul"], ["Fasilitas 3", "Dapur Lengkap", "Siap masak bersama"], ["Fasilitas 4", "Playroom", "Anak-anak senang"], ["Penutup", "Cek tanggal tersedia", "DM atau klik link di bio"]] },
+  { name: "Room Tour", hint: "tur ruang demi ruang", slides: [["Cover", "Room Tour", "Lihat setiap sudutnya"], ["Living", "Living Room", ""], ["Dining", "Dining Area", ""], ["Kamar", "Master Bedroom", ""], ["Kamar mandi", "Bathroom", ""], ["Outdoor", "Outdoor & View", ""], ["Penutup", "Siap menginap?", "Booking sekarang"]] },
+  { name: "Tips & Insight", hint: "edukasi bernomor", slides: [["Cover", "4 Tips Staycation Hemat", "Simpan untuk liburan berikutnya"], ["Tip 1", "Pilih hari kerja", ""], ["Tip 2", "Ajak rombongan", ""], ["Tip 3", "Masak sendiri", ""], ["Tip 4", "Booking jauh hari", ""], ["Penutup", "Mau coba?", "Tanya tanggal kosong"]] },
+  { name: "Promo & Offer", hint: "penawaran + CTA", slides: [["Cover", "Promo Akhir Tahun", "Terbatas"], ["Penawaran", "Diskon menginap", "Syarat berlaku"], ["Benefit", "Gratis sarapan", ""], ["Penutup", "Klaim sekarang", "DM kami"]] },
+  { name: "Lifestyle & Experience", hint: "suasana & momen", slides: [["Cover", "Slow Morning", "Satu hari di villa"], ["Pagi", "Kopi dengan view", ""], ["Siang", "Berenang santai", ""], ["Malam", "BBQ bersama", ""], ["Penutup", "Rencanakan momenmu", ""]] }
+];
 const DAYS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 const targetOf = (c: CampaignData) => c.target ?? 30;
@@ -166,6 +175,7 @@ function ContentDetail({ campaign, item, onBack, onOpenStudio }: { campaign: Cam
         </> : <>
           <p className="cx-hint">Tambah, ubah, dan urutkan {unit} langsung di kartu. {video ? "Durasi tiap scene menyusun timeline otomatis." : "Urutan kartu = urutan slide."}</p>
           <button className="primary-button cx-wide" onClick={addScene}><Plus size={16} /> Tambah {unit}</button>
+          {!video && <div className="cx-field"><label>Mulai dari struktur slide</label><div className="cx-presets">{SLIDE_PRESETS.map(pr => <button key={pr.name} onClick={() => { if (board.length && !window.confirm(`Ganti ${board.length} slide yang ada dengan struktur “${pr.name}”?`)) return; setBoard(pr.slides.map(([label, text, sub]) => ({ label, text, sub, visual: "", audio: "" }))); }}><b>{pr.name}</b><small>{pr.slides.length} slide · {pr.hint}</small></button>)}</div></div>}
         </>}
       </aside>
 
@@ -183,6 +193,7 @@ function ContentDetail({ campaign, item, onBack, onOpenStudio }: { campaign: Cam
                 <div className="cx-menu-wrap"><button className="cx-icon" aria-label={`Menu ${s.label}`} onClick={() => setMenu(menu === i ? null : i)}><MoreHorizontal size={16} /></button>{menu === i && <div className="floating-menu cx-menu"><button onClick={() => move(i, -1)} disabled={i === 0}>Geser ke kiri<ChevronLeft size={14} /></button><button onClick={() => move(i, 1)} disabled={i === board.length - 1}>Geser ke kanan<ChevronRight size={14} /></button><button className="x-danger" onClick={() => { setBoard(board.filter((_, n) => n !== i)); setMenu(null); }}>Hapus {unit}<Trash2 size={14} /></button></div>}</div></div>
               <label className="cx-line"><Film size={14} /><textarea rows={2} aria-label={`Shot ${s.label}`} placeholder={video ? "Shot & gerakan kamera" : "Foto / komposisi"} value={s.visual} onChange={e => editScene(i, { visual: e.target.value })} /></label>
               <label className="cx-line"><b>T</b><textarea rows={2} aria-label={`Teks ${s.label}`} placeholder="Teks di layar" value={s.text} onChange={e => editScene(i, { text: e.target.value })} /></label>
+              {!video && <label className="cx-line"><span>Sub</span><textarea rows={2} aria-label={`Subjudul ${s.label}`} placeholder="Subjudul" value={s.sub ?? ""} onChange={e => editScene(i, { sub: e.target.value })} /></label>}
               {video && <label className="cx-line"><span>VO</span><textarea rows={2} aria-label={`VO ${s.label}`} placeholder="Voice over / musik" value={s.audio} onChange={e => editScene(i, { audio: e.target.value })} /></label>}
               <label className="cx-line"><Pencil size={14} /><textarea rows={2} aria-label={`Catatan ${s.label}`} placeholder="Catatan" value={s.note ?? ""} onChange={e => editScene(i, { note: e.target.value })} /></label>
             </div>
@@ -210,7 +221,7 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
   const [open, setOpen] = useState<Ref | null>(null);
   const [pop, setPop] = useState<"" | "client" | "batch" | "ai">("");
   const [q, setQ] = useState("");
-  const [modal, setModal] = useState<"" | "batch" | "content" | "client" | "rename">("");
+  const [modal, setModal] = useState<"" | "batch" | "content" | "client" | "rename" | "brand">("");
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState(blankForm);
   const [draft, setDraft] = useState({ title: "", format: "Reels" as CampaignContent["format"], date: "", batch: "" });
@@ -245,7 +256,7 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
     const account = form.account.trim();
     const fields = { account, name: form.name.trim(), start: form.start || undefined, end: form.end || undefined, period: periodOf(form.start, form.end, "-"), goal: form.goal, kind: form.kind || defaultKind(account), brief: form.brief.trim(), target: Math.max(1, form.target) };
     if (editing) { patchCampaign(editing, c => ({ ...c, ...fields, period: periodOf(form.start, form.end, c.period) })); notify("Batch disimpan."); }
-    else { const id = "c" + Date.now(); setPlan(o => ({ accounts: o.accounts.includes(account) ? o.accounts : [...o.accounts, account], campaigns: [{ id, cover: "living", items: [], ...fields }, ...o.campaigns] })); setClient(account); setBatchId(id); if (form.start) setMonth({ y: Number(form.start.slice(0, 4)), m: Number(form.start.slice(5, 7)) - 1 }); notify("Batch dibuat. Tambahkan konten atau minta AI mengusulkan judul."); }
+    else { const id = "c" + Date.now(); setPlan(o => ({ ...o, accounts: o.accounts.includes(account) ? o.accounts : [...o.accounts, account], campaigns: [{ id, cover: "living", items: [], ...fields }, ...o.campaigns] })); setClient(account); setBatchId(id); if (form.start) setMonth({ y: Number(form.start.slice(0, 4)), m: Number(form.start.slice(5, 7)) - 1 }); notify("Batch dibuat. Tambahkan konten atau minta AI mengusulkan judul."); }
     setModal("");
   };
   const deleteBatch = (c: CampaignData) => {
@@ -270,8 +281,8 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
   const printBatch = (d: CampaignData) => { const w = window.open("", "_blank"); if (!w) return notify("Izinkan pop-up untuk mencetak PDF."); w.document.open(); w.document.write(campaignHtml(d)); w.document.close(); w.onload = () => w.print(); };
   const downloadBatch = (d: CampaignData) => { const url = URL.createObjectURL(new Blob([campaignHtml(d)], { type: "text/html;charset=utf-8" })); const a = document.createElement("a"); a.href = url; a.download = d.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-content-plan.html"; a.click(); URL.revokeObjectURL(url); };
   const addClient = () => { const n = form.account.trim(); if (!n) return; if (plan.accounts.includes(n)) return notify("Klien itu sudah ada."); setPlan(o => ({ ...o, accounts: [...o.accounts, n] })); pickClient(n); setModal(""); };
-  const renameClient = () => { const from = activeClient, to = form.account.trim(); if (!to || to === from) return setModal(""); if (plan.accounts.includes(to)) return notify("Nama klien itu sudah ada."); setPlan(o => ({ accounts: o.accounts.map(a => (a === from ? to : a)), campaigns: o.campaigns.map(c => (c.account === from ? { ...c, account: to } : c)) })); setClient(to); setModal(""); };
-  const deleteClient = () => { const name = activeClient, owned = plan.campaigns.filter(c => c.account === name); if (!window.confirm(owned.length ? `Hapus klien “${name}” beserta ${owned.length} batch di dalamnya?` : `Hapus klien “${name}”?`)) return; const ids = new Set(owned.map(c => c.id)); setPlan(o => ({ accounts: o.accounts.filter(a => a !== name), campaigns: o.campaigns.filter(c => c.account !== name) })); dropTasks(t => ids.has(t.campaignId)); pickClient(""); setModal(""); };
+  const renameClient = () => { const from = activeClient, to = form.account.trim(); if (!to || to === from) return setModal(""); if (plan.accounts.includes(to)) return notify("Nama klien itu sudah ada."); setPlan(o => { const kits = { ...o.brandKits }; if (kits[from]) { kits[to] = kits[from]; delete kits[from]; } return { ...o, brandKits: kits, accounts: o.accounts.map(a => (a === from ? to : a)), campaigns: o.campaigns.map(c => (c.account === from ? { ...c, account: to } : c)) }; }); setClient(to); setModal(""); };
+  const deleteClient = () => { const name = activeClient, owned = plan.campaigns.filter(c => c.account === name); if (!window.confirm(owned.length ? `Hapus klien “${name}” beserta ${owned.length} batch di dalamnya?` : `Hapus klien “${name}”?`)) return; const ids = new Set(owned.map(c => c.id)); setPlan(o => { const kits = { ...o.brandKits }; delete kits[name]; return { ...o, brandKits: kits, accounts: o.accounts.filter(a => a !== name), campaigns: o.campaigns.filter(c => c.account !== name) }; }); dropTasks(t => ids.has(t.campaignId)); pickClient(""); setModal(""); };
 
   const byDate = new Map<string, Row[]>();
   shown.forEach(r => { const d = dateOf(r.x); if (d) byDate.set(d, [...(byDate.get(d) ?? []), r]); });
@@ -297,7 +308,7 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
       <Picker open={pop === "client"} onToggle={() => setPop(pop === "client" ? "" : "client")} icon={<span className="cx-avatar">{(activeClient || "S")[0]}</span>} label={<><b>{activeClient || "Semua klien"}</b><small>{activeClient ? `${plan.campaigns.filter(c => c.account === activeClient).length} batch` : `${plan.accounts.length} klien`}</small></>}>
         <h4>Pilih klien</h4><div className="search-field"><Search size={15} /><input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Cari klien…" aria-label="Cari klien" /></div>
         <div className="cx-opts">{["", ...plan.accounts].filter(a => !a || matches(a)).map(a => <button key={a || "all"} className={activeClient === a ? "active" : ""} onClick={() => pickClient(a)}><span className="cx-avatar">{(a || "S")[0]}</span><span><b>{a || "Semua klien"}</b><small>{a ? `${plan.campaigns.filter(c => c.account === a).length} batch` : "Overview lintas klien"}</small></span>{activeClient === a && <Check size={16} />}</button>)}</div>
-        <div className="cx-pop-foot"><button onClick={() => { setForm({ ...blankForm }); setModal("client"); setPop(""); }}><Plus size={15} /> Tambah klien</button>{activeClient && <button onClick={() => { setForm({ ...blankForm, account: activeClient }); setModal("rename"); setPop(""); }}><Pencil size={14} /> Kelola klien ini</button>}</div>
+        <div className="cx-pop-foot"><button onClick={() => { setForm({ ...blankForm }); setModal("client"); setPop(""); }}><Plus size={15} /> Tambah klien</button>{activeClient && <><button onClick={() => { setModal("brand"); setPop(""); }}><Palette size={14} /> Brand Kit</button><button onClick={() => { setForm({ ...blankForm, account: activeClient }); setModal("rename"); setPop(""); }}><Pencil size={14} /> Kelola</button></>}</div>
       </Picker>
       <Picker wide open={pop === "batch"} onToggle={() => setPop(pop === "batch" ? "" : "batch")} icon={<Layers3 size={17} />} label={<><b>{batch ? batch.name : "Semua batch"}</b><small>{batch ? `${batch.period} · ${batch.items.length} konten` : `${batches.length} batch · ${rows.length} konten`}</small></>}>
         <h4>Pilih batch konten</h4><div className="search-field"><Search size={15} /><input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Cari batch…" aria-label="Cari batch" /></div>
@@ -362,10 +373,12 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
           <div className="cx-blist">{batches.map(c => { const n = c.items.filter(x => ["Terjadwal", "Dipublish"].includes(stageOf(x.status))).length; return <button key={c.id} onClick={() => pickBatch(c.id)}><ImageTile kind={coverOf(c)} className="cx-opt-thumb" /><span><b>{c.name}</b><small>{!activeClient ? `${c.account} · ` : ""}{c.period}</small><i className="cx-bar-mini"><em style={{ width: `${c.items.length ? (n / c.items.length) * 100 : 0}%` }} /></i></span><small>{n}/{c.items.length}</small></button>; })}{!batches.length && <p className="x-empty">Belum ada batch untuk klien ini.</p>}</div>
           <button className="outline-button cx-wide" onClick={openNewBatch}><Plus size={15} /> Buat batch baru</button>
         </section>}
+        {activeClient && <BrandKitCard account={activeClient} kit={plan.brandKits?.[activeClient]} onEdit={() => setModal("brand")} />}
       </aside>
     </div>}
 
-    {modal && <div className="modal-backdrop" onClick={() => setModal("")}><div className={`quick-modal ${modal === "batch" ? "cp-modal" : "plan-v2-modal"}`} role="dialog" aria-label={modal === "batch" ? "Batch" : "Form"} onClick={e => e.stopPropagation()}><button className="modal-close" onClick={() => setModal("")} aria-label="Tutup"><X size={18} /></button>
+    {modal === "brand" && activeClient && <BrandKitModal account={activeClient} kit={plan.brandKits?.[activeClient]} onClose={() => setModal("")} onSave={k => { setPlan(o => ({ ...o, brandKits: { ...o.brandKits, [activeClient]: k } })); setModal(""); notify(`Brand Kit ${activeClient} disimpan.`); }} />}
+    {modal && modal !== "brand" && <div className="modal-backdrop" onClick={() => setModal("")}><div className={`quick-modal ${modal === "batch" ? "cp-modal" : "plan-v2-modal"}`} role="dialog" aria-label={modal === "batch" ? "Batch" : "Form"} onClick={e => e.stopPropagation()}><button className="modal-close" onClick={() => setModal("")} aria-label="Tutup"><X size={18} /></button>
       {modal === "batch" && <>
         <div className="cp-modal-head"><span className="modal-icon"><Layers3 size={21} /></span><div><h2>{editing ? "Edit batch" : "Buat batch baru"}</h2><p>Satu batch = satu pesanan konten untuk satu klien. Periode produksi boleh berbeda dari jadwal tayang.</p></div></div>
         <div className="cp-form">

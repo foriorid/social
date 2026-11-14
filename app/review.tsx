@@ -25,7 +25,7 @@ const newToken = () => Array.from(crypto.getRandomValues(new Uint8Array(24)), b 
 export function snapshotOf(c: CampaignData, version: number): ReviewSnapshot {
   const photo = (x: CampaignData["items"][number]) => x.assets?.find(a => a.kind === "Foto")?.thumb ?? x.board?.find(s => s.image)?.image ?? "";
   const items: ReviewItem[] = c.items.filter(x => !x.untitled).map(x => {
-    const base = { day: x.day, title: x.title, format: x.format, publishDate: x.publishDate || "", cover: photo(x), goal: x.goal || "", caption: x.caption || "", hashtags: x.hashtags || "", cta: x.cta || "", concept: x.concept || x.visualDirection || "", board: (x.board ?? []).map(s => ({ label: s.label, visual: s.visual, text: s.text, audio: s.audio, ...(s.sec ? { sec: s.sec } : {}), ...(s.note ? { note: s.note } : {}), ...(s.image ? { image: s.image } : {}) })) };
+    const base = { day: x.day, title: x.title, format: x.format, publishDate: x.publishDate || "", cover: photo(x), goal: x.goal || "", caption: x.caption || "", hashtags: x.hashtags || "", cta: x.cta || "", concept: x.concept || x.visualDirection || "", board: (x.board ?? []).map(s => ({ label: s.label, visual: s.visual, text: s.text, audio: s.audio, ...(s.sec ? { sec: s.sec } : {}), ...(s.note ? { note: s.note } : {}), ...(s.image ? { image: s.image } : {}), ...(s.sub ? { sub: s.sub } : {}) })) };
     return { ...base, rev: revOf(base) };
   });
   return { account: c.account, batch: c.name, period: c.period, goal: c.goal, brief: c.brief ?? "", cover: items.find(i => i.cover)?.cover ?? "", version, publishedAt: new Date().toISOString(), items };

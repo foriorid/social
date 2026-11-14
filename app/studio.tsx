@@ -12,47 +12,11 @@ import { addApproval, useSettings, useStored, useTasks } from "./lib/store";
 import { AiButton, AiError, notify, useAI } from "./modules";
 import { patchItem, usePlan, type AssetRef, type CampaignContent, type CampaignData, type Scene } from "./plan-data";
 import { ImageTile, SAMPLE_PHOTOS } from "./ui";
+import { SlideCanvas, TEMPLATES, brandOf, normalizeLook, renderPng, type Look } from "./slide";
 
-type Look = { template: "dark" | "light" | "bold"; ratio: "4:5" | "1:1" };
-const TEMPLATES: { id: Look["template"]; name: string }[] = [{ id: "dark", name: "Editorial gelap" }, { id: "light", name: "Minimal terang" }, { id: "bold", name: "Bold ungu" }];
 const SAMPLES = Object.values(SAMPLE_PHOTOS);
 const copy = (text: string, what: string) => { navigator.clipboard?.writeText(text); notify(`${what} disalin.`); };
 const saveFile = (blob: Blob, name: string) => { const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url); };
-/** Drive thumbnails have no CORS headers; this host serves the same file with them, which canvas export needs. */
-const exportUrl = (url: string) => { const m = /drive\.google\.com\/thumbnail\?id=([^&]+)/.exec(url); return m ? `https://lh3.googleusercontent.com/d/${m[1]}=w1600` : url; };
-
-function loadImage(url: string): Promise<HTMLImageElement | null> {
-  return new Promise(resolve => { const img = new Image(); img.crossOrigin = "anonymous"; img.onload = () => resolve(img); img.onerror = () => resolve(null); img.src = exportUrl(url); });
-}
-
-function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const lines: string[] = []; let line = "";
-  for (const word of text.split(/\s+/)) { const next = line ? line + " " + word : word; if (ctx.measureText(next).width > maxWidth && line) { lines.push(line); line = word; } else line = next; }
-  if (line) lines.push(line);
-  return lines;
-}
-
-/** Renders one slide to a 1080px-wide PNG. Returns false in `photoMissing` when the photo could not be loaded. */
-async function renderSlide(scene: Scene, index: number, total: number, look: Look, handle: string): Promise<{ blob: Blob; photoMissing: boolean }> {
-  const W = 1080, H = look.ratio === "1:1" ? 1080 : 1350;
-  const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext("2d")!;
-  const img = await loadImage(scene.image || SAMPLES[index % SAMPLES.length]);
-  ctx.fillStyle = look.template === "light" ? "#EDE9F5" : "#1B1235"; ctx.fillRect(0, 0, W, H);
-  if (img) { const s = Math.max(W / img.width, H / img.height); ctx.drawImage(img, (W - img.width * s) / 2, (H - img.height * s) / 2, img.width * s, img.height * s); }
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  const [top, mid, bottom] = look.template === "light" ? ["rgba(255,255,255,.92)", "rgba(255,255,255,.15)", "rgba(255,255,255,.94)"] : look.template === "bold" ? ["rgba(106,63,208,.88)", "rgba(106,63,208,.2)", "rgba(60,30,140,.94)"] : ["rgba(20,12,45,.6)", "rgba(20,12,45,.05)", "rgba(20,12,45,.9)"];
-  g.addColorStop(0, top); g.addColorStop(0.45, mid); g.addColorStop(1, bottom); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = look.template === "light" ? "#1D1733" : "#FFFFFF"; ctx.textBaseline = "top";
-  ctx.font = "700 34px 'DM Sans', Arial, sans-serif"; ctx.fillText("FORIOR", 72, 72);
-  ctx.font = "500 30px 'DM Sans', Arial, sans-serif"; const count = `${index + 1} / ${total}`; ctx.fillText(count, W - 72 - ctx.measureText(count).width, 74);
-  ctx.font = `700 ${look.template === "bold" ? 84 : 76}px 'DM Sans', Arial, sans-serif`;
-  const lines = wrap(ctx, scene.text || scene.label, W - 144).slice(0, 6), lh = look.template === "bold" ? 96 : 88;
-  let y = H - 150 - lines.length * lh; for (const l of lines) { ctx.fillText(l, 72, y); y += lh; }
-  ctx.font = "500 30px 'DM Sans', Arial, sans-serif"; ctx.fillText(handle + (index < total - 1 ? "  ·  geser →" : ""), 72, H - 104);
-  try { const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, "image/png")); if (blob) return { blob, photoMissing: !img }; } catch { /* tainted canvas: fall through and redraw without the photo */ }
-  return renderSlide({ ...scene, image: "data:," }, index, total, look, handle);
-}
 
 const coverOf = (c: CampaignData) => c.items.flatMap(x => x.assets ?? []).find(a => a.kind === "Foto")?.thumb ?? c.cover;
 const progressOf = (c: CampaignData) => Math.round((c.items.filter(x => ["Terjadwal", "Dipublish"].includes(stageOf(x.status))).length / (c.target ?? 30)) * 100);
@@ -108,7 +72,10 @@ export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaig
   useEffect(() => { if (target) { setCampaignId(target.campaignId); setDay(target.day); } }, [target]);
   const campaign = plan.campaigns.find(c => c.id === campaignId) ?? plan.campaigns[0];
   const item = campaign?.items.find(x => x.day === day) ?? campaign?.items[0];
-  const [look, setLook] = useStored<Look>(`look:${campaign?.id}:${item?.day}`, { template: "dark", ratio: "4:5" });
+  const [rawLook, setRawLook] = useStored<Partial<Look>>(`look:${campaign?.id}:${item?.day}`, {});
+  const brand = brandOf(campaign?.account ?? "", plan.brandKits?.[campaign?.account ?? ""], settings);
+  const look = normalizeLook(rawLook, brand);
+  const setLook = (fn: (o: Look) => Look) => setRawLook(fn(look));
   const [index, setIndex] = useState(0);
   const [tab, setTab] = useState("Isi");
   const [picker, setPicker] = useState<"" | "campaign" | "content" | "drive">("");
@@ -142,7 +109,7 @@ export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaig
   const submit = () => { addApproval({ ref: { campaignId: campaign.id, day: item.day }, title: `${item.format} — ${item.title}`, by: video ? "Video Editor" : "Graphic Designer", type: `${campaign.account} · hasil produksi`, body: `${board.map(s => `• ${s.label} — ${s.text || s.visual}`).join("\n")}\n\nCaption:\n${item.caption}\n\n${item.hashtags ?? ""}` }); set({ status: "Review" }); notify("Hasil produksi masuk ke antrean approval."); };
   const exportSlides = async (all: boolean) => {
     setExporting(true); let missing = 0;
-    try { for (const n of all ? board.map((_, k) => k) : [i]) { const { blob, photoMissing } = await renderSlide({ ...board[n], image: photoOf(board[n], n) }, n, board.length, look, settings.handle); if (photoMissing) missing++; saveFile(blob, `${item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${pad(n + 1)}.png`); } }
+    try { for (const n of all ? board.map((_, k) => k) : [i]) { const { blob, photoMissing } = await renderPng({ scene: board[n], index: n, total: board.length, look, brand }, photoOf(board[n], n)); if (photoMissing) missing++; saveFile(blob, `${item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${pad(n + 1)}.png`); } }
     finally { setExporting(false); }
     notify(missing ? `${missing} slide diekspor tanpa foto karena foto tidak bisa dimuat untuk ekspor. Unduh fotonya dari Drive lalu tempel manual.` : all ? "Semua slide diekspor sebagai PNG." : "Slide diekspor sebagai PNG.");
   };
@@ -151,7 +118,7 @@ export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaig
   const activeTab = tabs.includes(tab) ? tab : "Isi";
   const tabIcon: Record<string, React.ReactNode> = { Isi: <Sparkles size={15} />, Naskah: <FileText size={15} />, "Paket Produksi": <Film size={15} />, Desain: <Layers3 size={15} />, "AI Assist": <Sparkles size={15} /> };
   const guidebook = () => videoGuidebook(campaign, item, { name: settings.brandName, handle: settings.handle });
-  const overlay = look.template === "light" ? "linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,.15) 45%,rgba(255,255,255,.94))" : look.template === "bold" ? "linear-gradient(180deg,rgba(106,63,208,.88),rgba(106,63,208,.2) 45%,rgba(60,30,140,.94))" : "linear-gradient(180deg,rgba(20,12,45,.6),rgba(20,12,45,.05) 45%,rgba(20,12,45,.9))";
+  const overlay = look.tone === "light" ? "linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,.15) 45%,rgba(255,255,255,.94))" : look.tone === "brand" ? "linear-gradient(180deg,rgba(106,63,208,.88),rgba(106,63,208,.2) 45%,rgba(60,30,140,.94))" : "linear-gradient(180deg,rgba(20,12,45,.6),rgba(20,12,45,.05) 45%,rgba(20,12,45,.9))";
   const link = (ref: AssetRef) => set({ assets: [...linked.filter(a => a.id !== ref.id), ref] });
   const useAsset = (a: AssetRef) => {
     if (!scene) return notify(`Buat ${unit} dulu, lalu pilih aset untuknya.`);
@@ -185,7 +152,7 @@ export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaig
         <button className="st-nav" onClick={() => setIndex(Math.max(0, i - 1))} disabled={i === 0} aria-label="Sebelumnya"><ChevronLeft size={18} /></button>
         <div className="st-preview-body">
           {video ? <div className="f-phone"><div className="f-phone-screen" style={{ backgroundImage: `url("${photoOf(scene, i)}")` }}><div style={{ background: overlay }}><b>FORIOR</b><div><strong>{scene.text || "Teks layar"}</strong><small>{scene.label}</small><span className="st-progress"><i style={{ width: `${((i + 1) / board.length) * 100}%` }} /></span><small>{i + 1} / {board.length}</small></div></div></div></div>
-          : <div className={`f-canvas ${look.ratio === "1:1" ? "square" : ""} ${look.template}`} style={{ backgroundImage: `url("${photoOf(scene, i)}")` }}><div style={{ background: overlay }}><div className="f-canvas-top"><b>FORIOR</b><span>{i + 1} / {board.length}</span></div><div><strong>{scene.text || scene.label}</strong><small>{settings.handle}{i < board.length - 1 ? " · geser →" : ""}</small></div></div></div>}
+          : <SlideCanvas className="st-slide" input={{ scene, index: i, total: board.length, look, brand }} photo={photoOf(scene, i)} />}
           {!video && <div className="x-row f-center"><button className="outline-button" onClick={() => exportSlides(false)} disabled={exporting}><Download size={15} /> PNG slide ini</button><button className="primary-button" onClick={() => exportSlides(true)} disabled={exporting}><Download size={15} /> {exporting ? "Mengekspor…" : "PNG semua"}</button></div>}
         </div>
         <button className="st-nav" onClick={() => setIndex(Math.min(board.length - 1, i + 1))} disabled={i === board.length - 1} aria-label="Berikutnya"><ChevronRight size={18} /></button>
@@ -196,15 +163,24 @@ export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaig
         {activeTab === "Isi" && <>
           <div className="f-field"><label htmlFor="sc-label">{video ? "Durasi / Label" : "Label"}</label><input id="sc-label" value={scene.label} onChange={e => edit({ label: e.target.value })} /></div>
           <div className="f-field"><label htmlFor="sc-text">{video ? "Teks Layar / Narasi" : "Teks pada slide"}</label><textarea id="sc-text" rows={2} value={scene.text} onChange={e => edit({ text: e.target.value })} /></div>
+          {!video && <div className="f-field"><label htmlFor="sc-sub">Subjudul</label><textarea id="sc-sub" rows={2} value={scene.sub ?? ""} onChange={e => edit({ sub: e.target.value })} placeholder="Kalimat pendukung di bawah judul" /></div>}
           <div className="f-field"><label htmlFor="sc-visual">{video ? "Arahan Shot" : "Foto / Komposisi"}</label><textarea id="sc-visual" rows={2} value={scene.visual} onChange={e => edit({ visual: e.target.value })} /></div>
           {video && <div className="f-field"><label htmlFor="sc-audio">Audio</label><input id="sc-audio" value={scene.audio} onChange={e => edit({ audio: e.target.value })} /></div>}
           <div className="x-row"><AiButton className="outline-button st-ai" label="Pertajam teks" busy={ai.busy === "slide"} onClick={rewrite} /><button className="outline-button x-danger" onClick={() => { setBoard(board.filter((_, n) => n !== i)); setIndex(Math.max(0, i - 1)); }} disabled={board.length < 2}><Trash2 size={14} /> Hapus {unit}</button></div><AiError message={ai.error} />
         </>}
-        {activeTab === "Desain" && <>
-          <label className="f-label">TEMPLATE</label><div className="f-options">{TEMPLATES.map(t => <button key={t.id} className={look.template === t.id ? "active" : ""} onClick={() => setLook(o => ({ ...o, template: t.id }))}>{t.name}</button>)}</div>
-          <label className="f-label">RASIO</label><div className="f-options">{(["4:5", "1:1"] as const).map(r => <button key={r} className={look.ratio === r ? "active" : ""} onClick={() => setLook(o => ({ ...o, ratio: r }))}>{r === "4:5" ? "4:5 · 1080×1350" : "1:1 · 1080×1080"}</button>)}</div>
-          <p className="x-empty">Foto Anda dipakai apa adanya. Template hanya mengatur lapisan warna dan teks.</p>
-        </>}
+        {activeTab === "Desain" && <div className="st-design">
+          <label className="f-label">TEMPLATE</label>
+          <div className="st-tpls">{TEMPLATES.map(t => <button key={t.id} className={look.template === t.id ? "active" : ""} onClick={() => setLook(o => ({ ...o, template: t.id }))} title={t.hint}><SlideCanvas className="st-tpl-canvas" input={{ scene, index: i, total: board.length, look: { ...look, template: t.id, ratio: "4:5" }, brand }} photo={photoOf(scene, i)} /><span>{t.name}</span></button>)}</div>
+          <label className="f-label">RASIO</label>
+          <div className="f-options">{(["4:5", "1:1", "9:16"] as const).map(r => <button key={r} className={look.ratio === r ? "active" : ""} onClick={() => setLook(o => ({ ...o, ratio: r }))}>{r === "4:5" ? "4:5 Feed" : r === "1:1" ? "1:1 Square" : "9:16 Story"}</button>)}</div>
+          <label className="f-label">WARNA</label>
+          <div className="st-swatches">{([["dark", "Gelap", brand.dark], ["light", "Terang", brand.light], ["brand", "Brand", brand.accent]] as const).map(([v, l, c]) => <button key={v} className={look.tone === v ? "active" : ""} onClick={() => setLook(o => ({ ...o, tone: v }))}><i style={{ background: c }} />{l}</button>)}</div>
+          <div className="st-two"><div><label className="f-label">FONT JUDUL</label><div className="f-options">{(["serif", "sans"] as const).map(f => <button key={f} className={look.font === f ? "active" : ""} onClick={() => setLook(o => ({ ...o, font: f }))} style={{ fontFamily: f === "serif" ? "Georgia, serif" : "inherit" }}>{f === "serif" ? "Serif" : "Sans"}</button>)}</div></div>
+            <div><label className="f-label">PERATAAN</label><div className="f-options">{(["left", "center"] as const).map(a2 => <button key={a2} className={look.align === a2 ? "active" : ""} onClick={() => setLook(o => ({ ...o, align: a2 }))}>{a2 === "left" ? "Kiri" : "Tengah"}</button>)}</div></div></div>
+          <label className="f-label" htmlFor="st-scale">UKURAN TEKS · {Math.round(look.scale * 100)}%</label>
+          <input id="st-scale" type="range" min={0.7} max={1.4} step={0.05} value={look.scale} onChange={e => setLook(o => ({ ...o, scale: Number(e.target.value) }))} />
+          <p className="x-empty">Warna dan nama brand diambil dari Brand Kit {campaign.account}. Ubah di Content Plan → klien → Brand Kit.</p>
+        </div>}
         {activeTab === "Naskah" && <>
           <pre className="x-output">{board.map(s => `[${s.label}] ${s.text}`).join("\n")}</pre>
           <div className="x-row"><button className="outline-button" onClick={() => copy(board.map(s => s.text).filter(Boolean).join("\n"), "Naskah")}><Copy size={14} /> Salin naskah</button>{video && <button className="outline-button" onClick={() => saveFile(new Blob([toSrt(board)], { type: "text/plain" }), "subtitle.srt")}><Download size={14} /> Subtitle .srt</button>}</div>
@@ -239,7 +215,7 @@ export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaig
       </div>
       <div className="st-asset-row">
         <button className="st-asset st-asset-add" onClick={() => setPicker("drive")}><Plus size={24} /><b>Tambah aset</b></button>
-        {assetType === "Template" ? TEMPLATES.map(t => <button key={t.id} className={`st-asset st-template ${t.id} ${look.template === t.id ? "active" : ""}`} onClick={() => setLook(o => ({ ...o, template: t.id }))}><span>{t.name}</span></button>)
+        {assetType === "Template" ? TEMPLATES.map(t => <button key={t.id} className={`st-asset st-template ${look.template === t.id ? "active" : ""}`} onClick={() => setLook(o => ({ ...o, template: t.id }))}><SlideCanvas className="st-tpl-canvas" input={{ scene: scene ?? { label: t.name, visual: "", text: t.name, audio: "" }, index: 0, total: Math.max(1, board.length), look: { ...look, template: t.id, ratio: "4:5" }, brand }} photo={scene ? photoOf(scene, i) : SAMPLES[0]} /><span>{t.name}</span></button>)
         : shownAssets.map(a => { const inUse = scene && (scene.image === a.thumb || scene.audio === a.name); return <div key={a.id} className={`st-asset ${inUse ? "active" : ""}`}>
           <button className="st-asset-use" onClick={() => useAsset(a)} title={`Pakai ${a.name}`}>{a.kind === "Audio" ? <span className="st-asset-audio"><Music size={26} /></span> : <img src={a.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" />}<span className="st-asset-name">{a.kind === "Video" && <Film size={12} />} {a.name}</span></button>
           {!a.id.startsWith("sample-") && <button className="st-asset-x" aria-label={`Lepas ${a.name}`} onClick={() => set({ assets: linked.filter(x => x.id !== a.id) })}><X size={13} /></button>}

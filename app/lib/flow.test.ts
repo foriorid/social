@@ -123,3 +123,15 @@ test("monthGrid starts on Monday and pads to whole weeks", async () => {
   assert.equal(g.indexOf("2026-11-01"), 6);
   assert.equal(g.filter(Boolean).length, 30);
 });
+
+test("brand kit lines reach the prompt only when filled", async () => {
+  const { kitLines, stepPrompt } = await import("./flow.ts");
+  assert.equal(kitLines(undefined), "");
+  assert.equal(kitLines({ tone: "  ", accent: "#fff" }), "");
+  const kit = { tone: "Hangat, premium", donts: "Jangan clickbait\nJangan harga coret" };
+  const c = { id: "c", account: "Villa", name: "Nov", period: "Nov", goal: "Bookings", cover: "", items: [item] };
+  const p = stepPrompt("brief", c, item, kit);
+  assert.match(p, /Tone of voice: Hangat, premium/);
+  assert.match(p, /Hindari: Jangan clickbait; Jangan harga coret/);
+  assert.doesNotMatch(stepPrompt("brief", c, item), /Brand Kit/);
+});

@@ -107,7 +107,7 @@ export function PublicReviewPage() {
                 {item.concept && <p>{item.concept}</p>}</div></div>
             {item.board.length > 0 && <div className="rv-card"><h3><FileText size={17} /> {item.format === "Reels" ? "Storyboard" : "Slide"} <span>({item.board.length})</span></h3>
               <ol className={`rv-scenes ${item.format === "Reels" ? "v" : "s"}`}>{(() => { let t = 0; return item.board.map((sc, i) => { const start = t; t += secOf(sc); const n = (f?.comments ?? []).filter(c => c.scene === i).length; return <li key={i}><Thumb src={sc.image ?? ""} className="rv-scene-img"><b>{pad(i + 1)}</b>{item.format === "Reels" && <span>{clock(start)} – {clock(t)}</span>}</Thumb>
-                <div><h4>{sc.label}</h4>{sc.visual && <p><i>{item.format === "Reels" ? "Shot" : "Visual"}</i>{sc.visual}</p>}{sc.text && <p><i>Teks</i>{sc.text}</p>}{sc.audio && <p><i>VO / Audio</i>{sc.audio}</p>}
+                <div><h4>{sc.label}</h4>{sc.visual && <p><i>{item.format === "Reels" ? "Shot" : "Visual"}</i>{sc.visual}</p>}{sc.text && <p><i>Teks</i>{sc.text}</p>}{sc.sub && <p><i>Subjudul</i>{sc.sub}</p>}{sc.audio && <p><i>VO / Audio</i>{sc.audio}</p>}
                   <SceneComment busy={busy} count={n} onSend={text => act({ action: "comment", day: item.day, text, scene: i })} /></div></li>; }); })()}</ol></div>}
             <div className="rv-card"><h3><MessageSquare size={17} /> Caption & copy</h3>
               <p className="rv-caption">{item.caption || "Caption belum ditulis."}</p>{item.hashtags && <p className="rv-tags">{item.hashtags}</p>}{item.cta && <p className="rv-cta"><b>CTA:</b> {item.cta}</p>}</div>
