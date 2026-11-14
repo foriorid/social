@@ -3,31 +3,31 @@
 // Gate screens shown before the app: sign-in (invite only), choosing a password from an invite/reset link,
 // a short loading state, and the message for an account that belongs to no workspace yet.
 import { useState } from "react";
-import { Image as ImageIcon, Info, Layers, Loader2, Lock, Users } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Image as ImageIcon, Layers, Loader2, Lock, Mail, Users } from "lucide-react";
 import { sendPasswordReset, setNewPassword, signInWithEmail, signInWithPassword, signOut } from "./lib/cloud";
 
-function Brand({ light = false }: { light?: boolean }) {
-  return <div className={`lg-brand ${light ? "light" : ""}`}><span className="lg-mark" aria-hidden="true"><i /><i /></span><span><b>FORIOR</b><small>Hub</small></span></div>;
+function Brand() {
+  return <div className="lg-brand"><span className="lg-mark" aria-hidden="true"><i /><i /></span><b>FORIOR</b></div>;
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
   return <main className="lg-page">
     <div className="lg-bg" aria-hidden="true" /><div className="lg-scrim" aria-hidden="true" />
     <aside className="lg-side">
-      <Brand light />
+      <Brand />
       <div className="lg-pitch">
         <span className="lg-eyebrow">FORIOR HUB</span>
         <h1>Create better property visuals, <span>together.</span></h1>
         <p>Workspace untuk mengelola project, konten, dan photo delivery dari FORIOR.</p>
+        <span className="lg-rule" aria-hidden="true" />
         <ul>
-          <li><Layers size={18} aria-hidden="true" /> Project &amp; photo delivery</li>
-          <li><ImageIcon size={18} aria-hidden="true" /> Content plan &amp; produksi</li>
-          <li><Users size={18} aria-hidden="true" /> Kolaborasi tim</li>
+          <li><Layers size={18} aria-hidden="true" /> Project management</li>
+          <li><ImageIcon size={18} aria-hidden="true" /> Photo &amp; video delivery</li>
+          <li><Users size={18} aria-hidden="true" /> Team collaboration</li>
         </ul>
       </div>
-      <small className="lg-copy"><Lock size={13} aria-hidden="true" /> Private workspace · Invitation only</small>
     </aside>
-    <section className="lg-main"><div className="lg-mobile-head"><Brand light /><p>Akses hanya dengan undangan.</p></div>{children}</section>
+    <section className="lg-main"><div className="lg-mobile-head"><Brand /></div>{children}</section>
   </main>;
 }
 
@@ -35,8 +35,9 @@ const validEmail = (v: string) => /^\S+@\S+\.\S+$/.test(v.trim());
 
 export function LoginScreen() {
   const [mode, setMode] = useState<"password" | "link" | "reset">("password");
-  const [email, setEmail] = useState(""), [password, setPassword] = useState("");
+  const [email, setEmail] = useState(""), [password, setPassword] = useState(""), [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
+  const switchMode = (m: typeof mode) => { setMode(m); setError(""); setNotice(""); };
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(""); setNotice("");
     if (!validEmail(email)) return setError("Email belum valid.");
@@ -49,18 +50,21 @@ export function LoginScreen() {
   };
   return <Shell>
     <form className="lg-card" onSubmit={submit} noValidate>
-      <div className="lg-head"><h2>{mode === "reset" ? "Lupa kata sandi" : "Masuk"}</h2><p>{mode === "reset" ? "Kami kirim link untuk membuat kata sandi baru." : "Gunakan akun yang diundang ke FORIOR Hub."}</p></div>
+      <Brand />
+      <div className="lg-head"><h2>{mode === "reset" ? "Lupa password" : "Welcome back"}</h2><p>{mode === "reset" ? "Kami kirim link untuk membuat kata sandi baru." : "Masuk ke FORIOR Hub untuk mengelola project, konten, dan photo delivery."}</p></div>
       {mode !== "reset" && <div className="lg-seg" role="group" aria-label="Cara masuk">
-        <button type="button" className={mode === "password" ? "active" : ""} aria-pressed={mode === "password"} onClick={() => { setMode("password"); setError(""); setNotice(""); }}>Kata sandi</button>
-        <button type="button" className={mode === "link" ? "active" : ""} aria-pressed={mode === "link"} onClick={() => { setMode("link"); setError(""); setNotice(""); }}>Link via email</button>
+        <button type="button" className={mode === "password" ? "active" : ""} aria-pressed={mode === "password"} onClick={() => switchMode("password")}>Kata sandi</button>
+        <button type="button" className={mode === "link" ? "active" : ""} aria-pressed={mode === "link"} onClick={() => switchMode("link")}>Link via email</button>
       </div>}
-      <label className="lg-field">Email<input type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} placeholder="nama@forior.id" autoFocus /></label>
-      {mode === "password" && <label className="lg-field"><span className="lg-label-row">Kata sandi <button type="button" className="lg-link" onClick={() => { setMode("reset"); setError(""); setNotice(""); }}>Lupa kata sandi?</button></span><input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} /></label>}
+      <label className="lg-field">Email<span className="lg-input"><Mail size={17} className="lg-input-icon" aria-hidden="true" /><input type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} placeholder="nama@forior.id" autoFocus /></span></label>
+      {mode === "password" && <label className="lg-field"><span className="lg-label-row">Password <button type="button" className="lg-link" onClick={() => switchMode("reset")}>Lupa password?</button></span>
+        <span className="lg-input"><input type={show ? "text" : "password"} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" /><button type="button" className="lg-eye" onClick={() => setShow(!show)} aria-label={show ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}>{show ? <EyeOff size={17} /> : <Eye size={17} />}</button></span></label>}
       {error && <p className="lg-error" role="alert">{error}</p>}
       {notice && <p className="lg-ok" role="status">{notice}</p>}
-      <button type="submit" className="lg-submit" disabled={busy}>{busy && <Loader2 size={17} className="lg-spin" />}{mode === "password" ? "Masuk" : mode === "link" ? "Kirim link masuk" : "Kirim link reset"}</button>
-      {mode === "reset" ? <button type="button" className="lg-link lg-back" onClick={() => { setMode("password"); setError(""); setNotice(""); }}>← Kembali ke masuk</button>
-        : <div className="lg-note"><Info size={17} aria-hidden="true" /><span>Belum punya akses? Minta undangan ke admin FORIOR. Tidak ada pendaftaran publik.</span></div>}
+      <button type="submit" className="lg-submit" disabled={busy}>{busy && <Loader2 size={17} className="lg-spin" />}{mode === "password" ? "Masuk" : mode === "link" ? "Kirim link masuk" : "Kirim link reset"}{!busy && mode === "password" && <ArrowRight size={17} />}</button>
+      {mode === "reset"
+        ? <button type="button" className="lg-link lg-back" onClick={() => switchMode("password")}>← Kembali ke masuk</button>
+        : <p className="lg-private"><Lock size={14} aria-hidden="true" /> Private workspace · Invitation only</p>}
     </form>
   </Shell>;
 }
