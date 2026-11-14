@@ -2974,3 +2974,25 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .bk-modal .settings-field .bk-color { gap:10px; padding:8px 10px; } .bk-modal .bk-color span { text-transform:none; letter-spacing:0; }
 .bk-modal .bk-color b { color:#3f3452; } .bk-modal .bk-logo small { text-transform:none; letter-spacing:0; text-align:left; }
 .bk-modal .bk-logo .outline-button { min-height:38px; }
+
+/* ---------- Photo Delivery: tidier link box + mobile header ---------- */
+.dl-linkbox { align-items:center; padding:4px 4px 4px 0; background:#fff; }
+.dl-linkbox input { text-overflow:ellipsis; }
+.dl-linkbox button { width:auto; display:inline-flex; align-items:center; gap:6px; flex:none; min-height:36px; padding:0 12px; border:0 !important; border-radius:8px; background:#f2edfc !important; color:#6a3fd0; font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+.dl-linkbox button::after { content:"Salin"; }
+.dl-linkbox button:hover { background:#e7dcfb !important; }
+@media (max-width:700px) {
+  .dl-crumb > span, .dl-crumb > svg, .dl-crumb > b { display:none; }
+  .dl-crumb > button { display:inline-flex; align-items:center; gap:4px; font-size:13px; }
+  .dl-crumb > button::before { content:"‹"; font-size:18px; line-height:1; }
+  .dl-top h1 { font-size:26px; line-height:1.15; margin:2px 0 8px; }
+  .dl-top-chips { gap:6px; } .dl-top-chips .dl-chip, .dl-top-chips .dl-phase { font-size:12px; padding:3px 9px; } .dl-due { flex-basis:100%; font-size:12.5px; }
+  .dl-top-actions { display:grid; grid-template-columns:44px repeat(3,minmax(0,1fr)); gap:6px; margin-top:10px; }
+  .dl-top-actions > .outline-button, .dl-top-actions > a, .dl-top-actions .dl-icon-btn { min-height:42px; padding:0 6px; font-size:12.5px; gap:5px; width:100%; }
+  .dl-top-actions .dropdown-wrap { width:44px; } .dl-top-actions .dl-icon-btn { width:44px; padding:0; }
+}
+@media (max-width:700px) {
+  .topbar:has(.dl-top) { flex-wrap:wrap; row-gap:6px; }
+  .topbar:has(.dl-top) .page-heading { order:3; flex:1 1 100%; width:100%; min-width:0; }
+  .topbar:has(.dl-top) .dl-top { width:100%; flex-direction:column; align-items:stretch; }
+}
