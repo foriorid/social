@@ -3,7 +3,7 @@
 // A decision belongs to the revision (`rev`) it was made on: when the owner publishes changed content, that
 // content goes back to "review" so a change after approval always needs approval again.
 
-export type ReviewScene = { label: string; sec?: number; visual: string; text: string; audio: string; note?: string; image?: string };
+export type ReviewScene = { label: string; sec?: number; visual: string; text: string; audio: string; note?: string; image?: string; sub?: string };
 export type ReviewItem = { day: number; title: string; format: "Reels" | "Carousel" | "Feed"; publishDate: string; cover: string; goal: string; caption: string; hashtags: string; cta: string; concept: string; board: ReviewScene[]; rev: string };
 export type ReviewSnapshot = { account: string; batch: string; period: string; goal: string; brief: string; cover: string; version: number; publishedAt: string; items: ReviewItem[] };
 export type ReviewComment = { id: string; by: string; text: string; at: string; scene?: number; team?: boolean };

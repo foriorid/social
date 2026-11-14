@@ -4,7 +4,7 @@
 import { readStored, useStored, writeStored } from "./lib/store";
 
 /** One storyboard row: a video scene or a carousel slide. */
-export type Scene = { label: string; visual: string; text: string; audio: string; image?: string; sec?: number; note?: string };
+export type Scene = { label: string; visual: string; text: string; audio: string; image?: string; sec?: number; note?: string; sub?: string };
 /** A file that stays in Google Drive; only its link is stored. */
 export type AssetRef = { id: string; name: string; url: string; thumb: string; kind: string };
 export type CampaignContent = {day:number;date:string;title:string;format:"Reels"|"Carousel"|"Feed";pillar:string;status:string;goal:string;hook:string;caption:string;visualDirection:string;cta:string;publishDate:string;scenes:string[];untitled?:boolean;message?:string;hashtags?:string;assetNeeds?:string;production?:string;schedule?:string;board?:Scene[];assets?:AssetRef[];publishOn?:string;concept?:string;duration?:string;style?:string};
@@ -38,7 +38,9 @@ export function PublicCampaignPage({data}:{data:CampaignData}){
  return <main className="public-campaign-page"><div className="public-campaign-wrap"><header className="public-campaign-hero"><span>{data.account} · {data.period}</span><h1>{data.name}</h1><p>{data.goal} · {data.items.length} content plans</p></header><div className="public-campaign-stats"><b>{data.items.length}<small>Content plans</small></b><b>{data.items.filter(x=>x.format==="Reels").length}<small>Reels</small></b><b>{data.items.filter(x=>x.format==="Carousel").length}<small>Carousel</small></b></div><div className="public-campaign-list">{data.items.map(x=><article key={x.day}><span>CONTENT {String(x.day).padStart(2,"0")} / {data.items.length} · {x.date} · {x.format}</span><h2>{x.title}</h2><div className="public-campaign-fields"><p><b>Objective</b>{x.goal}</p><p><b>Pillar</b>{x.pillar}</p><p><b>Status</b>{x.status}</p></div><p><b>Hook / core message</b>{x.hook}</p><p><b>Visual direction</b>{x.visualDirection}</p><p><b>Caption</b>{x.caption}</p><p><b>CTA</b>{x.cta}</p><p><b>Storyboard</b>{x.scenes.join(" · ")}</p></article>)}</div><footer>Shared without login · FORIOR Creator OS</footer></div></main>;
 }
 
-export type PlanState = { accounts: string[]; campaigns: (CampaignData & { auto?: boolean })[] };
+/** Per-client brand guide: feeds AI prompts and the carousel editor. All fields optional. */
+export type BrandKit = { name?: string; handle?: string; accent?: string; dark?: string; light?: string; font?: "serif" | "sans"; tone?: string; audience?: string; pillars?: string; references?: string; dos?: string; donts?: string };
+export type PlanState = { accounts: string[]; campaigns: (CampaignData & { auto?: boolean })[]; brandKits?: Record<string, BrandKit> };
 /** A workspace with no saved plan starts empty (demo campaigns were removed with the workspace split). */
 export const DEFAULT_PLAN: PlanState = { accounts: DEFAULT_ACCOUNTS, campaigns: [] };
 export const usePlan = () => useStored<PlanState>("plan", DEFAULT_PLAN);

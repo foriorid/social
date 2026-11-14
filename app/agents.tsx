@@ -40,13 +40,13 @@ async function runTask(task: Task) {
   const step = stepOf(task.kind);
   const role = step.agent.includes("/") ? (campaign.items.find(x => x.day === task.day)?.format === "Reels" ? "Video Editor" : "Graphic Designer") : step.agent;
   if (task.kind === "plan") {
-    const rows = parsePlan(await askAI({ tier: step.tier, role, maxTokens: step.maxTokens, label: "Judul campaign", prompt: stepPrompt("plan", campaign, campaign.items[0]) }), campaign.items.filter(x => !x.board?.length).length);
+    const rows = parsePlan(await askAI({ tier: step.tier, role, maxTokens: step.maxTokens, label: "Judul campaign", prompt: stepPrompt("plan", campaign, campaign.items[0], readPlan().brandKits?.[campaign.account]) }), campaign.items.filter(x => !x.board?.length).length);
     patchCampaign(campaign.id, c => ({ ...c, items: applyPlan(c.items, rows) }));
     return;
   }
   const item = campaign.items.find(x => x.day === task.day);
   if (!item) throw new Error("Konten sudah dihapus.");
-  const answer = await askAI({ tier: step.tier, role, maxTokens: step.maxTokens, label: step.output.replace(/ \(1 panggilan\)$/, ""), prompt: stepPrompt(task.kind, campaign, item) });
+  const answer = await askAI({ tier: step.tier, role, maxTokens: step.maxTokens, label: step.output.replace(/ \(1 panggilan\)$/, ""), prompt: stepPrompt(task.kind, campaign, item, readPlan().brandKits?.[campaign.account]) });
   const patch = applyStep(task.kind, item, answer);
   patchItem(campaign.id, item.day, patch);
 

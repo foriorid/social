@@ -1,5 +1,5 @@
 // The content pipeline: stages, the fixed job of each agent, prompts and answer parsing. Pure, so it is unit-tested.
-import type { CampaignContent, CampaignData, CampaignKind, Scene } from "../plan-data";
+import type { BrandKit, CampaignContent, CampaignData, CampaignKind, Scene } from "../plan-data";
 
 export const STAGES = ["Draft", "Brief Siap", "Produksi", "Review", "Terjadwal", "Dipublish"] as const;
 export type Stage = typeof STAGES[number];
@@ -57,18 +57,25 @@ const KIND_GUIDE: Record<CampaignKind, string> = {
   business: "Ini akun bisnis FORIOR, penyedia jasa foto interior properti. Fokus pada portofolio proyek klien, before/after, proses kerja tim, testimoni dan hasil bisnis klien, paket dan penawaran jasa.",
   property: "Ini konten promosi untuk properti yang menjadi subjek campaign (villa/rumah/apartemen/hotel klien), dengan foto hasil pemotretan FORIOR. Fokus pada properti itu sendiri: tur ruangan, kamar, fasilitas, pengalaman menginap atau tinggal, detail desain, suasana dan lokasi sekitar, momen dan aktivitas, serta ajakan booking atau inquiry. JANGAN membuat konten tips atau edukasi fotografi."
 };
-const campaignHeader = (c: CampaignData) => `Akun: ${c.account}\nJenis campaign: ${KIND_LABEL[c.kind ?? "personal"]}\nCampaign: ${c.name} (${c.period})\nTujuan campaign: ${c.goal}${c.brief?.trim() ? `\nBrief campaign: ${c.brief.trim()}` : ""}`;
-const context = (c: CampaignData, item: CampaignContent) => `${campaignHeader(c)}\nKonten #${item.day}: ${item.title}\nFormat: ${item.format}\nPilar: ${item.pillar}${item.concept?.trim() ? `\nKonsep dari pemilik: ${item.concept.trim()}` : ""}${item.duration ? `\nDurasi total: ${item.duration}` : ""}${item.style ? `\nGaya: ${item.style}` : ""}`;
+/** Brand Kit lines for prompts; empty when no kit is filled in. */
+export function kitLines(kit?: BrandKit): string {
+  if (!kit) return "";
+  const rows: [string, string | undefined][] = [["Tone of voice", kit.tone], ["Target audiens", kit.audience], ["Pilar konten", kit.pillars], ["Referensi visual", kit.references], ["Lakukan", kit.dos], ["Hindari", kit.donts]];
+  const lines = rows.filter(([, v]) => v?.trim()).map(([k, v]) => `${k}: ${v!.trim().replace(/\s*\n\s*/g, "; ")}`);
+  return lines.length ? `\nBrand Kit:\n${lines.join("\n")}` : "";
+}
+const campaignHeader = (c: CampaignData, kit?: BrandKit) => `Akun: ${c.account}\nJenis campaign: ${KIND_LABEL[c.kind ?? "personal"]}\nCampaign: ${c.name} (${c.period})\nTujuan campaign: ${c.goal}${c.brief?.trim() ? `\nBrief campaign: ${c.brief.trim()}` : ""}${kitLines(kit)}`;
+const context = (c: CampaignData, item: CampaignContent, kit?: BrandKit) => `${campaignHeader(c, kit)}\nKonten #${item.day}: ${item.title}\nFormat: ${item.format}\nPilar: ${item.pillar}${item.concept?.trim() ? `\nKonsep dari pemilik: ${item.concept.trim()}` : ""}${item.duration ? `\nDurasi total: ${item.duration}` : ""}${item.style ? `\nGaya: ${item.style}` : ""}`;
 
-export function stepPrompt(kind: StepKind, c: CampaignData, item: CampaignContent): string {
+export function stepPrompt(kind: StepKind, c: CampaignData, item: CampaignContent, kit?: BrandKit): string {
   if (kind === "plan") {
     const open = c.items.filter(x => !x.board?.length).length;
-    return `${campaignHeader(c)}\n\n${KIND_GUIDE[c.kind ?? "personal"]}\nSusun ${open} judul konten yang semuanya relevan dengan campaign ini. Variasikan sudut pandang dan pilar, kira-kira 40% Reels, 35% Carousel, 25% Feed. Judul spesifik dan menarik, maksimal 9 kata, pilar 1-2 kata. Balas HANYA JSON array ringkas tanpa spasi berlebih: [{"title":"...","format":"Reels|Carousel|Feed","pillar":"..."}]`;
+    return `${campaignHeader(c, kit)}\n\n${KIND_GUIDE[c.kind ?? "personal"]}\nSusun ${open} judul konten yang semuanya relevan dengan campaign ini. Variasikan sudut pandang dan pilar, kira-kira 40% Reels, 35% Carousel, 25% Feed. Judul spesifik dan menarik, maksimal 9 kata, pilar 1-2 kata. Balas HANYA JSON array ringkas tanpa spasi berlebih: [{"title":"...","format":"Reels|Carousel|Feed","pillar":"..."}]`;
   }
-  if (kind === "brief") return `${context(c, item)}\n\nTulis brief, storyboard, caption, dan jadwal dalam satu jawaban. Singkat dan padat. ${isVideo(item.format) ? "Storyboard video 4-6 scene: label = nama scene (mis. \"Establishing\"), sec = durasi detik (total sesuai durasi), visual = shot & gerakan kamera (maks. 15 kata), text = teks layar (maks. 8 kata), audio = VO atau musik (maks. 12 kata), note = catatan produksi (maks. 10 kata)." : "Storyboard 5-7 slide: label = nama slide (mis. \"Cover\"), visual = foto/komposisi (maks. 12 kata), text = teks slide (maks. 12 kata), note = catatan desain (maks. 10 kata), audio kosong."}\nBalas HANYA JSON tanpa spasi berlebih: {"hook":"maks. 15 kata","message":"maks. 15 kata","goal":"maks. 10 kata","visualDirection":"maks. 25 kata","assetNeeds":"maks. 20 kata","caption":"maks. 70 kata termasuk CTA","cta":"maks. 10 kata","hashtags":"8 hashtag","schedule":"hari & jam WIB + alasan maks. 12 kata","board":[{"label":"","sec":0,"visual":"","text":"","audio":"","note":""}]}`;
+  if (kind === "brief") return `${context(c, item, kit)}\n\nTulis brief, storyboard, caption, dan jadwal dalam satu jawaban. Singkat dan padat. ${isVideo(item.format) ? "Storyboard video 4-6 scene: label = nama scene (mis. \"Establishing\"), sec = durasi detik (total sesuai durasi), visual = shot & gerakan kamera (maks. 15 kata), text = teks layar (maks. 8 kata), audio = VO atau musik (maks. 12 kata), note = catatan produksi (maks. 10 kata)." : "Storyboard 5-7 slide: label = nama slide (mis. \"Cover\"), visual = foto/komposisi (maks. 12 kata), text = teks slide (maks. 12 kata), note = catatan desain (maks. 10 kata), audio kosong."}\nBalas HANYA JSON tanpa spasi berlebih: {"hook":"maks. 15 kata","message":"maks. 15 kata","goal":"maks. 10 kata","visualDirection":"maks. 25 kata","assetNeeds":"maks. 20 kata","caption":"maks. 70 kata termasuk CTA","cta":"maks. 10 kata","hashtags":"8 hashtag","schedule":"hari & jam WIB + alasan maks. 12 kata","board":[{"label":"","sec":0,"visual":"","text":"","audio":"","note":""}]}`;
   const board = (item.board ?? []).map(s => `${s.label}: ${s.visual} | ${s.text}`).join("\n");
-  if (kind === "production") return `${context(c, item)}\nHook: ${item.hook}\nStoryboard:\n${board}\n\n${isVideo(item.format) ? "Buat paket produksi video: shot list bernomor (lensa/angle, gerakan, durasi), urutan edit, transisi, saran audio, dan teks subtitle per scene." : "Buat paket produksi desain: untuk tiap slide tulis layout, hierarki teks, dan catatan pemilihan foto; lalu catatan konsistensi brand."} Maksimal 220 kata, poin-poin singkat, tanpa JSON.`;
-  return `${context(c, item)}\nHook: ${item.hook}\nDraf caption: ${item.caption}\nCTA: ${item.cta}\n\nRapikan untuk tayang. Balas HANYA JSON: {"caption":"caption final siap tempel, termasuk CTA","hashtags":"8-12 hashtag dipisah spasi","schedule":"usulan hari dan jam tayang (WIB) beserta alasan singkat"}`;
+  if (kind === "production") return `${context(c, item, kit)}\nHook: ${item.hook}\nStoryboard:\n${board}\n\n${isVideo(item.format) ? "Buat paket produksi video: shot list bernomor (lensa/angle, gerakan, durasi), urutan edit, transisi, saran audio, dan teks subtitle per scene." : "Buat paket produksi desain: untuk tiap slide tulis layout, hierarki teks, dan catatan pemilihan foto; lalu catatan konsistensi brand."} Maksimal 220 kata, poin-poin singkat, tanpa JSON.`;
+  return `${context(c, item, kit)}\nHook: ${item.hook}\nDraf caption: ${item.caption}\nCTA: ${item.cta}\n\nRapikan untuk tayang. Balas HANYA JSON: {"caption":"caption final siap tempel, termasuk CTA","hashtags":"8-12 hashtag dipisah spasi","schedule":"usulan hari dan jam tayang (WIB) beserta alasan singkat"}`;
 }
 
 /** Turn a step's model answer into the fields it fills on the content item. */
