@@ -7,7 +7,7 @@ import type { BrandKit, Scene } from "./plan-data";
 
 export type Template = "cover" | "top" | "split" | "minimal";
 export type Look = { template: Template; ratio: "4:5" | "1:1" | "9:16"; tone: "dark" | "light" | "brand"; font: "serif" | "sans"; align: "left" | "center"; scale: number };
-export type Brand = { name: string; handle: string; accent: string; dark: string; light: string; font?: "serif" | "sans" };
+export type Brand = { name: string; handle: string; accent: string; dark: string; light: string; font?: "serif" | "sans"; logo?: string };
 export const TEMPLATES: { id: Template; name: string; hint: string }[] = [
   { id: "cover", name: "Cover besar", hint: "Judul besar di bawah, foto penuh" },
   { id: "top", name: "Judul atas", hint: "Teks di atas, foto tetap lega" },
@@ -27,7 +27,7 @@ export function normalizeLook(raw: (Omit<Partial<Look>, "template"> & { template
 }
 
 export function brandOf(account: string, kit: BrandKit | undefined, fallback: { brandName: string; handle: string }): Brand {
-  return { name: (kit?.name || account || fallback.brandName).toUpperCase(), handle: kit?.handle || fallback.handle, accent: kit?.accent || "#7c4de2", dark: kit?.dark || "#1b1235", light: kit?.light || "#f4f0ea", font: kit?.font };
+  return { name: (kit?.name || account || fallback.brandName).toUpperCase(), handle: kit?.handle || fallback.handle, accent: kit?.accent || "#7c4de2", dark: kit?.dark || "#1b1235", light: kit?.light || "#f4f0ea", font: kit?.font, logo: kit?.logo };
 }
 
 const rgba = (hex: string, a: number) => { const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim()); const n = m ? parseInt(m[1], 16) : 0x1b1235; return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
@@ -43,10 +43,10 @@ function cover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, 
   ctx.drawImage(img, x + (w - img.width * s) / 2, y + (h - img.height * s) / 2, img.width * s, img.height * s); ctx.restore();
 }
 
-export type SlideInput = { scene: Scene; index: number; total: number; look: Look; brand: Brand; img: HTMLImageElement | null };
+export type SlideInput = { scene: Scene; index: number; total: number; look: Look; brand: Brand; img: HTMLImageElement | null; logo?: HTMLImageElement | null };
 
 /** Draws one slide at W×H (1080 wide). Pure drawing; no loading. */
-export function drawSlide(ctx: CanvasRenderingContext2D, W: number, H: number, { scene, index, total, look, brand, img }: SlideInput) {
+export function drawSlide(ctx: CanvasRenderingContext2D, W: number, H: number, { scene, index, total, look, brand, img, logo }: SlideInput) {
   const M = 78, bg = look.tone === "light" ? brand.light : look.tone === "brand" ? brand.accent : brand.dark;
   const ink = look.tone === "light" ? brand.dark : "#ffffff", accent = look.tone === "brand" ? "#ffffff" : brand.accent;
   const serif = look.font === "serif";
@@ -70,7 +70,9 @@ export function drawSlide(ctx: CanvasRenderingContext2D, W: number, H: number, {
   const headInk = look.template === "minimal" ? "#ffffff" : ink;
   ctx.fillStyle = headInk; ctx.font = bodyFont(30, 700);
   if ("letterSpacing" in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = "6px";
-  ctx.textAlign = "left"; ctx.fillText(brand.name.slice(0, 28), M, M + 22);
+  ctx.textAlign = "left";
+  if (logo) { const lh2 = 72, lw = Math.min(360, (logo.width / logo.height) * lh2); ctx.drawImage(logo, M, M - 18, lw, lw / (logo.width / logo.height)); }
+  else ctx.fillText(brand.name.slice(0, 28), M, M + 22);
   if ("letterSpacing" in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = "0px";
   ctx.font = bodyFont(28, 600); ctx.textAlign = "right"; ctx.fillText(`${String(index + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}`, W - M, M + 22);
   ctx.textAlign = center ? "center" : "left";
@@ -118,10 +120,11 @@ export function loadImage(url: string, forExport = false): Promise<HTMLImageElem
 }
 
 /** PNG at full size. `photoMissing` when the photo could not be loaded CORS-clean (exported without it). */
-export async function renderPng(input: Omit<SlideInput, "img">, photo: string): Promise<{ blob: Blob; photoMissing: boolean }> {
+export async function renderPng(input: Omit<SlideInput, "img" | "logo"> & { logo?: HTMLImageElement | null }, photo: string): Promise<{ blob: Blob; photoMissing: boolean }> {
   const { W, H } = sizeOf(input.look.ratio);
-  const draw = (img: HTMLImageElement | null) => { const c = document.createElement("canvas"); c.width = W; c.height = H; drawSlide(c.getContext("2d")!, W, H, { ...input, img }); return new Promise<Blob | null>(r => { try { c.toBlob(r, "image/png"); } catch { r(null); } }); };
-  const img = await loadImage(photo, true);
+  const draw = (img: HTMLImageElement | null) => { const c = document.createElement("canvas"); c.width = W; c.height = H; drawSlide(c.getContext("2d")!, W, H, { ...input, img } as SlideInput); return new Promise<Blob | null>(r => { try { c.toBlob(r, "image/png"); } catch { r(null); } }); };
+  const [img, logo] = await Promise.all([loadImage(photo, true), loadImage(input.brand.logo ?? "")]);
+  input = { ...input, logo } as typeof input;
   const blob = await draw(img);
   if (blob) return { blob, photoMissing: !img };
   return { blob: (await draw(null))!, photoMissing: true };
@@ -131,13 +134,15 @@ export async function renderPng(input: Omit<SlideInput, "img">, photo: string): 
 export function SlideCanvas({ input, photo, className }: { input: Omit<SlideInput, "img">; photo: string; className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
+  const [logo, setLogo] = useState<HTMLImageElement | null>(null);
   useEffect(() => { let on = true; setImg(null); loadImage(photo).then(i => { if (on) setImg(i); }); return () => { on = false; }; }, [photo]);
+  useEffect(() => { let on = true; setLogo(null); loadImage(input.brand.logo ?? "").then(i => { if (on) setLogo(i); }); return () => { on = false; }; }, [input.brand.logo]);
   const { W, H } = sizeOf(input.look.ratio);
   useEffect(() => {
     const c = ref.current; if (!c) return;
     c.width = W / 2; c.height = H / 2;
     const ctx = c.getContext("2d")!; ctx.setTransform(0.5, 0, 0, 0.5, 0, 0);
-    drawSlide(ctx, W, H, { ...input, img });
+    drawSlide(ctx, W, H, { ...input, img, logo });
   });
   return <canvas ref={ref} className={className} style={{ aspectRatio: `${W} / ${H}` }} aria-label={`Pratinjau slide ${input.index + 1}`} />;
 }

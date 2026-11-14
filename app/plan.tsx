@@ -2,12 +2,13 @@
 
 // Content Plan: pick a client and a batch, see its content as a calendar, timeline or list, and open one
 // content item into Brief / Storyboard / Desain. Clients are plan.accounts and batches are plan.campaigns.
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, Palette, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock, Code2, Copy, FileText, Film, Image as ImageIcon, Layers3, List, MoreHorizontal, Pencil, Play, Plus, Printer, Search, Send, Share2, Sparkles, Trash2, Users, X, Zap } from "lucide-react";
 import { DriveBrowser } from "./assets";
 import { enqueue, enqueueCampaign } from "./agents";
 import { KIND_LABEL, PIPELINE, STAGES, clock, dateOf, isVideo, monthGrid, nextStep, sceneTimes, secOf, stageKey, stageOf, type Stage } from "./lib/flow";
 import { addApproval, useIdeas, useStored, useTasks, writeStored, type Task } from "./lib/store";
+import { goalsOf } from "./plan-data";
 import { notify, useAiReady } from "./modules";
 import { campaignHtml, defaultKind, patchCampaign, patchItem, storyboardHtml, usePlan, type CampaignContent, type CampaignData, type CampaignKind, type Scene } from "./plan-data";
 import { BrandKitCard, BrandKitModal } from "./brandkit";
@@ -19,7 +20,7 @@ const dropTasks = (match: (t: Task) => boolean) => writeStored<Task[]>("tasks", 
 const pad = (n: number) => String(n).padStart(2, "0");
 const FORMATS: CampaignContent["format"][] = ["Reels", "Carousel", "Feed"];
 const FORMAT_ICON = { Reels: Play, Carousel: Layers3, Feed: ImageIcon } as const;
-const GOALS = ["Awareness & engagement", "Lead generation", "Bookings", "Sales conversion"];
+const GOALS = ["Awareness", "Engagement", "Lead generation", "Bookings", "Sales conversion", "Edukasi", "Brand building"];
 /** Ready-made carousel structures (label, title, subtitle); text is a starting point to edit. */
 const SLIDE_PRESETS: { name: string; hint: string; slides: [string, string, string][] }[] = [
   { name: "Facilities Highlight", hint: "fitur unggulan berurutan", slides: [["Cover", "5 Fasilitas Favorit", "Yang bikin tamu betah"], ["Fasilitas 1", "Private Pool", "Kolam renang pribadi"], ["Fasilitas 2", "Ruang Keluarga", "Luas untuk kumpul"], ["Fasilitas 3", "Dapur Lengkap", "Siap masak bersama"], ["Fasilitas 4", "Playroom", "Anak-anak senang"], ["Penutup", "Cek tanggal tersedia", "DM atau klik link di bio"]] },
@@ -47,6 +48,13 @@ function StagePill({ s }: { s: Stage }) { return <em className={`cx-stage cx-s-$
 function Field({ label, value, onChange, rows = 2, placeholder }: { label: string; value: string; onChange: (v: string) => void; rows?: number; placeholder?: string }) {
   const id = "f-" + label.replace(/\W+/g, "-").toLowerCase();
   return <div className="cx-field"><label htmlFor={id}>{label}</label><textarea id={id} rows={rows} value={value} placeholder={placeholder} onChange={e => onChange(e.target.value)} /></div>;
+}
+
+/** Textarea that grows with its text, so storyboard cards never show inner scrollbars. */
+function AutoText(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => { const t = ref.current; if (t) { t.style.height = "auto"; t.style.height = `${t.scrollHeight}px`; } });
+  return <textarea ref={ref} rows={1} {...props} />;
 }
 
 /** Popover dropdown with a search box; used for client and batch. */
@@ -110,6 +118,7 @@ function ContentDetail({ campaign, item, onBack, onOpenStudio }: { campaign: Cam
           <label><CalendarDays size={15} /><input type="date" aria-label="Tanggal tayang" value={dateOf(item) ?? ""} onChange={e => set({ publishOn: e.target.value, publishDate: e.target.value ? longDate(e.target.value) : "" })} /></label>
           <span><Users size={15} /> {campaign.account}</span>
           <span><Layers3 size={15} /> {campaign.name}</span>
+          {item.objective && <span className="cx-goal">{item.objective}</span>}
           {video && total > 0 && <span><Clock size={15} /> ± {total} detik</span>}
         </div>
       </div>
@@ -130,7 +139,7 @@ function ContentDetail({ campaign, item, onBack, onOpenStudio }: { campaign: Cam
 
     {tab === "Brief" && <div className="cx-brief">
       <section className="panel cx-card">
-        <div className="cx-card-head"><h3><FileText size={18} /> Detail Brief</h3><select aria-label="Format" value={item.format} onChange={e => set({ format: e.target.value as CampaignContent["format"] })}>{FORMATS.map(f => <option key={f}>{f}</option>)}</select></div>
+        <div className="cx-card-head"><h3><FileText size={18} /> Detail Brief</h3><div className="cx-row">{goalsOf(campaign).length > 0 && <select aria-label="Tujuan konten" value={item.objective ?? ""} onChange={e => set({ objective: e.target.value || undefined })}><option value="">Tujuan konten…</option>{goalsOf(campaign).map(g => <option key={g}>{g}</option>)}</select>}<select aria-label="Format" value={item.format} onChange={e => set({ format: e.target.value as CampaignContent["format"] })}>{FORMATS.map(f => <option key={f}>{f}</option>)}</select></div></div>
         <div className="cx-grid2">
           <Field label="Tujuan" value={item.goal} onChange={v => set({ goal: v })} />
           <Field label="Pesan utama" value={item.message ?? ""} onChange={v => set({ message: v })} placeholder="Satu kalimat yang harus diingat audiens" />
@@ -191,11 +200,11 @@ function ContentDetail({ campaign, item, onBack, onOpenStudio }: { campaign: Cam
             <div className="cx-scene-body">
               <div className="cx-scene-top"><input aria-label={`Nama ${unit} ${i + 1}`} value={s.label} onChange={e => editScene(i, { label: e.target.value })} />{video && <label className="cx-sec"><input type="number" min={1} max={60} aria-label={`Durasi ${s.label}`} value={secOf(s)} onChange={e => editScene(i, { sec: Math.max(1, Number(e.target.value) || 1) })} />dtk</label>}
                 <div className="cx-menu-wrap"><button className="cx-icon" aria-label={`Menu ${s.label}`} onClick={() => setMenu(menu === i ? null : i)}><MoreHorizontal size={16} /></button>{menu === i && <div className="floating-menu cx-menu"><button onClick={() => move(i, -1)} disabled={i === 0}>Geser ke kiri<ChevronLeft size={14} /></button><button onClick={() => move(i, 1)} disabled={i === board.length - 1}>Geser ke kanan<ChevronRight size={14} /></button><button className="x-danger" onClick={() => { setBoard(board.filter((_, n) => n !== i)); setMenu(null); }}>Hapus {unit}<Trash2 size={14} /></button></div>}</div></div>
-              <label className="cx-line"><Film size={14} /><textarea rows={2} aria-label={`Shot ${s.label}`} placeholder={video ? "Shot & gerakan kamera" : "Foto / komposisi"} value={s.visual} onChange={e => editScene(i, { visual: e.target.value })} /></label>
-              <label className="cx-line"><b>T</b><textarea rows={2} aria-label={`Teks ${s.label}`} placeholder="Teks di layar" value={s.text} onChange={e => editScene(i, { text: e.target.value })} /></label>
-              {!video && <label className="cx-line"><span>Sub</span><textarea rows={2} aria-label={`Subjudul ${s.label}`} placeholder="Subjudul" value={s.sub ?? ""} onChange={e => editScene(i, { sub: e.target.value })} /></label>}
-              {video && <label className="cx-line"><span>VO</span><textarea rows={2} aria-label={`VO ${s.label}`} placeholder="Voice over / musik" value={s.audio} onChange={e => editScene(i, { audio: e.target.value })} /></label>}
-              <label className="cx-line"><Pencil size={14} /><textarea rows={2} aria-label={`Catatan ${s.label}`} placeholder="Catatan" value={s.note ?? ""} onChange={e => editScene(i, { note: e.target.value })} /></label>
+              <label className="cx-line"><Film size={14} /><AutoText aria-label={`Shot ${s.label}`} placeholder={video ? "Shot & gerakan kamera" : "Foto / komposisi"} value={s.visual} onChange={e => editScene(i, { visual: e.target.value })} /></label>
+              <label className="cx-line"><b>T</b><AutoText aria-label={`Teks ${s.label}`} placeholder="Teks di layar" value={s.text} onChange={e => editScene(i, { text: e.target.value })} /></label>
+              {!video && <label className="cx-line"><span>Sub</span><AutoText aria-label={`Subjudul ${s.label}`} placeholder="Subjudul" value={s.sub ?? ""} onChange={e => editScene(i, { sub: e.target.value })} /></label>}
+              {video && <label className="cx-line"><span>VO</span><AutoText aria-label={`VO ${s.label}`} placeholder="Voice over / musik" value={s.audio} onChange={e => editScene(i, { audio: e.target.value })} /></label>}
+              <label className="cx-line"><Pencil size={14} /><AutoText aria-label={`Catatan ${s.label}`} placeholder="Catatan" value={s.note ?? ""} onChange={e => editScene(i, { note: e.target.value })} /></label>
             </div>
           </li>)}</ol>}
         {board.length > 0 && <section className="panel cx-output">
@@ -209,15 +218,15 @@ function ContentDetail({ campaign, item, onBack, onOpenStudio }: { campaign: Cam
   </div>;
 }
 
-const blankForm = { account: "", name: "", start: "", end: "", goal: GOALS[0], kind: "" as CampaignKind | "", brief: "", target: 15 };
+const blankForm = { account: "", name: "", start: "", end: "", goals: [] as string[], kind: "" as CampaignKind | "", brief: "", target: 15 };
 
-export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (campaignId: string, day: number) => void; onShare: (data: CampaignData) => void }) {
+export function ContentPlanPage({ onOpenStudio, onShare, target, onTargetDone }: { onOpenStudio: (campaignId: string, day: number) => void; onShare: (data: CampaignData) => void; target?: Ref | null; onTargetDone?: () => void }) {
   const [plan, setPlan] = usePlan();
   const [tasks] = useTasks();
   const ready = useAiReady();
   const [client, setClient] = useStored("cpClient", "");
   const [batchId, setBatchId] = useStored("cpBatch", "");
-  const [view, setView] = useStored<"Kalender" | "Timeline" | "List">("cpView", "Kalender");
+  const [view, setView] = useStored<"Kalender" | "Timeline" | "List">("cpView2", "List");
   const [open, setOpen] = useState<Ref | null>(null);
   const [pop, setPop] = useState<"" | "client" | "batch" | "ai">("");
   const [q, setQ] = useState("");
@@ -230,6 +239,14 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
   const now = new Date();
   const [month, setMonth] = useState({ y: now.getFullYear(), m: now.getMonth() });
   const review = useReviewLink(batchId || undefined);
+  const [goalDraft, setGoalDraft] = useState("");
+  // "Buka brief" from Production Studio: open that content's Brief tab directly.
+  useEffect(() => {
+    if (!target) return;
+    const c = plan.campaigns.find(x => x.id === target.campaignId);
+    if (c?.items.some(x => x.day === target.day)) { setClient(c.account); setBatchId(c.id); writeStored("cxTab", "Brief", "Brief"); setOpen(target); }
+    onTargetDone?.();
+  }, [target]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const clientValid = !client || plan.accounts.includes(client);
   const activeClient = clientValid ? client : "";
@@ -249,12 +266,12 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
   const pickClient = (a: string) => { setClient(a); setBatchId(""); setPop(""); setQ(""); };
   const pickBatch = (id: string) => { setBatchId(id); setPop(""); setQ(""); const c = plan.campaigns.find(x => x.id === id); const first = c?.start ?? c?.items.map(dateOf).filter(Boolean).sort()[0]; if (first) setMonth({ y: Number(first.slice(0, 4)), m: Number(first.slice(5, 7)) - 1 }); };
   const openNewBatch = () => { setEditing(null); setForm({ ...blankForm, account: activeClient || plan.accounts[0] || "" }); setModal("batch"); setPop(""); };
-  const openEditBatch = (c: CampaignData) => { setEditing(c.id); setForm({ account: c.account, name: c.name, start: c.start ?? "", end: c.end ?? "", goal: c.goal, kind: c.kind ?? "", brief: c.brief ?? "", target: targetOf(c) }); setModal("batch"); };
+  const openEditBatch = (c: CampaignData) => { setEditing(c.id); setForm({ account: c.account, name: c.name, start: c.start ?? "", end: c.end ?? "", goals: goalsOf(c), kind: c.kind ?? "", brief: c.brief ?? "", target: targetOf(c) }); setModal("batch"); };
   const saveBatch = () => {
     if (!form.account.trim() || !form.name.trim()) return notify("Isi klien dan nama batch.");
     if (form.start && form.end && form.end < form.start) return notify("Tanggal selesai harus setelah tanggal mulai.");
     const account = form.account.trim();
-    const fields = { account, name: form.name.trim(), start: form.start || undefined, end: form.end || undefined, period: periodOf(form.start, form.end, "-"), goal: form.goal, kind: form.kind || defaultKind(account), brief: form.brief.trim(), target: Math.max(1, form.target) };
+    const fields = { account, name: form.name.trim(), start: form.start || undefined, end: form.end || undefined, period: periodOf(form.start, form.end, "-"), goals: form.goals, goal: form.goals.join(", ") || "Awareness", kind: form.kind || defaultKind(account), brief: form.brief.trim(), target: Math.max(1, form.target) };
     if (editing) { patchCampaign(editing, c => ({ ...c, ...fields, period: periodOf(form.start, form.end, c.period) })); notify("Batch disimpan."); }
     else { const id = "c" + Date.now(); setPlan(o => ({ ...o, accounts: o.accounts.includes(account) ? o.accounts : [...o.accounts, account], campaigns: [{ id, cover: "living", items: [], ...fields }, ...o.campaigns] })); setClient(account); setBatchId(id); if (form.start) setMonth({ y: Number(form.start.slice(0, 4)), m: Number(form.start.slice(5, 7)) - 1 }); notify("Batch dibuat. Tambahkan konten atau minta AI mengusulkan judul."); }
     setModal("");
@@ -318,7 +335,7 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
         </div>
         <div className="cx-pop-foot"><button onClick={openNewBatch}><Plus size={15} /> Buat batch baru</button><label className="cx-check"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} /> Tampilkan arsip</label></div>
       </Picker>
-      <div className="cx-views" role="tablist">{([["Kalender", CalendarDays], ["Timeline", Clock], ["List", List]] as const).map(([v, I]) => <button key={v} role="tab" aria-selected={view === v} className={view === v ? "active" : ""} onClick={() => setView(v)}><I size={15} /> {v}</button>)}</div>
+      <div className="cx-views" role="tablist">{([["List", List], ["Kalender", CalendarDays], ["Timeline", Clock]] as const).map(([v, I]) => <button key={v} role="tab" aria-selected={view === v} className={view === v ? "active" : ""} onClick={() => setView(v)}><I size={15} /> {v}</button>)}</div>
       <button className="primary-button cx-new" onClick={() => openNewContent()}><Plus size={16} /> {scope.length ? "Buat konten" : "Buat batch"}</button>
     </div>
 
@@ -340,7 +357,7 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
                 {list.length > 2 && <button className="cx-more" onClick={() => { setView("Timeline"); }}>+{list.length - 2} lagi</button>}</>}
             </div>; })}
           </div>
-        </section>{table}</>}
+        </section></>}
 
         {view === "Timeline" && <section className="panel cx-timeline">
           <div className="cx-card-head"><h3>Timeline konten</h3><span className="cx-chip">{shown.length} konten</span></div>
@@ -359,7 +376,7 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
             <div className="cx-menu-wrap"><button className="cx-icon" aria-label="Menu batch" onClick={() => setPop(pop === "ai" ? "" : "ai")}><MoreHorizontal size={18} /></button>
               {pop === "ai" && <div className="floating-menu cx-menu"><button onClick={() => { setPop(""); openEditBatch(batch); }}>Edit batch<Pencil size={14} /></button><button onClick={() => suggestTitles(batch)}>Usulkan 5 judul (AI)<Sparkles size={14} /></button><button onClick={() => { const n = enqueueCampaign(batch.id, 5); setPop(""); notify(n ? `${n} konten digarap agen (±Rp 9 per konten).` : "Tidak ada konten yang perlu digarap."); }}>Tulis brief AI untuk 5 konten<Play size={14} /></button><button onClick={() => { patchCampaign(batch.id, c => ({ ...c, auto: !c.auto })); setPop(""); }}>Agen otomatis: {(batch as { auto?: boolean }).auto ? "nyala" : "mati"}<Zap size={14} /></button><button onClick={() => { patchCampaign(batch.id, c => ({ ...c, archived: !c.archived })); setPop(""); notify(batch.archived ? "Batch diaktifkan lagi." : "Batch diarsipkan."); }}>{batch.archived ? "Aktifkan lagi" : "Arsipkan"}<Layers3 size={14} /></button></div>}</div></div>
           <h4><Layers3 size={16} /> Informasi batch</h4>
-          <dl className="cx-dl"><dt>Periode</dt><dd>{batch.period || "-"}</dd><dt>Total konten</dt><dd>{batch.items.length} / {targetOf(batch)}</dd><dt>Tujuan</dt><dd>{batch.goal}</dd><dt>Jenis</dt><dd>{KIND_LABEL[batch.kind ?? defaultKind(batch.account)]}</dd></dl>
+          <dl className="cx-dl"><dt>Periode</dt><dd>{batch.period || "-"}</dd><dt>Total konten</dt><dd>{batch.items.length} / {targetOf(batch)}</dd><dt>Tujuan</dt><dd className="cx-goals">{goalsOf(batch).map(g => <em key={g} className="cx-goal">{g}</em>)}</dd><dt>Jenis</dt><dd>{KIND_LABEL[batch.kind ?? defaultKind(batch.account)]}</dd></dl>
           <h4><Check size={16} /> Progress produksi <span>{rows.length} konten</span></h4>
           <div className="cx-stack">{STAGES.map(s => { const n = count(s); return n ? <i key={s} className={`cx-s-${stageKey(s)}`} style={{ flexGrow: n }} title={`${s}: ${n}`} /> : null; })}{!rows.length && <i className="cx-s-none" style={{ flexGrow: 1 }} />}</div>
           <ul className="cx-legend">{STAGES.map(s => <li key={s}><i className={`cx-s-${stageKey(s)}`} />{s}<b>{count(s)}</b></li>)}</ul>
@@ -381,15 +398,16 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
     {modal && modal !== "brand" && <div className="modal-backdrop" onClick={() => setModal("")}><div className={`quick-modal ${modal === "batch" ? "cp-modal" : "plan-v2-modal"}`} role="dialog" aria-label={modal === "batch" ? "Batch" : "Form"} onClick={e => e.stopPropagation()}><button className="modal-close" onClick={() => setModal("")} aria-label="Tutup"><X size={18} /></button>
       {modal === "batch" && <>
         <div className="cp-modal-head"><span className="modal-icon"><Layers3 size={21} /></span><div><h2>{editing ? "Edit batch" : "Buat batch baru"}</h2><p>Satu batch = satu pesanan konten untuk satu klien. Periode produksi boleh berbeda dari jadwal tayang.</p></div></div>
-        <div className="cp-form">
-          <div className="settings-field"><label htmlFor="n-acc">KLIEN *</label><input id="n-acc" list="cx-clients" value={form.account} onChange={e => setForm({ ...form, account: e.target.value, kind: "" })} placeholder="Pilih atau ketik klien baru" /><datalist id="cx-clients">{plan.accounts.map(a => <option key={a} value={a} />)}</datalist></div>
-          <div className="settings-field"><label htmlFor="n-name">NAMA BATCH *</label><input id="n-name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Batch Nov – Des 2026" /></div>
-          <div className="settings-field"><label htmlFor="n-start">MULAI</label><input id="n-start" type="date" value={form.start} onChange={e => setForm({ ...form, start: e.target.value })} /></div>
-          <div className="settings-field"><label htmlFor="n-end">SELESAI</label><input id="n-end" type="date" value={form.end} min={form.start || undefined} onChange={e => setForm({ ...form, end: e.target.value })} /></div>
-          <div className="settings-field"><label htmlFor="n-target">TARGET JUMLAH KONTEN</label><input id="n-target" type="number" min={1} max={200} value={form.target} onChange={e => setForm({ ...form, target: Number(e.target.value) || 1 })} /></div>
-          <div className="settings-field"><label htmlFor="n-goal">TUJUAN</label><select id="n-goal" value={form.goal} onChange={e => setForm({ ...form, goal: e.target.value })}>{GOALS.map(g => <option key={g}>{g}</option>)}</select></div>
-          <div className="settings-field cp-wide"><label htmlFor="n-kind">JENIS KONTEN</label><select id="n-kind" value={form.kind || defaultKind(form.account)} onChange={e => setForm({ ...form, kind: e.target.value as CampaignKind })}>{(Object.keys(KIND_LABEL) as CampaignKind[]).map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></div>
-          <div className="settings-field cp-wide"><label htmlFor="n-brief">CATATAN BATCH</label><textarea id="n-brief" rows={3} maxLength={500} value={form.brief} onChange={e => setForm({ ...form, brief: e.target.value })} placeholder="Fokus: fasilitas, room tour, suasana. Format: 8 Reels, 5 Carousel, 2 Single. Target upload 3–4 konten per minggu." /><small>{form.brief.length} / 500</small></div>
+        <div className="cx-form">
+          <label className="cx-f"><span>Klien <b>*</b></span><input list="cx-clients" value={form.account} onChange={e => setForm({ ...form, account: e.target.value, kind: "" })} placeholder="Pilih atau ketik klien baru" /><datalist id="cx-clients">{plan.accounts.map(a => <option key={a} value={a} />)}</datalist></label>
+          <label className="cx-f"><span>Nama batch <b>*</b></span><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Batch Nov – Des 2026" /></label>
+          <div className="cx-f"><span>Periode produksi</span><div className="cx-range"><input type="date" aria-label="Mulai" value={form.start} onChange={e => setForm({ ...form, start: e.target.value })} /><i>sampai</i><input type="date" aria-label="Selesai" value={form.end} min={form.start || undefined} onChange={e => setForm({ ...form, end: e.target.value })} /></div></div>
+          <label className="cx-f"><span>Target jumlah konten</span><div className="cx-unit"><input type="number" min={1} max={200} value={form.target} onChange={e => setForm({ ...form, target: Number(e.target.value) || 1 })} /><em>konten</em></div></label>
+          <div className="cx-f wide"><span>Jenis konten</span><div className="cx-segs">{(Object.keys(KIND_LABEL) as CampaignKind[]).map(k => <button type="button" key={k} className={(form.kind || defaultKind(form.account)) === k ? "active" : ""} onClick={() => setForm({ ...form, kind: k })}>{KIND_LABEL[k]}</button>)}</div></div>
+          <div className="cx-f wide"><span>Tujuan <small>pilih satu atau lebih; tiap konten bisa memilih salah satunya</small></span>
+            <div className="cx-chipsel">{[...GOALS, ...form.goals.filter(g => !GOALS.includes(g))].map(g => { const on = form.goals.includes(g); return <button type="button" key={g} className={on ? "active" : ""} aria-pressed={on} onClick={() => setForm({ ...form, goals: on ? form.goals.filter(x => x !== g) : [...form.goals, g] })}>{on && <Check size={13} />}{g}</button>; })}
+              <input value={goalDraft} maxLength={40} onChange={e => setGoalDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && goalDraft.trim()) { e.preventDefault(); const g = goalDraft.trim(); if (!form.goals.includes(g)) setForm({ ...form, goals: [...form.goals, g] }); setGoalDraft(""); } }} placeholder="+ Tujuan lain (Enter)" aria-label="Tambah tujuan" /></div></div>
+          <label className="cx-f wide"><span>Catatan batch</span><textarea rows={4} maxLength={500} value={form.brief} onChange={e => setForm({ ...form, brief: e.target.value })} placeholder="Fokus: fasilitas, room tour, suasana. Format: 8 Reels, 5 Carousel, 2 Single. Target upload 3–4 konten per minggu." /><small>{form.brief.length} / 500 · dipakai AI saat menulis judul dan brief</small></label>
         </div>
         <div className="cp-modal-actions">{editing && <button className="outline-button x-danger" onClick={() => { const c = plan.campaigns.find(x => x.id === editing); if (c) deleteBatch(c); }}><Trash2 size={15} /> Hapus</button>}<button className="outline-button" onClick={() => setModal("")}>Batal</button><button className="primary-button" onClick={saveBatch}>{editing ? "Simpan" : "Buat batch"}</button></div>
       </>}

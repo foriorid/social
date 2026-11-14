@@ -7,7 +7,7 @@ import { Check, Copy, ExternalLink, Link2, Loader2, MessageSquare, RefreshCw, Se
 import { readCloud, supabase } from "./lib/cloud";
 import { notify } from "./modules";
 import type { CampaignData } from "./plan-data";
-import { progress, revOf, statusOf, type ClientStatus, type Feedback, type ReviewItem, type ReviewSnapshot } from "../supabase/functions/review/review";
+import { progress, reviewSlug, revOf, statusOf, type ClientStatus, type Feedback, type ReviewItem, type ReviewSnapshot } from "../supabase/functions/review/review";
 
 export type ReviewRow = { token: string; snapshot: ReviewSnapshot; feedback: Feedback; revoked: boolean; updated_at: string };
 export const CLIENT_LABEL: Record<ClientStatus, string> = { approved: "Disetujui klien", revision: "Revisi klien", review: "Menunggu klien" };
@@ -19,7 +19,8 @@ export function reviewLink(token: string) {
   return window.location.hostname.endsWith("github.io") ? `${window.location.origin}${root}/review/?r=${token}` : `${window.location.origin}${root}/review/${token}`;
 }
 
-const newToken = () => Array.from(crypto.getRandomValues(new Uint8Array(24)), b => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join("");
+const rand4 = () => Array.from(crypto.getRandomValues(new Uint8Array(4)), b => "abcdefghijkmnpqrstuvwxyz23456789"[b % 32]).join("");
+const newToken = (c: CampaignData) => reviewSlug(c.account, c.name, rand4());
 
 /** What the client sees of a batch. Only reviewable fields; internal notes and status stay in the app. */
 export function snapshotOf(c: CampaignData, version: number): ReviewSnapshot {
@@ -59,11 +60,14 @@ export function useReviewLink(campaignId: string | undefined) {
   const publish = (c: CampaignData) => {
     if (!ws) return Promise.resolve(false);
     if (row) return run(async () => await supabase.from("review_links").update({ snapshot: snapshotOf(c, row.snapshot.version + 1), revoked: false, updated_at: new Date().toISOString() }).eq("token", row.token), "Portal klien diperbarui.");
-    return run(async () => await supabase.from("review_links").insert({ token: newToken(), workspace_id: ws, campaign_id: c.id, snapshot: snapshotOf(c, 1) }), "Link review dibuat.");
+    // a slug collision is near impossible; retry once with a new tail if it happens
+    return run(async () => { let r = await supabase.from("review_links").insert({ token: newToken(c), workspace_id: ws, campaign_id: c.id, snapshot: snapshotOf(c, 1) }); if (r.error?.code === "23505") r = await supabase.from("review_links").insert({ token: newToken(c), workspace_id: ws, campaign_id: c.id, snapshot: snapshotOf(c, 1) }); return r; }, "Link review dibuat.");
   };
   const setRevoked = (revoked: boolean) => row ? run(async () => await supabase.from("review_links").update({ revoked, updated_at: new Date().toISOString() }).eq("token", row.token), revoked ? "Link dinonaktifkan. Klien tidak bisa membukanya lagi." : "Link aktif lagi.") : Promise.resolve(false);
   const reply = (day: number, text: string) => row ? run(async () => await supabase.rpc("review_team_reply", { p_token: row.token, p_day: day, p_name: readCloud().workspaces.find(w => w.id === ws)?.name ?? "FORIOR", p_text: text }), "Balasan terkirim.") : Promise.resolve(false);
-  return { row, state, busy, load, publish, setRevoked, reply };
+  /** Swap an older random link for a readable one; feedback stays. The old link stops working. */
+  const tidy = (c: CampaignData) => row ? run(async () => await supabase.from("review_links").update({ token: newToken(c), updated_at: new Date().toISOString() }).eq("token", row.token), "Link diganti ke alamat yang rapi.") : Promise.resolve(false);
+  return { row, state, busy, load, publish, setRevoked, reply, tidy };
 }
 
 const copy = (text: string, ok: string) => navigator.clipboard?.writeText(text).then(() => notify(ok), () => notify("Browser menolak menyalin. Salin manual."));
@@ -71,7 +75,7 @@ const when = (iso: string) => new Date(iso).toLocaleString("id-ID", { day: "nume
 
 /** Batch side panel block: create / update / disable the client link and see approval progress. */
 export function ReviewPanel({ campaign, review }: { campaign: CampaignData; review: ReturnType<typeof useReviewLink> }) {
-  const { row, state, busy, publish, setRevoked, load } = review;
+  const { row, state, busy, publish, setRevoked, load, tidy } = review;
   const changes = pendingChanges(campaign, row);
   const p = row ? progress(row.snapshot, row.feedback) : null;
   const general = row?.feedback["0"]?.comments ?? [];
@@ -82,6 +86,8 @@ export function ReviewPanel({ campaign, review }: { campaign: CampaignData; revi
     <h4><Link2 size={16} /> Client review {row.revoked ? <em className="cx-badge off">Nonaktif</em> : <em className="cx-badge">v{row.snapshot.version}</em>}<button className="cx-link" onClick={load} aria-label="Muat ulang status review"><RefreshCw size={13} /></button></h4>
     {p && <><div className="rv-progress"><b>{Math.round((p.approved / Math.max(1, p.total)) * 100)}%</b><span>{p.approved}/{p.total} disetujui{p.revision ? ` · ${p.revision} revisi` : ""}</span></div><i className="cx-bar-mini rv-bar"><em style={{ width: `${(p.approved / Math.max(1, p.total)) * 100}%` }} /></i></>}
     {general.length > 0 && <div className="rv-general"><MessageSquare size={14} /><span><b>{general.at(-1)!.by}:</b> {general.at(-1)!.text}</span></div>}
+    {!row.revoked && <code className="rv-link">{reviewLink(row.token).replace(/^https?:\/\//, "")}</code>}
+    {!row.revoked && !row.token.includes("-") && <button className="cx-link rv-tidy" disabled={busy} onClick={() => { if (window.confirm("Ganti ke link yang rapi? Link lama tidak bisa dibuka lagi, jadi kirim link baru ke klien.")) tidy(campaign); }}>Rapikan alamat link</button>}
     {changes > 0 && !row.revoked && <p className="rv-changes">{changes} konten berubah sejak dibagikan. Perbarui agar klien melihat versi terbaru. Konten yang berubah perlu disetujui ulang.</p>}
     <div className="cx-batch-actions">
       {row.revoked ? <button className="primary-button" disabled={busy} onClick={() => setRevoked(false)}><Check size={14} /> Aktifkan lagi</button> : <>

@@ -3,7 +3,8 @@
 // Brand Kit per client: identity, colors and voice. Saved in the plan (per workspace), used by the AI prompts
 // (flow.ts kitLines) and by the carousel editor (slide.tsx brandOf).
 import { useState } from "react";
-import { Palette, Pencil, X } from "lucide-react";
+import { ImagePlus, Palette, Pencil, Trash2, X } from "lucide-react";
+import { notify } from "./modules";
 import { useSettings } from "./lib/store";
 import type { BrandKit } from "./plan-data";
 import { SlideCanvas, brandOf, normalizeLook } from "./slide";
@@ -11,6 +12,23 @@ import { SAMPLE_PHOTOS } from "./ui";
 
 const filled = (k?: BrandKit) => !!k && Object.values(k).some(v => typeof v === "string" && v.trim());
 const COLOR = /^#[0-9a-f]{6}$/i;
+
+/** Logo as a small data URL (max 512px, keeps transparency) so it lives in the Brand Kit without file storage. */
+export function logoDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!/^image\/(png|jpeg|webp|svg\+xml)$/.test(file.type)) return reject(new Error("Pakai file PNG, JPG, WebP, atau SVG."));
+    if (file.size > 5 * 1024 * 1024) return reject(new Error("Maksimal 5 MB."));
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, 512 / Math.max(img.width || 512, img.height || 512)), c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round((img.width || 512) * s)); c.height = Math.max(1, Math.round((img.height || 512) * s));
+      c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      const png = c.toDataURL("image/png"); resolve(png.length > 350_000 ? c.toDataURL("image/webp", 0.9) : png);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("File logo tidak bisa dibaca.")); };
+    img.src = url;
+  });
+}
 
 export function BrandKitModal({ account, kit, onSave, onClose }: { account: string; kit?: BrandKit; onSave: (k: BrandKit) => void; onClose: () => void }) {
   const [settings] = useSettings();
@@ -25,6 +43,12 @@ export function BrandKitModal({ account, kit, onSave, onClose }: { account: stri
     <div className="cp-modal-head"><span className="modal-icon"><Palette size={21} /></span><div><h2>Brand Kit · {account}</h2><p>Dipakai AI saat menulis judul, brief, dan caption, dan oleh editor carousel untuk warna dan nama brand.</p></div></div>
     <div className="bk-body">
       <div className="cp-form">
+        <div className="settings-field cp-wide"><label>LOGO</label><div className="bk-logo">
+          {d.logo ? <img src={d.logo} alt={`Logo ${account}`} /> : <span className="bk-logo-empty"><ImagePlus size={22} /></span>}
+          <div><label className="outline-button bk-upload"><ImagePlus size={15} /> {d.logo ? "Ganti logo" : "Upload logo"}<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={async e => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; try { set({ logo: await logoDataUrl(f) }); } catch (err) { notify(err instanceof Error ? err.message : String(err)); } }} /></label>
+            {d.logo && <button className="outline-button x-danger" onClick={() => set({ logo: undefined })}><Trash2 size={14} /> Hapus</button>}
+            <small>PNG transparan paling bagus. Dipakai di pojok kiri atas slide menggantikan nama brand.</small></div>
+        </div></div>
         <div className="settings-field"><label htmlFor="bk-name">NAMA DI DESAIN</label><input id="bk-name" value={d.name ?? ""} maxLength={40} onChange={e => set({ name: e.target.value })} placeholder={account} /></div>
         <div className="settings-field"><label htmlFor="bk-handle">AKUN SOSMED</label><input id="bk-handle" value={d.handle ?? ""} maxLength={40} onChange={e => set({ handle: e.target.value })} placeholder="@intragamavilla" /></div>
         <div className="settings-field cp-wide"><label>WARNA</label><div className="bk-colors">{color("accent", "Aksen", "#7c4de2")}{color("dark", "Gelap", "#1b1235")}{color("light", "Terang", "#f4f0ea")}</div></div>
@@ -49,7 +73,7 @@ export function BrandKitModal({ account, kit, onSave, onClose }: { account: stri
 export function BrandKitCard({ account, kit, onEdit }: { account: string; kit?: BrandKit; onEdit: () => void }) {
   const pillars = (kit?.pillars ?? "").split(/[,\n]/).map(p => p.trim()).filter(Boolean).slice(0, 6);
   return <section className="panel cx-batch bk-card">
-    <h4><Palette size={16} /> Brand Kit · {account}<button className="cx-link" onClick={onEdit}><Pencil size={12} /> {filled(kit) ? "Edit" : "Isi"}</button></h4>
+    <h4>{kit?.logo ? <img className="bk-card-logo" src={kit.logo} alt="" /> : <Palette size={16} />} Brand Kit · {account}<button className="cx-link" onClick={onEdit}><Pencil size={12} /> {filled(kit) ? "Edit" : "Isi"}</button></h4>
     {filled(kit) ? <>
       <div className="bk-swatches">{[kit?.accent ?? "#7c4de2", kit?.dark ?? "#1b1235", kit?.light ?? "#f4f0ea"].map((c, i) => <i key={i} style={{ background: c }} />)}<span>{kit?.font === "sans" ? "Sans modern" : "Serif elegan"}{kit?.handle ? ` · ${kit.handle}` : ""}</span></div>
       {kit?.tone && <p className="cx-note">{kit.tone}</p>}

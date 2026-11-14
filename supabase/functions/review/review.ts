@@ -73,4 +73,11 @@ export function teamReply(fb: Feedback, day: number, name: string, text: string,
   return { ...fb, [String(day)]: { ...cur, comments: [...cur.comments, { id, by: clean(name, 60) || "FORIOR", text: t, at: now.toISOString(), team: true }] } };
 }
 
-export const isToken = (t: string) => /^[a-z0-9]{20,40}$/.test(t);
+/** Link id: readable slug with a short random tail (new links), or the older 20-40 char random id. */
+export const isToken = (t: string) => /^[a-z0-9][a-z0-9-]{6,88}[a-z0-9]$/.test(t) && !t.includes("--");
+const slugPart = (v: string) => v.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 36).replace(/-+$/g, "");
+/** e.g. "intragama-villa-november-2026-k7m2"; the 4-char tail keeps links hard to guess. */
+export function reviewSlug(account: string, batch: string, rand: string): string {
+  const base = [slugPart(account), slugPart(batch)].filter(Boolean).join("-") || "review";
+  return `${base}-${rand.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 4).padEnd(4, "x")}`;
+}

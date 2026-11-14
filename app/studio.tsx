@@ -62,7 +62,7 @@ function ContentPicker({ campaign, current, onPick, onClose }: { campaign: Campa
   </div></div>;
 }
 
-export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaignId: string; day: number } | null; onOpenPlan: () => void; embedded?: boolean }) {
+export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaignId: string; day: number } | null; onOpenPlan: (ref?: { campaignId: string; day: number }) => void; embedded?: boolean }) {
   const [plan] = usePlan();
   const [settings] = useSettings();
   const [tasks] = useTasks();
@@ -89,8 +89,8 @@ export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaig
   </>;
   if (!campaign) return <div className="module-page f-page"><p className="x-empty">Belum ada campaign. Buat di Content Plan.</p></div>;
   const pct = progressOf(campaign);
-  const campaignButton = <button className="st-select st-select-camp" onClick={() => setPicker("campaign")} aria-label="Pilih campaign"><ImageTile kind={coverOf(campaign)} className="st-select-thumb" /><span><b>{campaign.account} — {campaign.name}</b><small>{campaign.period} · {campaign.items.length} konten</small></span><em className="st-pct">{pct}%</em><ChevronDown size={18} /></button>;
-  if (!item) return <div className="module-page f-page"><section className="panel st-top"><label>Campaign</label>{campaignButton}</section><section className="panel f-emptyboard"><h3>Campaign ini belum punya konten</h3><p>Tambahkan konten di Content Plan, lalu kembali ke sini untuk produksi.</p><button className="primary-button" onClick={onOpenPlan}>Buka Content Plan</button></section>{pickers}</div>;
+  const campaignButton = <button className="st-select st-select-camp" onClick={() => setPicker("campaign")} aria-label="Pilih batch"><ImageTile kind={coverOf(campaign)} className="st-select-thumb" /><span><b>{campaign.account} — {campaign.name}</b><small>{campaign.period} · {campaign.items.length} konten</small></span><em className="st-pct">{pct}%</em><ChevronDown size={18} /></button>;
+  if (!item) return <div className="module-page f-page"><section className="panel st-top"><label>Batch</label>{campaignButton}</section><section className="panel f-emptyboard"><h3>Campaign ini belum punya konten</h3><p>Tambahkan konten di Content Plan, lalu kembali ke sini untuk produksi.</p><button className="primary-button" onClick={() => onOpenPlan()}>Buka Content Plan</button></section>{pickers}</div>;
 
   const board = item.board ?? [];
   const video = isVideo(item.format);
@@ -131,10 +131,10 @@ export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaig
 
   return <div className={`module-page f-page st-page ${embedded ? "st-embedded" : ""}`}>
     {!embedded && <section className="panel st-top">
-      <label>Campaign</label>{campaignButton}
+      <label>Batch</label>{campaignButton}
       <label>Konten</label>
       <button className="st-select" onClick={() => setPicker("content")} aria-label="Pilih konten"><span className="st-select-icon"><Play size={16} /></span><span><b>{pad(item.day)} · {item.title || "Tanpa judul"}</b><small>{item.format} · {board.length} {unit}</small></span><ChevronDown size={18} /></button>
-      <div className="st-top-actions"><button className="outline-button" onClick={onOpenPlan}><FileText size={15} /> Buka brief</button><button className="primary-button" onClick={submit} disabled={!board.length}><Check size={15} /> Ajukan approval</button></div>
+      <div className="st-top-actions"><button className="outline-button" onClick={() => onOpenPlan({ campaignId: campaign.id, day: item.day })}><FileText size={15} /> Buka brief</button><button className="primary-button" onClick={submit} disabled={!board.length}><Check size={15} /> Ajukan approval</button></div>
     </section>}
 
     {!board.length ? <section className="panel f-emptyboard"><h3>Konten ini belum punya storyboard</h3><p>Studio bekerja dari storyboard di brief. Minta agen menulisnya, atau mulai dari {unit} kosong.</p><div className="x-row"><button className="primary-button" onClick={() => enqueue(campaign.id, item.day, false, "brief")} disabled={working}><Play size={15} /> {working ? "Agen sedang menulis…" : "Minta agen menulis brief + storyboard"}</button><button className="outline-button" onClick={() => setBoard([{ label: video ? "0-3 dtk" : "Slide 1", visual: "", text: item.title, audio: "" }])}><Plus size={15} /> Mulai manual</button></div></section>
