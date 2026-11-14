@@ -3,7 +3,7 @@
 // Gate screens shown before the app: sign-in (invite only), choosing a password from an invite/reset link,
 // a short loading state, and the message for an account that belongs to no workspace yet.
 import { useState } from "react";
-import { Image as ImageIcon, Info, Loader2, Lock, Users } from "lucide-react";
+import { Image as ImageIcon, Info, Layers, Loader2, Lock, Users } from "lucide-react";
 import { sendPasswordReset, setNewPassword, signInWithEmail, signInWithPassword, signOut } from "./lib/cloud";
 
 function Brand({ light = false }: { light?: boolean }) {
@@ -12,18 +12,20 @@ function Brand({ light = false }: { light?: boolean }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return <main className="lg-page">
+    <div className="lg-bg" aria-hidden="true" /><div className="lg-scrim" aria-hidden="true" />
     <aside className="lg-side">
       <Brand light />
       <div className="lg-pitch">
-        <h1>Satu tempat untuk konten dan project FORIOR.</h1>
-        <p>Content plan, produksi, dan photo delivery untuk tim. Akses hanya dengan undangan.</p>
+        <span className="lg-eyebrow">FORIOR HUB</span>
+        <h1>Create better property visuals, <span>together.</span></h1>
+        <p>Workspace untuk mengelola project, konten, dan photo delivery dari FORIOR.</p>
         <ul>
-          <li><Lock size={18} aria-hidden="true" /> Halaman ini tertutup untuk umum</li>
-          <li><Users size={18} aria-hidden="true" /> Workspace Alvian &amp; FORIOR terpisah</li>
-          <li><ImageIcon size={18} aria-hidden="true" /> Klien membuka galeri tanpa perlu akun</li>
+          <li><Layers size={18} aria-hidden="true" /> Project &amp; photo delivery</li>
+          <li><ImageIcon size={18} aria-hidden="true" /> Content plan &amp; produksi</li>
+          <li><Users size={18} aria-hidden="true" /> Kolaborasi tim</li>
         </ul>
       </div>
-      <small className="lg-copy">© 2026 FORIOR · Interior Photo Services</small>
+      <small className="lg-copy"><Lock size={13} aria-hidden="true" /> Private workspace · Invitation only</small>
     </aside>
     <section className="lg-main"><div className="lg-mobile-head"><Brand light /><p>Akses hanya dengan undangan.</p></div>{children}</section>
   </main>;

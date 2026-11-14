@@ -6,7 +6,7 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 // Each workspace has its own space ("forior-os:ws:<id>:<key>") so switching never shows another workspace's data.
 // A few keys are about the device or session, not a workspace, and stay global ("forior-os:<key>").
 const BASE = "forior-os:";
-const GLOBAL_KEYS = new Set(["cloud", "toast", "workspace"]);
+const GLOBAL_KEYS = new Set(["cloud", "toast", "workspace", "navCollapsed"]);
 let space = "";
 export const isGlobalKey = (key: string) => GLOBAL_KEYS.has(key);
 export const storeSpace = () => space;

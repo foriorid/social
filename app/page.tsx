@@ -316,6 +316,8 @@ function AppShell() {
   const wsLabel = (w: { kind: string }) => (w.kind === "personal" ? "Personal Brand" : "Business");
   const isBiz = ws?.kind === "business";
   const currentItem = navGroupsFor(ws?.kind).flatMap(g => g.items).find(i => i.name === activeNav);
+  const [navCollapsed, setNavCollapsed] = useStored<string[]>("navCollapsed", []);
+  const toggleGroup = (label: string) => setNavCollapsed(c => (c.includes(label) ? c.filter(x => x !== label) : [...c, label]));
   const pickWorkspace = (id: string) => { setShowWorkspace(false); setShowProfile(false); if (id !== cloud.workspaceId) switchWorkspace(id); };
   const [mobileNav, setMobileNav] = useState(false);
   const [quickAction, setQuickAction] = useState("");
@@ -388,22 +390,24 @@ function AppShell() {
         </div>
 
         <nav className="side-nav">
-          {navGroupsFor(ws?.kind).map((group) => (
-            <div className="nav-group" key={group.label}>
-              <span className="eyebrow nav-label">{group.label}</span>
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <div key={item.name}>
-                    <button className={`nav-item ${activeNav === item.name ? "active" : ""}`} onClick={() => { setActiveNav(item.name); setMobileNav(false); }}>
-                      <Icon size={18} strokeWidth={1.8} />
-                      <span>{item.label ?? item.name}</span>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+          {navGroupsFor(ws?.kind).map((group) => {
+            const open = group.items.some(i => i.name === activeNav) || !navCollapsed.includes(group.label);
+            const renderItem = (item: NavItem) => { const Icon = item.icon; return (
+              <button key={item.name} className={`nav-item ${activeNav === item.name ? "active" : ""}`} onClick={() => { setActiveNav(item.name); setMobileNav(false); }}>
+                <Icon size={18} strokeWidth={1.8} /><span>{item.label ?? item.name}</span>
+              </button>
+            ); };
+            // Single-item groups (Dashboard) stay as a plain item; multi-item groups collapse.
+            if (group.items.length === 1) return <div className="nav-group" key={group.label}>{renderItem(group.items[0])}</div>;
+            return (
+              <div className={`nav-group collapsible ${open ? "open" : ""}`} key={group.label}>
+                <button className="nav-group-head" onClick={() => toggleGroup(group.label)} aria-expanded={open}>
+                  <span className="eyebrow nav-label">{group.label}</span><ChevronDown size={15} className="nav-caret" />
+                </button>
+                {open && <div className="nav-group-items">{group.items.map(renderItem)}</div>}
+              </div>
+            );
+          })}
         </nav>
 
         <div className="sidebar-bottom">
