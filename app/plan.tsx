@@ -10,6 +10,7 @@ import { KIND_LABEL, PIPELINE, STAGES, clock, dateOf, isVideo, monthGrid, nextSt
 import { addApproval, useIdeas, useStored, useTasks, writeStored, type Task } from "./lib/store";
 import { notify, useAiReady } from "./modules";
 import { campaignHtml, defaultKind, patchCampaign, patchItem, storyboardHtml, usePlan, type CampaignContent, type CampaignData, type CampaignKind, type Scene } from "./plan-data";
+import { CLIENT_LABEL, ClientFeedback, ReviewPanel, clientStatusOf, useReviewLink } from "./review";
 import { StudioPage } from "./studio";
 import { ImageTile } from "./ui";
 
@@ -56,6 +57,7 @@ function ContentDetail({ campaign, item, onBack, onOpenStudio }: { campaign: Cam
   const [mode, setMode] = useState<"ai" | "manual">(item.board?.length ? "manual" : "ai");
   const [menu, setMenu] = useState<number | "head" | null>(null);
   const ready = useAiReady();
+  const review = useReviewLink(campaign.id);
   const set = (patch: Partial<CampaignContent>) => patchItem(campaign.id, item.day, patch);
   const board = item.board ?? [];
   const setBoard = (next: Scene[]) => set({ board: next, scenes: next.map(s => `${s.label}: ${s.visual}`) });
@@ -131,6 +133,7 @@ function ContentDetail({ campaign, item, onBack, onOpenStudio }: { campaign: Cam
         <div className="cx-grid2"><Field label="Hashtag" value={item.hashtags ?? ""} onChange={v => set({ hashtags: v })} rows={2} placeholder="#fotointerior #propertijakarta" /><Field label="Pilar konten" value={item.pillar} onChange={v => set({ pillar: v })} rows={2} /></div>
       </section>
       <aside className="cx-side-stack">
+        <ClientFeedback day={item.day} review={review} boardLabels={board.map(s => s.label)} extra={clientStatusOf(review.row, item.day) === "approved" && !["Terjadwal", "Dipublish"].includes(stage) ? <button className="outline-button" onClick={() => set({ status: "Terjadwal" })}><Check size={14} /> Tandai Terjadwal</button> : null} />
         <section className="panel cx-card">
           <div className="cx-card-head"><h3><ImageIcon size={18} /> Referensi</h3><button className="outline-button" onClick={() => setPicking(!picking)}>{picking ? "Tutup" : <><Plus size={14} /> Drive</>}</button></div>
           {item.assets?.length ? <div className="cx-refs">{item.assets.map(a => <div key={a.id}><a href={a.url} target="_blank" rel="noreferrer"><img src={a.thumb} alt={a.name} referrerPolicy="no-referrer" /></a><button aria-label={`Lepas ${a.name}`} onClick={() => set({ assets: item.assets!.filter(x => x.id !== a.id) })}><X size={13} /></button></div>)}</div> : <p className="x-empty">Belum ada foto referensi. Tautkan dari Google Drive.</p>}
@@ -168,6 +171,7 @@ function ContentDetail({ campaign, item, onBack, onOpenStudio }: { campaign: Cam
 
       <section className="cx-sb-main">
         <div className="cx-sb-head"><h3><Clapperboard size={18} /> Storyboard <span>({board.length} {unit})</span></h3><div className="cx-row">{video && total > 0 && <span className="cx-chip">Total ± {total} detik</span>}<button className="outline-button" onClick={addScene}><Plus size={14} /> Tambah {unit}</button></div></div>
+        {(review.row?.feedback[String(item.day)]?.comments ?? []).some(c => c.scene !== undefined) && <ClientFeedback day={item.day} review={review} boardLabels={board.map(s => s.label)} />}
         {!board.length ? <div className="panel cx-empty"><Clapperboard size={28} /><h3>Belum ada storyboard</h3><p>Generate dengan AI dari deskripsi di kiri, atau mulai manual.</p></div>
           : <ol className={`cx-scenes ${video ? "v" : "s"}`}>{board.map((s, i) => <li key={i} className="panel cx-scene">
             <div className="cx-scene-img" style={s.image ? { backgroundImage: `url("${s.image}")` } : undefined}>
@@ -214,6 +218,7 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
   const [showArchived, setShowArchived] = useState(false);
   const now = new Date();
   const [month, setMonth] = useState({ y: now.getFullYear(), m: now.getMonth() });
+  const review = useReviewLink(batchId || undefined);
 
   const clientValid = !client || plan.accounts.includes(client);
   const activeClient = clientValid ? client : "";
@@ -281,7 +286,7 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
     {shown.length ? <div className="cx-table" role="table">
       <div className="cx-tr cx-th" role="row"><span>Konten</span><span>Jenis</span><span>Status</span><span>Jadwal</span></div>
       {[...shown].sort((a, b) => (dateOf(a.x) ?? "9").localeCompare(dateOf(b.x) ?? "9") || a.x.day - b.x.day).map(r => <button key={r.c.id + r.x.day} className="cx-tr" role="row" onClick={() => openRow(r)}>
-        <span className="cx-tcontent"><ImageTile kind={thumbOf(r.x, r.c)} className="cx-thumb" /><span><b className={r.x.untitled ? "cx-untitled" : ""}>{r.x.title}</b><small>#{pad(r.x.day)}{!batch ? ` · ${r.c.name}` : ""}{busy.has(`${r.c.id}:${r.x.day}`) ? " · agen bekerja…" : ""}</small></span></span>
+        <span className="cx-tcontent"><ImageTile kind={thumbOf(r.x, r.c)} className="cx-thumb" /><span><b className={r.x.untitled ? "cx-untitled" : ""}>{r.x.title}</b><small>#{pad(r.x.day)}{!batch ? ` · ${r.c.name}` : ""}{busy.has(`${r.c.id}:${r.x.day}`) ? " · agen bekerja…" : ""}{batch && review.row && !review.row.revoked && clientStatusOf(review.row, r.x.day) ? <em className={`rv-mini rv-${clientStatusOf(review.row, r.x.day)}`}>{CLIENT_LABEL[clientStatusOf(review.row, r.x.day)!]}</em> : null}</small></span></span>
         <span><Fmt f={r.x.format} /></span><span><StagePill s={stageOf(r.x.status)} /></span><span className="cx-tdate">{shortDate(dateOf(r.x))}</span>
       </button>)}
     </div> : <p className="x-empty">{rows.length ? "Tidak ada konten dengan filter ini." : "Belum ada konten di batch ini."}</p>}
@@ -349,6 +354,7 @@ export function ContentPlanPage({ onOpenStudio, onShare }: { onOpenStudio: (camp
           <ul className="cx-legend">{STAGES.map(s => <li key={s}><i className={`cx-s-${stageKey(s)}`} />{s}<b>{count(s)}</b></li>)}</ul>
           <h4><FileText size={16} /> Catatan batch <button className="cx-link" onClick={() => openEditBatch(batch)}>Edit</button></h4>
           <p className="cx-note">{batch.brief || "Belum ada catatan. Tulis fokus, komposisi format, dan target upload — dipakai AI saat menulis judul dan brief."}</p>
+          <ReviewPanel campaign={batch} review={review} />
           <div className="cx-batch-actions"><button className="outline-button" onClick={() => onShare(batch)}><Share2 size={14} /> Bagikan</button><button className="outline-button" onClick={() => printBatch(batch)}><Printer size={14} /> PDF</button><button className="outline-button" onClick={() => downloadBatch(batch)}><Code2 size={14} /> HTML</button></div>
         </section>
         : <section className="panel cx-batch">
