@@ -23,7 +23,7 @@ test("nextStep needs one brief call, then the human", () => {
 
 test("applyStep(brief) fills the storyboard and advances status", () => {
   const patch = applyStep("brief", item, '{"hook":"H","message":"M","hashtags":"#a #b","schedule":"Rab 19.00","board":[{"visual":"wide shot","text":"Halo"},{"visual":"","text":""}]}');
-  assert.equal(patch.status, "Produksi");
+  assert.equal(patch.status, "Brief Siap");
   assert.equal(patch.hook, "H");
   assert.equal(patch.hashtags, "#a #b");
   assert.equal(patch.schedule, "Rab 19.00");
@@ -53,9 +53,9 @@ test("driveFolderId reads folder links", () => {
   assert.equal(driveFolderId("https://example.com/folders/abc"), null);
 });
 
-test("toSrt uses label timings and falls back to 3s blocks", () => {
+test("toSrt keeps silent scenes in the timeline", () => {
   const srt = toSrt([{ label: "0-3 dtk", visual: "", text: "Halo", audio: "" }, { label: "Scene 2", visual: "", text: "", audio: "" }, { label: "Scene 3", visual: "", text: "Dua", audio: "" }]);
-  assert.equal(srt, "1\n00:00:00,000 --> 00:00:03,000\nHalo\n\n2\n00:00:03,000 --> 00:00:06,000\nDua\n");
+  assert.equal(srt, "1\n00:00:00,000 --> 00:00:03,000\nHalo\n\n2\n00:00:06,000 --> 00:00:09,000\nDua\n");
 });
 
 test("applyPlan titles only slots without a storyboard and clears template text", () => {
@@ -97,7 +97,29 @@ test("videoGuidebook carries the storyboard, assets and render target", async ()
   assert.equal(guidebookName(it), "guidebook-01-tur-office-space-2-000-m2.md");
 });
 
-test("stageOf maps the older six statuses onto the four stages", async () => {
+test("stageOf maps older statuses onto the six stages", async () => {
   const { stageOf } = await import("./flow.ts");
-  assert.deepEqual(["Planned", "Brief ready", "In production", "In review", "Scheduled", "Published", "Draft", "aneh"].map(stageOf), ["Brief", "Brief", "Produksi", "Draft", "Publish", "Publish", "Draft", "Brief"]);
+  assert.deepEqual(["Planned", "Brief", "Brief ready", "In production", "In review", "Publish", "Scheduled", "Published", "Review", "aneh"].map(stageOf), ["Draft", "Draft", "Brief Siap", "Produksi", "Review", "Terjadwal", "Terjadwal", "Dipublish", "Review", "Draft"]);
+});
+
+test("sceneTimes uses sec, then label ranges, then 3 seconds", async () => {
+  const { sceneTimes, toSrt } = await import("./flow.ts");
+  const board = [{ label: "Establishing", sec: 4, visual: "", text: "Halo", audio: "" }, { label: "3-8 dtk", visual: "", text: "", audio: "" }, { label: "Closing", visual: "", text: "Bye", audio: "" }];
+  assert.deepEqual(sceneTimes(board), [{ start: 0, end: 4 }, { start: 4, end: 9 }, { start: 9, end: 12 }]);
+  assert.match(toSrt(board), /00:00:09,000 --> 00:00:12,000\nBye/);
+});
+
+test("dateOf prefers the picker date and parses free text", async () => {
+  const { dateOf } = await import("./flow.ts");
+  assert.equal(dateOf({ publishOn: "2026-11-05", publishDate: "x" }), "2026-11-05");
+  assert.equal(dateOf({ publishDate: "Nov 07, 2026" }), "2026-11-07");
+  assert.equal(dateOf({ publishDate: "Belum dijadwalkan" }), null);
+});
+
+test("monthGrid starts on Monday and pads to whole weeks", async () => {
+  const { monthGrid } = await import("./flow.ts");
+  const g = monthGrid(2026, 10); // November 2026 starts on a Sunday
+  assert.equal(g.length % 7, 0);
+  assert.equal(g.indexOf("2026-11-01"), 6);
+  assert.equal(g.filter(Boolean).length, 30);
 });

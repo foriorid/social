@@ -55,7 +55,7 @@ async function renderSlide(scene: Scene, index: number, total: number, look: Loo
 }
 
 const coverOf = (c: CampaignData) => c.items.flatMap(x => x.assets ?? []).find(a => a.kind === "Foto")?.thumb ?? c.cover;
-const progressOf = (c: CampaignData) => Math.round((c.items.filter(x => stageOf(x.status) === "Publish").length / (c.target ?? 30)) * 100);
+const progressOf = (c: CampaignData) => Math.round((c.items.filter(x => ["Terjadwal", "Dipublish"].includes(stageOf(x.status))).length / (c.target ?? 30)) * 100);
 const pad = (n: number) => String(n).padStart(2, "0");
 const STAGE_CLASS: Record<string, string> = { Brief: "cp-brief", Produksi: "cp-produksi", Draft: "cp-draft", Publish: "cp-publish" };
 
@@ -98,7 +98,7 @@ function ContentPicker({ campaign, current, onPick, onClose }: { campaign: Campa
   </div></div>;
 }
 
-export function StudioPage({ target, onOpenPlan }: { target: { campaignId: string; day: number } | null; onOpenPlan: () => void }) {
+export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaignId: string; day: number } | null; onOpenPlan: () => void; embedded?: boolean }) {
   const [plan] = usePlan();
   const [settings] = useSettings();
   const [tasks] = useTasks();
@@ -139,7 +139,7 @@ export function StudioPage({ target, onOpenPlan }: { target: { campaignId: strin
   const samples: AssetRef[] = linked.some(a => a.kind === "Foto") ? [] : SAMPLES.map((u, n) => ({ id: `sample-${n}`, name: `Contoh ${n + 1}`, url: u, thumb: u, kind: "Foto" }));
   const photos = [...linked.filter(a => a.kind === "Foto").map(a => a.thumb), ...SAMPLES];
   const photoOf = (s: Scene, n: number) => s.image || photos[n % photos.length];
-  const submit = () => { addApproval({ ref: { campaignId: campaign.id, day: item.day }, title: `${item.format} — ${item.title}`, by: video ? "Video Editor" : "Graphic Designer", type: `${campaign.account} · hasil produksi`, body: `${board.map(s => `• ${s.label} — ${s.text || s.visual}`).join("\n")}\n\nCaption:\n${item.caption}\n\n${item.hashtags ?? ""}` }); set({ status: "Draft" }); notify("Hasil produksi masuk ke antrean approval."); };
+  const submit = () => { addApproval({ ref: { campaignId: campaign.id, day: item.day }, title: `${item.format} — ${item.title}`, by: video ? "Video Editor" : "Graphic Designer", type: `${campaign.account} · hasil produksi`, body: `${board.map(s => `• ${s.label} — ${s.text || s.visual}`).join("\n")}\n\nCaption:\n${item.caption}\n\n${item.hashtags ?? ""}` }); set({ status: "Review" }); notify("Hasil produksi masuk ke antrean approval."); };
   const exportSlides = async (all: boolean) => {
     setExporting(true); let missing = 0;
     try { for (const n of all ? board.map((_, k) => k) : [i]) { const { blob, photoMissing } = await renderSlide({ ...board[n], image: photoOf(board[n], n) }, n, board.length, look, settings.handle); if (photoMissing) missing++; saveFile(blob, `${item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${pad(n + 1)}.png`); } }
@@ -162,13 +162,13 @@ export function StudioPage({ target, onOpenPlan }: { target: { campaignId: strin
   const shownAssets = assetType === "Template" ? [] : allAssets.filter(a => (assetType === "Semua" || a.kind === assetType) && a.name.toLowerCase().includes(assetQuery.toLowerCase()));
   const uploadUrl = folders[0] ? `https://drive.google.com/drive/folders/${folders[0].id}` : "https://drive.google.com/drive/my-drive";
 
-  return <div className="module-page f-page st-page">
-    <section className="panel st-top">
+  return <div className={`module-page f-page st-page ${embedded ? "st-embedded" : ""}`}>
+    {!embedded && <section className="panel st-top">
       <label>Campaign</label>{campaignButton}
       <label>Konten</label>
       <button className="st-select" onClick={() => setPicker("content")} aria-label="Pilih konten"><span className="st-select-icon"><Play size={16} /></span><span><b>{pad(item.day)} · {item.title || "Tanpa judul"}</b><small>{item.format} · {board.length} {unit}</small></span><ChevronDown size={18} /></button>
       <div className="st-top-actions"><button className="outline-button" onClick={onOpenPlan}><FileText size={15} /> Buka brief</button><button className="primary-button" onClick={submit} disabled={!board.length}><Check size={15} /> Ajukan approval</button></div>
-    </section>
+    </section>}
 
     {!board.length ? <section className="panel f-emptyboard"><h3>Konten ini belum punya storyboard</h3><p>Studio bekerja dari storyboard di brief. Minta agen menulisnya, atau mulai dari {unit} kosong.</p><div className="x-row"><button className="primary-button" onClick={() => enqueue(campaign.id, item.day, false, "brief")} disabled={working}><Play size={15} /> {working ? "Agen sedang menulis…" : "Minta agen menulis brief + storyboard"}</button><button className="outline-button" onClick={() => setBoard([{ label: video ? "0-3 dtk" : "Slide 1", visual: "", text: item.title, audio: "" }])}><Plus size={15} /> Mulai manual</button></div></section>
     : <div className="st-grid">

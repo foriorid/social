@@ -57,7 +57,7 @@ export function BusinessDashboard({ go, openGallery }: { go: (nav: string) => vo
         {upcoming.length ? <div className="biz-list">{upcoming.slice(0, 3).map(r => <button key={r.id} className="biz-row biz-shoot" onClick={() => openGallery(r.id)}><b>{fmtShoot(r.data.shootDate)}</b><span>{r.data.title}</span><ArrowRight size={16} /></button>)}</div>
           : <p className="x-empty">Belum ada shoot terjadwal. Buat rencana di Photo Planner atau isi jadwal di detail project.</p>}</section>
       <section className="panel biz-card"><div className="biz-head"><h2>Sosmed FORIOR</h2><button className="outline-button" onClick={() => go("Content Plan")}>Content Plan <ArrowRight size={15} /></button></div>
-        <div className="biz-mini"><span><b>{plan.campaigns.length}</b>campaign</span><span><b>{stage("Brief") + stage("Produksi")}</b>dikerjakan</span><span><b>{stage("Draft")}</b>draft</span><span><b>{approvals.filter(a => a.status === "pending").length}</b>menunggu approval</span></div>
+        <div className="biz-mini"><span><b>{plan.campaigns.length}</b>campaign</span><span><b>{stage("Draft") + stage("Brief Siap") + stage("Produksi")}</b>dikerjakan</span><span><b>{stage("Review")}</b>review</span><span><b>{approvals.filter(a => a.status === "pending").length}</b>menunggu approval</span></div>
       </section>
     </div>
   </div>;

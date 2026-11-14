@@ -47,10 +47,10 @@ export function ApprovalList({ limit, empty = "Tidak ada yang menunggu persetuju
   const [open, setOpen] = useState<number | null>(null);
   const pending = approvals.filter(a => a.status === "pending");
   const shown = limit ? pending.slice(0, limit) : approvals;
-  // A decision on a draft moves its content card: approved → Publish, revision → back to Produksi.
+  // A decision on a draft moves its content card: approved → Terjadwal, revision → back to Produksi.
   const setStatus = (id: number, status: "approved" | "revision" | "pending") => {
     const a = approvals.find(x => x.id === id);
-    if (a?.ref) patchItem(a.ref.campaignId, a.ref.day, { status: status === "approved" ? "Publish" : status === "revision" ? "Produksi" : "Draft" });
+    if (a?.ref) patchItem(a.ref.campaignId, a.ref.day, { status: status === "approved" ? "Terjadwal" : status === "revision" ? "Produksi" : "Review" });
     setApprovals(old => old.map(x => (x.id === id ? { ...x, status } : x)));
   };
   if (!shown.length) return <p className="x-empty">{empty}</p>;
