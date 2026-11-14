@@ -65,7 +65,7 @@ export function kitLines(kit?: BrandKit): string {
   return lines.length ? `\nBrand Kit:\n${lines.join("\n")}` : "";
 }
 const campaignHeader = (c: CampaignData, kit?: BrandKit) => `Akun: ${c.account}\nJenis campaign: ${KIND_LABEL[c.kind ?? "personal"]}\nCampaign: ${c.name} (${c.period})\nTujuan campaign: ${c.goal}${c.brief?.trim() ? `\nBrief campaign: ${c.brief.trim()}` : ""}${kitLines(kit)}`;
-const context = (c: CampaignData, item: CampaignContent, kit?: BrandKit) => `${campaignHeader(c, kit)}\nKonten #${item.day}: ${item.title}\nFormat: ${item.format}\nPilar: ${item.pillar}${item.concept?.trim() ? `\nKonsep dari pemilik: ${item.concept.trim()}` : ""}${item.duration ? `\nDurasi total: ${item.duration}` : ""}${item.style ? `\nGaya: ${item.style}` : ""}`;
+const context = (c: CampaignData, item: CampaignContent, kit?: BrandKit) => `${campaignHeader(c, kit)}\nKonten #${item.day}: ${item.title}\nFormat: ${item.format}\nPilar: ${item.pillar}${item.objective ? `\nTujuan konten: ${item.objective}` : ""}${item.concept?.trim() ? `\nKonsep dari pemilik: ${item.concept.trim()}` : ""}${item.duration ? `\nDurasi total: ${item.duration}` : ""}${item.style ? `\nGaya: ${item.style}` : ""}`;
 
 export function stepPrompt(kind: StepKind, c: CampaignData, item: CampaignContent, kit?: BrandKit): string {
   if (kind === "plan") {

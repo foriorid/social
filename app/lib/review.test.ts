@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyReview, isToken, progress, ReviewError, revOf, statusOf, teamReply, type ReviewItem, type ReviewSnapshot } from "../../supabase/functions/review/review.ts";
+import { applyReview, isToken, reviewSlug, progress, ReviewError, revOf, statusOf, teamReply, type ReviewItem, type ReviewSnapshot } from "../../supabase/functions/review/review.ts";
 
 let n = 0;
 const id = () => `c${++n}`;
@@ -47,5 +47,15 @@ test("team reply and token format", () => {
   const fb = teamReply({}, 1, "FORIOR", "Siap, kami revisi", "r1");
   assert.equal(fb["1"].comments[0].team, true);
   assert.ok(isToken("abcdefghijklmnopqrstu1"));
+  assert.ok(isToken("intragama-villa-november-2026-k7m2"));
   assert.ok(!isToken("Abc-def"));
+  assert.ok(!isToken("a--b-cdefg"));
+  assert.ok(!isToken("-abcdefgh"));
+});
+
+test("reviewSlug is readable, safe and ends with a short code", () => {
+  assert.equal(reviewSlug("Intragama Villa", "Batch Nov – Des 2026", "K7M2"), "intragama-villa-batch-nov-des-2026-k7m2");
+  assert.equal(reviewSlug("Café Ñusa", "", "ab"), "cafe-nusa-abxx");
+  assert.ok(isToken(reviewSlug("Intragama Villa", "November 2026", "q1w2")));
+  assert.ok(isToken(reviewSlug("", "", "q1w2")));
 });
