@@ -2996,3 +2996,25 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .topbar:has(.dl-top) .page-heading { order:3; flex:1 1 100%; width:100%; min-width:0; }
   .topbar:has(.dl-top) .dl-top { width:100%; flex-direction:column; align-items:stretch; }
 }
+
+/* ---------- Campaign stock + production board ---------- */
+.sk-card { display:flex; flex-direction:column; gap:8px; padding:12px; border-radius:14px; border:1px solid #ece5f6; background:#fdfcff; }
+.sk-card h4 { display:flex; align-items:center; gap:7px; margin:0; font-size:14px; } .sk-card h4 svg { color:#7a48d8; } .sk-card h4 .cx-link { margin-left:auto; display:inline-flex; align-items:center; gap:4px; }
+.sk-counts { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; } .sk-counts span { display:flex; flex-direction:column; align-items:center; padding:7px; border-radius:10px; background:#f6f2fd; font-size:11.5px; color:#766d89; } .sk-counts b { font-size:17px; color:var(--ink); }
+.sk-link { display:flex; gap:6px; } .sk-link input { flex:1; min-width:0; border:1px solid #e1d8f0; border-radius:10px; padding:8px 10px; font:inherit; font-size:12.5px; } .sk-link .primary-button { min-height:38px; padding:0 14px; }
+.sk-card a { color:#7a48d8; font-weight:700; }
+.cx-scene-img select { opacity:.92; }
+.sk-lib-bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px; } .sk-lib-bar select { border:1px solid #e1d8f0; border-radius:10px; padding:8px 10px; font:inherit; }
+.sk-tags { margin-bottom:12px; }
+.f-thumb { position:relative; } .sk-used { position:absolute; left:6px; bottom:6px; font-style:normal; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:999px; background:rgba(124,77,226,.92); color:#fff; }
+.st-back { margin:0 0 10px; border:0; background:none; cursor:pointer; }
+.pb { display:flex; flex-direction:column; gap:14px; }
+.pb-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; } .pb-bar select { min-height:44px; border:1px solid #ddd0f2; border-radius:12px; padding:0 12px; font:inherit; font-size:14px; background:#fff; }
+.pb-lanes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; align-items:start; }
+.pb-lane { display:flex; flex-direction:column; gap:8px; border-radius:18px; } .pb-lane header { display:flex; align-items:center; justify-content:space-between; } .pb-lane h3 { margin:0; font-size:16px; } .pb-lane > .cx-hint { margin:0; }
+.pb-cards { display:flex; flex-direction:column; gap:10px; }
+.pb-card { display:grid; grid-template-columns:72px minmax(0,1fr); gap:10px; padding:10px; border:1px solid #ece5f6; border-radius:14px; background:#fff; }
+.pb-card > div:nth-child(2) { display:flex; flex-direction:column; gap:4px; min-width:0; } .pb-card b { font-size:13.5px; line-height:1.3; } .pb-card small { color:#8a80a0; font-size:11.5px; }
+.pb-thumb { width:72px; height:72px; border-radius:10px; }
+.pb-actions { grid-column:1 / -1; display:flex; gap:6px; } .pb-actions .primary-button { flex:1; min-height:38px; } .pb-actions .outline-button { min-height:38px; }
+@media (max-width:1000px) { .pb-lanes { grid-template-columns:1fr; } }

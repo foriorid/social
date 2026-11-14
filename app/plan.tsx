@@ -14,6 +14,7 @@ import { campaignHtml, defaultKind, patchCampaign, patchItem, storyboardHtml, us
 import { BrandKitCard, BrandKitModal } from "./brandkit";
 import { CLIENT_LABEL, ClientFeedback, ReviewPanel, clientStatusOf, useReviewLink } from "./review";
 import { StudioPage } from "./studio";
+import { FillButton, ScenePicker, StockCard } from "./stock-ui";
 import { ImageTile } from "./ui";
 
 const dropTasks = (match: (t: Task) => boolean) => writeStored<Task[]>("tasks", old => old.filter(t => !match(t)), []);
@@ -189,13 +190,13 @@ function ContentDetail({ campaign, item, onBack, onOpenStudio }: { campaign: Cam
       </aside>
 
       <section className="cx-sb-main">
-        <div className="cx-sb-head"><h3><Clapperboard size={18} /> Storyboard <span>({board.length} {unit})</span></h3><div className="cx-row">{video && total > 0 && <span className="cx-chip">Total ± {total} detik</span>}<button className="outline-button" onClick={addScene}><Plus size={14} /> Tambah {unit}</button></div></div>
+        <div className="cx-sb-head"><h3><Clapperboard size={18} /> Storyboard <span>({board.length} {unit})</span></h3><div className="cx-row"><FillButton campaign={campaign} item={item} />{video && total > 0 && <span className="cx-chip">Total ± {total} detik</span>}<button className="outline-button" onClick={addScene}><Plus size={14} /> Tambah {unit}</button></div></div>
         {(review.row?.feedback[String(item.day)]?.comments ?? []).some(c => c.scene !== undefined) && <ClientFeedback day={item.day} review={review} boardLabels={board.map(s => s.label)} />}
         {!board.length ? <div className="panel cx-empty"><Clapperboard size={28} /><h3>Belum ada storyboard</h3><p>Generate dengan AI dari deskripsi di kiri, atau mulai manual.</p></div>
           : <ol className={`cx-scenes ${video ? "v" : "s"}`}>{board.map((s, i) => <li key={i} className="panel cx-scene">
             <div className="cx-scene-img" style={s.image ? { backgroundImage: `url("${s.image}")` } : undefined}>
               <b>{pad(i + 1)}</b>{video && <span><Play size={11} /> {clock(times[i].start)} – {clock(times[i].end)}</span>}
-              {photos.length > 0 && <select aria-label={`Foto ${s.label}`} value={s.image ?? ""} onChange={e => editScene(i, { image: e.target.value || undefined })}><option value="">Pilih foto…</option>{photos.map(a => <option key={a.id} value={a.thumb}>{a.name}</option>)}</select>}
+              <ScenePicker campaign={campaign} item={item} scene={s} onPick={(image, assetId) => editScene(i, { image, assetId })} />
             </div>
             <div className="cx-scene-body">
               <div className="cx-scene-top"><input aria-label={`Nama ${unit} ${i + 1}`} value={s.label} onChange={e => editScene(i, { label: e.target.value })} />{video && <label className="cx-sec"><input type="number" min={1} max={60} aria-label={`Durasi ${s.label}`} value={secOf(s)} onChange={e => editScene(i, { sec: Math.max(1, Number(e.target.value) || 1) })} />dtk</label>}
@@ -382,6 +383,7 @@ export function ContentPlanPage({ onOpenStudio, onShare, target, onTargetDone }:
           <ul className="cx-legend">{STAGES.map(s => <li key={s}><i className={`cx-s-${stageKey(s)}`} />{s}<b>{count(s)}</b></li>)}</ul>
           <h4><FileText size={16} /> Catatan campaign <button className="cx-link" onClick={() => openEditBatch(batch)}>Edit</button></h4>
           <p className="cx-note">{batch.brief || "Belum ada catatan. Tulis fokus, komposisi format, dan target upload — dipakai AI saat menulis judul dan brief."}</p>
+          <StockCard key={batch.id} campaign={batch} />
           <ReviewPanel campaign={batch} review={review} />
           <div className="cx-batch-actions"><button className="outline-button" onClick={() => onShare(batch)}><Share2 size={14} /> Bagikan</button><button className="outline-button" onClick={() => printBatch(batch)}><Printer size={14} /> PDF</button><button className="outline-button" onClick={() => downloadBatch(batch)}><Code2 size={14} /> HTML</button></div>
         </section>
