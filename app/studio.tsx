@@ -13,6 +13,7 @@ import { AiButton, AiError, notify, useAI } from "./modules";
 import { patchItem, usePlan, type AssetRef, type CampaignContent, type CampaignData, type Scene } from "./plan-data";
 import { ImageTile, SAMPLE_PHOTOS } from "./ui";
 import { SlideCanvas, TEMPLATES, brandOf, normalizeLook, renderPng, type Look } from "./slide";
+import { fillFromStock } from "./stock-ui";
 
 const SAMPLES = Object.values(SAMPLE_PHOTOS);
 const copy = (text: string, what: string) => { navigator.clipboard?.writeText(text); notify(`${what} disalin.`); };
@@ -69,7 +70,8 @@ export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaig
   const [folders] = useStored<{ id: string }[]>("driveFolders", []);
   const [campaignId, setCampaignId] = useState(target?.campaignId ?? plan.campaigns.find(c => !c.archived)?.id ?? plan.campaigns[0]?.id ?? "");
   const [day, setDay] = useState(target?.day ?? 1);
-  useEffect(() => { if (target) { setCampaignId(target.campaignId); setDay(target.day); } }, [target]);
+  const [mode, setMode] = useState<"board" | "edit">(target || embedded ? "edit" : "board");
+  useEffect(() => { if (target) { setCampaignId(target.campaignId); setDay(target.day); setMode("edit"); } }, [target]);
   const campaign = plan.campaigns.find(c => c.id === campaignId) ?? plan.campaigns[0];
   const item = campaign?.items.find(x => x.day === day) ?? campaign?.items[0];
   const [rawLook, setRawLook] = useStored<Partial<Look>>(`look:${campaign?.id}:${item?.day}`, {});
@@ -83,6 +85,7 @@ export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaig
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
   const ai = useAI();
+  if (!embedded && mode === "board") return <ProductionBoard onOpen={(c, d) => { setCampaignId(c); setDay(d); setIndex(0); setMode("edit"); }} onOpenPlan={onOpenPlan} />;
   const pickers = campaign && <>
     {picker === "campaign" && <CampaignPicker campaigns={plan.campaigns} accounts={plan.accounts} current={campaign.id} onClose={() => setPicker("")} onPick={id => { setCampaignId(id); setDay(plan.campaigns.find(c => c.id === id)?.items[0]?.day ?? 1); setIndex(0); setPicker("content"); }} />}
     {picker === "content" && <ContentPicker campaign={campaign} current={item?.day ?? 0} onClose={() => setPicker("")} onPick={d => { setDay(d); setIndex(0); setPicker(""); }} />}
@@ -130,6 +133,7 @@ export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaig
   const uploadUrl = folders[0] ? `https://drive.google.com/drive/folders/${folders[0].id}` : "https://drive.google.com/drive/my-drive";
 
   return <div className={`module-page f-page st-page ${embedded ? "st-embedded" : ""}`}>
+    {!embedded && <button className="cx-crumbs st-back" onClick={() => setMode("board")}><ChevronLeft size={16} /> Antrian produksi</button>}
     {!embedded && <section className="panel st-top">
       <label>Campaign</label>{campaignButton}
       <label>Konten</label>
@@ -233,3 +237,36 @@ export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaig
 }
 
 function FolderIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="#0F9D58" d="M8 3h8l7 12h-8z" /><path fill="#4285F4" d="M23 15l-4 7H5l4-7z" /><path fill="#F4B400" d="M8 3L1 15l4 7 7-12z" /></svg>; }
+
+
+const LANES = [["Siap produksi", "Brief Siap", "Brief & storyboard sudah siap. Buat draft desain dari stok."], ["Dikerjakan", "Produksi", "Sedang didesain / diedit."], ["Siap review", "Review", "Menunggu approval internal atau klien."]] as const;
+
+/** Production queue across campaigns: what is ready to make, in progress, and waiting for review. */
+function ProductionBoard({ onOpen, onOpenPlan }: { onOpen: (campaignId: string, day: number) => void; onOpenPlan: (ref?: { campaignId: string; day: number }) => void }) {
+  const [plan] = usePlan();
+  const [filter, setFilter] = useStored("studioFilter", "");
+  const campaigns = plan.campaigns.filter(c => !c.archived && (!filter || c.id === filter));
+  const rows = campaigns.flatMap(c => c.items.map(x => ({ c, x, stage: stageOf(x.status) })));
+  const waiting = rows.filter(r => r.stage === "Draft").length;
+  const draft = (c: CampaignData, x: CampaignContent) => {
+    const n = fillFromStock(c, x);
+    patchItem(c.id, x.day, { status: "Produksi" });
+    notify(n ? `Draft dibuat: ${n} scene diisi dari stok. Koreksi foto yang kurang pas.` : c.stock?.files.length ? "Draft dibuat. Semua scene sudah bergambar." : "Draft dibuat. Tautkan folder stok di Content Plan agar foto terisi otomatis.");
+    onOpen(c.id, x.day);
+  };
+  return <div className="module-page pb">
+    <div className="pb-bar">
+      <select aria-label="Filter campaign" value={filter} onChange={e => setFilter(e.target.value)}><option value="">Semua campaign</option>{plan.campaigns.filter(c => !c.archived).map(c => <option key={c.id} value={c.id}>{c.account} — {c.name}</option>)}</select>
+      {waiting > 0 && <p className="cx-hint">{waiting} konten masih menunggu brief di Content Plan. <button className="cx-link" onClick={() => onOpenPlan()}>Buka Content Plan</button></p>}
+    </div>
+    <div className="pb-lanes">{LANES.map(([title, stage, hint]) => { const list = rows.filter(r => r.stage === stage); return <section key={stage} className="panel pb-lane">
+      <header><h3>{title}</h3><span className="muted-chip">{list.length}</span></header><p className="cx-hint">{hint}</p>
+      <div className="pb-cards">{list.map(({ c, x }) => { const board = x.board ?? []; const pics = board.filter(s => s.image).length; const thumb = board.find(s => s.image)?.image ?? x.assets?.find(a => a.kind === "Foto")?.thumb ?? coverOf(c); return <article key={c.id + x.day} className="pb-card">
+        <ImageTile kind={thumb} className="pb-thumb" />
+        <div><b>{x.title}</b><small>{c.account} · {c.name}</small>
+          <span className="cx-row"><em className={`cx-fmt cx-f-${x.format.toLowerCase()}`}>{x.format}</em><small>{board.length ? `${pics}/${board.length} bergambar` : "belum ada storyboard"}</small>{x.publishDate && <small>· {x.publishDate}</small>}</span></div>
+        <div className="pb-actions">{stage === "Brief Siap" ? <button className="primary-button" onClick={() => draft(c, x)}><Sparkles size={14} /> Buat draft</button> : <button className="outline-button" onClick={() => onOpen(c.id, x.day)}>Buka</button>}<button className="outline-button" onClick={() => onOpenPlan({ campaignId: c.id, day: x.day })} aria-label={`Brief ${x.title}`}><FileText size={14} /></button></div>
+      </article>; })}{!list.length && <p className="x-empty">Kosong</p>}</div>
+    </section>; })}</div>
+  </div>;
+}

@@ -7,6 +7,8 @@ import { PIPELINE, applyPlan, applyStep, nextStep, parsePlan, stepPrompt, type S
 import { addApproval, getSettings, readStored, useSettings, useTasks, writeStored, type Task } from "./lib/store";
 import { AiButton, AiError, ApprovalList, ModelRouterPanel, notify, runAgentTask, useAI, useAiReady } from "./modules";
 import { patchCampaign, patchItem, readPlan, usePlan } from "./plan-data";
+import { autoFill, usageOf } from "./lib/stock";
+import { driveThumb } from "./assets";
 
 const setTasks = (fn: (old: Task[]) => Task[]) => writeStored<Task[]>("tasks", fn, []);
 const stepOf = (kind: StepKind) => PIPELINE.find(s => s.kind === kind)!;
@@ -48,6 +50,8 @@ async function runTask(task: Task) {
   if (!item) throw new Error("Konten sudah dihapus.");
   const answer = await askAI({ tier: step.tier, role, maxTokens: step.maxTokens, label: step.output.replace(/ \(1 panggilan\)$/, ""), prompt: stepPrompt(task.kind, campaign, item, readPlan().brandKits?.[campaign.account]) });
   const patch = applyStep(task.kind, item, answer);
+  // New storyboard + campaign stock: pictures are matched right away, so the plan is reviewable with visuals.
+  if (patch.board && campaign.stock?.files.length) patch.board = autoFill(patch.board, campaign.stock.files, item.format === "Reels", id => driveThumb(id, 800), usageOf(campaign.items.filter(x => x.day !== item.day))).board;
   patchItem(campaign.id, item.day, patch);
 
 }

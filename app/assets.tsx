@@ -8,6 +8,7 @@ import { getSettings, useSettings, useStored } from "./lib/store";
 import { useCloud } from "./modules";
 import { notify } from "./modules";
 import { patchItem, readPlan, usePlan, type AssetRef } from "./plan-data";
+import { stockFile, type StockFile } from "./lib/stock";
 
 export type DriveFolder = { name: string; url: string; id: string };
 export type DriveFile = { id: string; name: string; mimeType: string; size?: string; modifiedTime?: string; webViewLink?: string };
@@ -36,6 +37,21 @@ export async function listDriveFolder(folderId: string): Promise<DriveFile[]> {
     pageToken = data.nextPageToken ?? "";
   } while (pageToken && files.length < 5000);
   return files;
+}
+
+/** Walks a campaign stock folder (up to 3 levels, 2000 files); subfolder names become tags. */
+export async function indexStock(folderId: string, onProgress?: (n: number) => void): Promise<StockFile[]> {
+  const out: StockFile[] = [];
+  const queue: { id: string; path: string[] }[] = [{ id: folderId, path: [] }];
+  while (queue.length && out.length < 2000) {
+    const { id, path } = queue.shift()!;
+    for (const f of await listDriveFolder(id)) {
+      if (f.mimeType === FOLDER_MIME) { if (path.length < 3) queue.push({ id: f.id, path: [...path, f.name] }); continue; }
+      const s = stockFile(f, path); if (s) out.push(s);
+    }
+    onProgress?.(out.length);
+  }
+  return out;
 }
 
 function useFolders() { return useStored<DriveFolder[]>("driveFolders", []); }
@@ -91,7 +107,24 @@ export function DriveBrowser({ onPick, pickLabel }: { onPick?: (ref: AssetRef) =
 
 export function AssetLibraryPage() {
   const [folders] = useFolders();
+  const [plan] = usePlan();
+  const withStock = plan.campaigns.filter(c => c.stock?.files.length);
+  const [pick, setPick] = useState(""), [tag, setTag] = useState(""), [kind, setKind] = useState("Semua");
+  const campaign = withStock.find(c => c.id === pick) ?? withStock[0];
+  const usedIn: Record<string, string[]> = {};
+  for (const x of campaign?.items ?? []) for (const sc of x.board ?? []) if (sc.assetId) (usedIn[sc.assetId] ??= []).includes(`#${x.day}`) || usedIn[sc.assetId].push(`#${x.day}`);
+  const files = (campaign?.stock?.files ?? []).filter(f => (kind === "Semua" || f.kind === kind) && (!tag || f.tags.includes(tag)));
+  const tags = campaign ? [...new Set(campaign.stock!.files.flatMap(f => f.tags))].sort() : [];
   return <div className="module-page f-page">
+    <section className="panel sk-lib"><div className="agent-section-heading"><div><h3>Stok campaign</h3><p>Folder Drive yang ditautkan ke tiap campaign (Content Plan → panel campaign → Stok materi). Dipakai untuk mengisi storyboard dan draft desain otomatis.</p></div></div>
+      {!withStock.length ? <p className="x-empty">Belum ada campaign dengan folder stok. Tautkan di Content Plan → pilih campaign → Stok materi.</p> : <>
+        <div className="sk-lib-bar"><select aria-label="Campaign" value={campaign?.id} onChange={e => { setPick(e.target.value); setTag(""); }}>{withStock.map(c => <option key={c.id} value={c.id}>{c.account} — {c.name} ({c.stock!.files.length})</option>)}</select>
+          <div className="f-chips">{["Semua", "Foto", "Video", "Audio"].map(k => <button key={k} className={kind === k ? "active" : ""} onClick={() => setKind(k)}>{k}</button>)}</div></div>
+        <div className="f-chips sk-tags"><button className={!tag ? "active" : ""} onClick={() => setTag("")}>Semua tag</button>{tags.map(t => <button key={t} className={tag === t ? "active" : ""} onClick={() => setTag(t)}>{t}</button>)}</div>
+        <div className="f-files">{files.slice(0, 300).map(f => <a key={f.id} className="f-file" href={`https://drive.google.com/file/d/${f.id}/view`} target="_blank" rel="noreferrer"><span className="f-thumb">{f.kind === "Audio" ? <FolderOpen size={26} /> : <img src={driveThumb(f.id, 320)} alt="" loading="lazy" referrerPolicy="no-referrer" />}{usedIn[f.id] && <em className="sk-used">Dipakai {usedIn[f.id].join(", ")}</em>}</span><b>{f.name}</b><small>{f.kind}{f.path ? ` · ${f.path}` : ""}</small></a>)}</div>
+        {files.length > 300 && <p className="cx-hint">Menampilkan 300 dari {files.length} file. Pakai filter tag.</p>}
+      </>}
+    </section>
     <section className="panel"><div className="agent-section-heading"><div><h3>Asset Library</h3><p>Semua aset diambil langsung dari Google Drive. Aplikasi hanya menyimpan tautan, jadi tidak ada file besar yang diunggah ke server.</p></div><span className="muted-chip">{folders.length} folder terhubung</span></div>
       <DriveBrowser />
     </section>
