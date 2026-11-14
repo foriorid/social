@@ -2500,11 +2500,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .dl-loadmore { display:flex; flex-direction:column; align-items:center; gap:8px; padding:20px 0 4px; } .dl-loadmore small { font-size:13px; color:var(--muted); }
 
 /* Login gate — full-bleed interior photo with a glassy card */
-.lg-page { position:relative; min-height:100vh; display:flex; flex-wrap:wrap; background:#140c22; color:#fff; overflow:hidden; }
-.lg-bg { position:absolute; inset:0; z-index:0; background:#140c22 url("https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1800&q=80") center/cover no-repeat; }
-.lg-scrim { position:absolute; inset:0; z-index:1; background:linear-gradient(105deg, rgba(18,10,34,.92) 0%, rgba(18,10,34,.72) 42%, rgba(30,18,58,.55) 100%); }
+.lg-page { position:relative; min-height:100vh; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:clamp(32px,6vw,96px); padding:40px clamp(28px,7vw,112px); box-sizing:border-box; background:#140c22; color:#fff; overflow:hidden; }
+.lg-bg { position:absolute; inset:0; z-index:0; background:#140c22 url("/login-bg.jpg") center/cover no-repeat; }
+.lg-scrim { position:absolute; inset:0; z-index:1; background:linear-gradient(105deg, rgba(22,13,38,.82) 0%, rgba(26,15,46,.58) 40%, rgba(46,28,80,.40) 72%, rgba(60,38,104,.30) 100%); }
 .lg-page > .lg-side, .lg-page > .lg-main { position:relative; z-index:2; }
-.lg-side { flex:1 1 480px; min-height:100vh; box-sizing:border-box; padding:56px; display:flex; flex-direction:column; justify-content:space-between; color:#fff; }
+.lg-side { flex:0 1 560px; display:flex; flex-direction:column; gap:48px; color:#fff; }
 .lg-brand { display:flex; align-items:center; gap:12px; color:#fff; }
 .lg-brand b { display:block; font-size:19px; letter-spacing:.02em; } .lg-brand small { display:block; font-size:12.5px; color:#c7bce0; }
 .lg-mark { display:flex; flex-direction:column; gap:4px; } .lg-mark i { display:block; width:32px; height:12px; border-radius:7px; background:#a77bff; } .lg-mark i + i { width:24px; background:#ece6ff; }
@@ -2515,7 +2515,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .lg-pitch ul { list-style:none; margin:14px 0 0; padding:0; display:flex; flex-direction:column; gap:14px; } .lg-pitch li { display:flex; gap:12px; align-items:center; font-size:15px; font-weight:500; color:#ece6ff; }
 .lg-pitch li svg { color:#c4a8ff; flex:none; width:18px; height:18px; padding:9px; box-sizing:content-box; border-radius:11px; background:rgba(167,123,255,.16); }
 .lg-copy { display:inline-flex; align-items:center; gap:7px; font-size:13px; color:#b6a9d4; } .lg-copy svg { color:#b99bff; }
-.lg-main { flex:1 1 480px; min-height:100vh; box-sizing:border-box; padding:48px 24px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; }
+.lg-main { flex:0 1 460px; box-sizing:border-box; display:flex; flex-direction:column; align-items:stretch; justify-content:center; gap:20px; }
 .lg-mobile-head { display:none; }
 .lg-card { width:100%; max-width:430px; box-sizing:border-box; display:flex; flex-direction:column; gap:16px; padding:36px; border-radius:24px; background:rgba(26,16,46,.60); backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px); border:1px solid rgba(255,255,255,.12); box-shadow:0 30px 80px rgba(0,0,0,.45); color:#fff; }
 .lg-head h2 { margin:0; font-family:Manrope,sans-serif; font-weight:800; font-size:28px; letter-spacing:-.5px; color:#fff; } .lg-head p { margin:6px 0 0; font-size:15px; line-height:1.55; color:#c7bce0; }
@@ -2523,7 +2523,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .lg-seg button { flex:1; min-height:42px; border:0; border-radius:9px; background:transparent; color:#c7bce0; font:inherit; font-size:14px; font-weight:600; cursor:pointer; }
 .lg-seg button.active { background:rgba(255,255,255,.14); color:#fff; font-weight:700; }
 .lg-field { display:flex; flex-direction:column; gap:6px; font-size:14px; font-weight:600; color:#e7dffa; }
-.lg-field input { min-height:48px; padding:0 14px; border:1px solid rgba(255,255,255,.14); border-radius:12px; font:inherit; font-size:16px; font-weight:400; color:#fff; background:rgba(255,255,255,.06); }
+.lg-field input { width:100%; box-sizing:border-box; min-height:48px; padding:0 14px; border:1px solid rgba(255,255,255,.14); border-radius:12px; font:inherit; font-size:16px; font-weight:400; color:#fff; background:rgba(255,255,255,.06); }
 .lg-field input::placeholder { color:#9b8fc0; } .lg-field input:focus { outline:2px solid #a983ff; outline-offset:1px; border-color:#a983ff; background:rgba(255,255,255,.09); }
 .lg-label-row { display:flex; justify-content:space-between; align-items:center; }
 .lg-link { border:0; background:none; padding:4px 0; color:#b99bff; font:inherit; font-size:13.5px; font-weight:600; cursor:pointer; } .lg-link:hover { text-decoration:underline; color:#c9b2ff; }
@@ -2536,7 +2536,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .lg-loading { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; background:#140c22; color:#c7bce0; font-size:14px; } .lg-loading .lg-brand { color:#fff; } .lg-loading .lg-spin { color:#a983ff; }
 @media (max-width:860px) {
   .lg-side { display:none; }
-  .lg-main { min-height:100vh; padding:24px 18px; justify-content:center; }
+  .lg-main { padding:0; justify-content:center; }
   .lg-mobile-head { display:flex; flex-direction:column; gap:10px; width:100%; max-width:430px; margin-bottom:4px; color:#fff; } .lg-mobile-head p { margin:0; color:#c7bce0; font-size:14.5px; }
 }
 
@@ -2600,3 +2600,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .nav-caret { color:#8a80a0; transition:transform .18s ease; flex:none; }
 .nav-group.collapsible:not(.open) .nav-caret { transform:rotate(-90deg); }
 .nav-group-items { display:flex; flex-direction:column; }
+
+/* Login — attachment layout refinements */
+.lg-card .lg-brand { margin-bottom:2px; }
+.lg-rule { width:48px; height:3px; border-radius:3px; background:#a983ff; margin:2px 0; }
+.lg-input { position:relative; display:block; }
+.lg-input-icon { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#9b8fc0; pointer-events:none; }
+.lg-input:has(.lg-input-icon) input { padding-left:42px; }
+.lg-input:has(.lg-eye) input { padding-right:46px; }
+.lg-eye { position:absolute; right:8px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:34px; height:34px; border:0; border-radius:8px; background:none; color:#9b8fc0; cursor:pointer; } .lg-eye:hover { color:#e7dffa; }
+.lg-private { display:flex; align-items:center; justify-content:center; gap:7px; margin:2px 0 0; font-size:13px; color:#b6a9d4; } .lg-private svg { color:#b99bff; }
