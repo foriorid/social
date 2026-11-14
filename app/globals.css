@@ -2523,7 +2523,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .lg-seg button { flex:1; min-height:42px; border:0; border-radius:9px; background:transparent; color:#c7bce0; font:inherit; font-size:14px; font-weight:600; cursor:pointer; }
 .lg-seg button.active { background:rgba(255,255,255,.14); color:#fff; font-weight:700; }
 .lg-field { display:flex; flex-direction:column; gap:6px; font-size:14px; font-weight:600; color:#e7dffa; }
-.lg-field input { min-height:48px; padding:0 14px; border:1px solid rgba(255,255,255,.14); border-radius:12px; font:inherit; font-size:16px; font-weight:400; color:#fff; background:rgba(255,255,255,.06); }
+.lg-field input { width:100%; box-sizing:border-box; min-height:48px; padding:0 14px; border:1px solid rgba(255,255,255,.14); border-radius:12px; font:inherit; font-size:16px; font-weight:400; color:#fff; background:rgba(255,255,255,.06); }
 .lg-field input::placeholder { color:#9b8fc0; } .lg-field input:focus { outline:2px solid #a983ff; outline-offset:1px; border-color:#a983ff; background:rgba(255,255,255,.09); }
 .lg-label-row { display:flex; justify-content:space-between; align-items:center; }
 .lg-link { border:0; background:none; padding:4px 0; color:#b99bff; font:inherit; font-size:13.5px; font-weight:600; cursor:pointer; } .lg-link:hover { text-decoration:underline; color:#c9b2ff; }
