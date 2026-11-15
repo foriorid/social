@@ -195,7 +195,7 @@ export async function refreshKeyStatus() {
   try { const { saved } = await callServer<{ saved: Record<string, string> }>("secrets.status"); setCloud({ keys: saved }); } catch { /* offline */ }
 }
 
-export async function saveSecret(name: "anthropic" | "google" | "meta_token" | "ig_user_id", value: string) {
+export async function saveSecret(name: "anthropic" | "google" | "meta_token" | "ig_user_id" | "meta_app_secret", value: string) {
   await callServer("secrets.set", { name, value });
   await refreshKeyStatus();
 }
