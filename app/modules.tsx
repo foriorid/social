@@ -79,7 +79,7 @@ export function AccountPanel() {
 }
 
 /** A key field: saved encrypted on the server when signed in, otherwise kept in this browser. */
-function KeyField({ id, label, hint, placeholder, server, local, setLocal }: { id: string; label: string; hint: React.ReactNode; placeholder: string; server: "anthropic" | "google" | "meta_token" | "ig_user_id"; local: string; setLocal: (v: string) => void }) {
+function KeyField({ id, label, hint, placeholder, server, local, setLocal }: { id: string; label: string; hint: React.ReactNode; placeholder: string; server: "anthropic" | "google" | "meta_token" | "ig_user_id" | "meta_app_secret"; local: string; setLocal: (v: string) => void }) {
   const [cloud] = useCloud();
   const [draft, setDraft] = useState(""), [show, setShow] = useState(false);
   const ai = useAI();
@@ -153,7 +153,8 @@ export function ApiSettingsTab() {
     <div className="settings-divider" />
     <KeyField id="gkey" label="GOOGLE API KEY (Asset Library — membaca folder Google Drive)" server="google" placeholder="AIza…" local={settings.googleApiKey} setLocal={v => set("googleApiKey", v)} hint="Google Cloud Console → Credentials → API key, lalu aktifkan “Google Drive API”. Batasi key hanya ke Google Drive API; Application restrictions biarkan None. Folder harus dibagikan “Siapa saja yang memiliki link”." />
     <div className="settings-divider" />
-    <KeyField id="meta" label="META ACCESS TOKEN (opsional — bedah akun Instagram otomatis)" server="meta_token" placeholder="EAAG…" local={settings.metaToken} setLocal={v => set("metaToken", v)} hint="Token dari Meta for Developers dengan izin instagram_basic. Hanya membaca akun Business/Creator publik." />
+    <KeyField id="meta" label="META ACCESS TOKEN (Bedah Akun & Auto DM)" server="meta_token" placeholder="EAAG…" local={settings.metaToken} setLocal={v => set("metaToken", v)} hint="Token dari Meta for Developers dengan izin instagram_basic. Hanya membaca akun Business/Creator publik." />
+    <KeyField id="appsecret" label="META APP SECRET (Auto DM — verifikasi webhook)" server="meta_app_secret" placeholder="32 karakter dari App settings → Basic" local="" setLocal={() => {}} hint="Meta for Developers → aplikasi Anda → App settings → Basic → App secret. Dipakai server untuk memastikan webhook benar-benar dari Meta." />
     <KeyField id="igid" label="INSTAGRAM USER ID (akun Business/Creator Anda)" server="ig_user_id" placeholder="1784…" local={settings.igUserId} setLocal={v => set("igUserId", v)} hint="Tanpa token Meta dan ID ini, Bedah Akun tetap jalan dari caption yang Anda tempel." />
   </>;
 }

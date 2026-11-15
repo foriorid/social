@@ -16,7 +16,7 @@ const auth = createClient(Deno.env.get("SUPABASE_URL")!, JSON.parse(Deno.env.get
 // Admin client for invitations only (creates the invited account and its sign-in link; sends no email).
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default ?? "";
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-const NAMES = ["anthropic", "google", "meta_token", "ig_user_id"] as const;
+const NAMES = ["anthropic", "google", "meta_token", "ig_user_id", "meta_app_secret"] as const;
 const MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
