@@ -79,7 +79,7 @@ export function AccountPanel() {
 }
 
 /** A key field: saved encrypted on the server when signed in, otherwise kept in this browser. */
-function KeyField({ id, label, hint, placeholder, server, local, setLocal }: { id: string; label: string; hint: React.ReactNode; placeholder: string; server: "anthropic" | "google" | "meta_token" | "ig_user_id" | "meta_app_secret"; local: string; setLocal: (v: string) => void }) {
+function KeyField({ id, label, hint, placeholder, server, local, setLocal }: { id: string; label: string; hint: React.ReactNode; placeholder: string; server: "anthropic" | "google" | "meta_token" | "ig_user_id" | "meta_app_secret" | "google_client_id" | "google_client_secret"; local: string; setLocal: (v: string) => void }) {
   const [cloud] = useCloud();
   const [draft, setDraft] = useState(""), [show, setShow] = useState(false);
   const ai = useAI();
@@ -152,6 +152,8 @@ export function ApiSettingsTab() {
     <div className="model-routing-cards"><article><span>BULAN INI</span><b>{rupiah(usage.idr)}</b><small>{usage.calls} panggilan AI</small></article><article><span>TOKEN MASUK</span><b>{usage.inputTokens.toLocaleString("id-ID")}</b><small>prompt + konteks brand</small></article><article><span>TOKEN KELUAR</span><b>{usage.outputTokens.toLocaleString("id-ID")}</b><small>hasil tulisan</small></article></div>
     <div className="settings-divider" />
     <KeyField id="gkey" label="GOOGLE API KEY (Asset Library — membaca folder Google Drive)" server="google" placeholder="AIza…" local={settings.googleApiKey} setLocal={v => set("googleApiKey", v)} hint="Google Cloud Console → Credentials → API key, lalu aktifkan “Google Drive API”. Batasi key hanya ke Google Drive API; Application restrictions biarkan None. Folder harus dibagikan “Siapa saja yang memiliki link”." />
+    <KeyField id="gcid" label="GOOGLE OAUTH CLIENT ID (Jadwal Shoot — Google Calendar)" server="google_client_id" placeholder="…apps.googleusercontent.com" local="" setLocal={() => {}} hint="Google Cloud Console → APIs & Services → Credentials → OAuth client ID (Web application). Aktifkan Google Calendar API." />
+    <KeyField id="gcsec" label="GOOGLE OAUTH CLIENT SECRET" server="google_client_secret" placeholder="GOCSPX-…" local="" setLocal={() => {}} hint="Dari OAuth client yang sama. Authorized redirect URI: lihat halaman Jadwal Shoot." />
     <div className="settings-divider" />
     <KeyField id="meta" label="META ACCESS TOKEN (Bedah Akun & Auto DM)" server="meta_token" placeholder="EAAG…" local={settings.metaToken} setLocal={v => set("metaToken", v)} hint="Token dari Meta for Developers dengan izin instagram_basic. Hanya membaca akun Business/Creator publik." />
     <KeyField id="appsecret" label="META APP SECRET (Auto DM — verifikasi webhook)" server="meta_app_secret" placeholder="32 karakter dari App settings → Basic" local="" setLocal={() => {}} hint="Meta for Developers → aplikasi Anda → App settings → Basic → App secret. Dipakai server untuk memastikan webhook benar-benar dari Meta." />

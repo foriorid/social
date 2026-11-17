@@ -137,7 +137,7 @@ function DeliveryInner() {
       {state === "ready" && !rows.length && <div className="dl-empty"><Images size={28} /><h3>Belum ada galeri</h3><p>Buat galeri, tempel link folder Google Drive berisi foto preview, lalu kirim link-nya ke klien untuk memilih foto.</p><button className="primary-button" onClick={() => setCreating(true)}><Plus size={15} /> Galeri baru</button></div>}
       <div className="dl-grid">{shown.map(r => { const g = r.data, picked = g.previewPhotos.filter(p => p.selected).length, cover = (g.finalPhotos[0] ?? g.draftPhotos[0] ?? g.previewPhotos[0])?.thumbnailUrl;
         return <button key={r.id} className="dl-card" onClick={() => setOpenId(r.id)}>
-          <span className="dl-cover">{cover ? <img src={cover} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <Images size={26} />}<em className={`dl-phase ${PHASE_CLASS[g.phase]}`}>{PHASE_SHORT[g.phase]}</em></span>
+          <span className="dl-cover"><Images size={26} />{cover && <img src={cover} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = "none"; }} />}<em className={`dl-phase ${PHASE_CLASS[g.phase]}`}>{PHASE_SHORT[g.phase]}</em></span>
           <span className="dl-card-body"><b>{g.title}</b><small>{[g.client?.company, g.client?.contact].filter(Boolean).join(" · ") || "Tanpa klien"}</small>
             <span className="dl-card-meta"><span><Images size={13} /> {g.previewPhotos.length} foto</span><span><Heart size={13} /> {picked}{g.selectionLimit ? ` / ${g.selectionLimit}` : ""} dipilih</span>{g.revisions.some(x => x.status === "Open") && <span className="dl-warn"><MessageSquare size={13} /> revisi</span>}</span></span>
         </button>; })}</div>

@@ -67,10 +67,10 @@ const dayStart = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.
 /** Projects with a shoot from today on, soonest first. */
 const upcomingShoots = (rows: Row[]) => rows.filter(r => r.data.shootDate && new Date(r.data.shootDate).getTime() >= dayStart()).sort((a, b) => a.data.shootDate!.localeCompare(b.data.shootDate!));
 
-type PlannerPlan = { clientName: string; clientWhatsapp?: string; propertyType: string; propertyName?: string; size?: string; areas?: string[]; details?: string; estimatedPhotos?: number; packageName?: string; packagePrice?: string; packageCount?: number; shootDate?: string; shootTime?: string };
+export type PlannerPlan = { clientName: string; clientWhatsapp?: string; propertyType: string; propertyName?: string; size?: string; areas?: string[]; details?: string; estimatedPhotos?: number; packageName?: string; packagePrice?: string; packageCount?: number; shootDate?: string; shootTime?: string };
 
 /** Turns a Photo Planner plan into a project (gallery) in the active workspace. Nothing is typed twice. */
-async function createProjectFromPlan(plan: PlannerPlan): Promise<string> {
+export async function createProjectFromPlan(plan: PlannerPlan): Promise<string> {
   const ws = readCloud().workspaceId;
   if (!ws) throw new Error("Workspace belum dimuat.");
   const title = (plan.propertyName || `${plan.propertyType} ${plan.clientName}`).slice(0, 120);
@@ -126,21 +126,5 @@ export function PhotoPlannerPage({ openGallery }: { openGallery: (id: string) =>
       </div>
     </aside>
     <div className="planner-frame-wrap"><iframe ref={frame} className="planner-frame" src={src} title="Photo Planner" /></div>
-  </div>;
-}
-
-/** Jadwal Shoot: shoots planned on projects (from Photo Planner or the project detail), soonest first. */
-export function CalendarPage({ openGallery, go }: { openGallery: (id: string) => void; go: (nav: string) => void }) {
-  const { rows, error } = useWorkspaceGalleries();
-  const upcoming = upcomingShoots(rows ?? []);
-  const past = (rows ?? []).filter(r => r.data.shootDate && new Date(r.data.shootDate).getTime() < dayStart()).sort((a, b) => b.data.shootDate!.localeCompare(a.data.shootDate!)).slice(0, 10);
-  const row = (r: Row) => <button key={r.id} className="biz-row biz-shoot" onClick={() => openGallery(r.id)}><b>{fmtShoot(r.data.shootDate)}</b><span>{r.data.title}{r.data.client?.contact ? ` · ${r.data.client.contact}` : ""}</span><em className={`dl-phase ${PHASE_CLASS[r.data.phase]}`}>{PHASE_SHORT[r.data.phase]}</em><ArrowRight size={16} /></button>;
-  return <div className="module-page biz-page">
-    <section className="panel biz-card">
-      <div className="biz-head"><h2>Shoot mendatang</h2><button className="primary-button" onClick={() => go("Photo Planner")}><CalendarDays size={15} /> Rencana baru</button></div>
-      {error && <p className="x-error">{error}</p>}
-      {!rows ? <p className="x-empty">Memuat jadwal…</p> : upcoming.length ? <div className="biz-list">{upcoming.map(row)}</div> : <p className="x-empty">Belum ada shoot terjadwal. Buat rencana di Photo Planner, atau isi “Jadwal shoot” di detail project.</p>}
-    </section>
-    {past.length > 0 && <section className="panel biz-card"><div className="biz-head"><h2>Shoot sebelumnya</h2></div><div className="biz-list">{past.map(row)}</div></section>}
   </div>;
 }

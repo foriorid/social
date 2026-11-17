@@ -3049,3 +3049,24 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (max-width:1100px) { .ad-layout { grid-template-columns:1fr; } .ad-setup { position:static; } }
 @media (max-width:760px) { .ad-edit { grid-template-columns:1fr; max-height:none; } .ad-phone { position:static; } }
 .cp-modal-actions .ad-check { display:inline-flex; align-items:center; gap:6px; margin-right:auto; font-size:13px; font-weight:700; } .cp-modal-actions .ad-check input { width:18px; height:18px; accent-color:#7c4de2; }
+/* Gallery covers: always 16:10, portrait photos are cropped instead of stretching the card */
+.dl-cover { overflow:hidden; } .dl-cover > img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+
+/* ---------- Jadwal Shoot + Google Calendar ---------- */
+.sc { display:flex; flex-direction:column; gap:14px; }
+.sc-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; } .sc-bar .cx-monthnav h3 { min-width:150px; font-size:18px; margin:0; } .sc-bar .outline-button { min-height:38px; }
+.sc-layout { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:16px; align-items:start; }
+.sc-cal .cx-day { min-height:112px; }
+.sc-ev { display:flex; align-items:center; gap:4px; width:100%; min-width:0; border:0; border-left:3px solid var(--c); border-radius:6px; padding:4px 6px; background:color-mix(in srgb, var(--c) 12%, #fff); color:#2c2340; font-size:11.5px; font-weight:600; text-align:left; cursor:pointer; }
+.sc-ev.shoot { background:#efe7fe; color:#4a2c9a; font-weight:800; } .sc-ev i { font-style:normal; font-size:10.5px; color:#6f6782; flex:none; } .sc-ev span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sc-side { display:flex; flex-direction:column; gap:16px; position:sticky; top:12px; }
+.sc-accounts, .sc-upcoming { display:flex; flex-direction:column; gap:10px; } .sc-accounts h3, .sc-upcoming h3 { display:flex; align-items:center; gap:8px; margin:0; font-size:16px; } .sc-accounts h3 svg { color:#7a48d8; } .sc-upcoming h3 .muted-chip { margin-left:auto; }
+.sc-acct { display:grid; grid-template-columns:12px 1fr auto auto; gap:8px; align-items:center; padding:8px; border:1px solid #ece5f6; border-radius:12px; } .sc-acct > i { width:12px; height:12px; border-radius:50%; } .sc-acct span { display:flex; flex-direction:column; min-width:0; } .sc-acct b { font-size:13px; overflow:hidden; text-overflow:ellipsis; } .sc-acct small { display:inline-flex; align-items:center; gap:3px; color:#b7791f; font-size:11.5px; font-weight:700; } .sc-acct .cx-link { align-self:flex-start; font-size:11.5px; } .sc-acct .cx-icon { width:30px; height:30px; }
+.sc-setup { display:flex; flex-direction:column; gap:8px; padding:10px; border-radius:12px; background:#fff8ec; border:1px solid #f6e3bf; font-size:12.5px; } .sc-setup ol { margin:0; padding-left:18px; } .sc-setup li { margin:3px 0; }
+.sc-row { display:flex; gap:8px; align-items:center; padding:9px 0; border-top:1px solid #f0ebf6; } .sc-row:first-of-type { border-top:0; }
+.sc-row-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; border:0; background:none; text-align:left; cursor:pointer; color:var(--ink); padding:0; } .sc-row-main b { font-size:12.5px; color:#6a3fd0; } .sc-row-main span { font-size:13.5px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .sc-row-main small { display:inline-flex; align-items:center; gap:3px; color:#8a80a0; font-size:12px; }
+.sc-row-side { display:flex; flex-direction:column; align-items:flex-end; gap:5px; } .sc-row-side .cx-link { display:inline-flex; align-items:center; gap:3px; }
+.sc-synced { display:inline-flex; align-items:center; gap:3px; font-size:11.5px; font-weight:700; color:#13804f; text-decoration:none; }
+.sc-select { width:100%; min-height:46px; border:1px solid #e1d8f0; border-radius:12px; padding:0 12px; font:inherit; font-size:14px; background:#fdfcff; }
+@media (max-width:1100px) { .sc-layout { grid-template-columns:1fr; } .sc-side { position:static; } }
+@media (max-width:640px) { .sc-cal .cx-day { min-height:60px; } .sc-ev span { display:none; } .sc-ev { justify-content:center; padding:3px; } .sc-ev i { display:none; } }
