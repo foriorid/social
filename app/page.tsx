@@ -29,7 +29,8 @@ import { ContentPlanPage } from "./plan";
 import { AutoDmPage } from "./autodm";
 import { StudioPage } from "./studio";
 import { DeliveryPage, openGallerySoon } from "./delivery";
-import { BusinessDashboard, CalendarPage, PhotoPlannerPage } from "./business";
+import { BusinessDashboard, PhotoPlannerPage } from "./business";
+import { CalendarPage } from "./schedule";
 import { TeamSettings } from "./team";
 
 type Platform = "All channels" | "Instagram" | "TikTok" | "YouTube";
@@ -318,8 +319,9 @@ function AppShell() {
   const wsLabel = (w: { kind: string }) => (w.kind === "personal" ? "Personal Brand" : "Business");
   const isBiz = ws?.kind === "business";
   const currentItem = navGroupsFor(ws?.kind).flatMap(g => g.items).find(i => i.name === activeNav);
-  const [navCollapsed, setNavCollapsed] = useStored<string[]>("navCollapsed", []);
-  const toggleGroup = (label: string) => setNavCollapsed(c => (c.includes(label) ? c.filter(x => x !== label) : [...c, label]));
+  // One group open at a time; all closed by default. Opening Project closes Sosmed and vice versa.
+  const [navOpen, setNavOpen] = useStored<string>("navOpen", "");
+  const toggleGroup = (label: string) => setNavOpen(o => (o === label ? "" : label));
   const pickWorkspace = (id: string) => { setShowWorkspace(false); setShowProfile(false); if (id !== cloud.workspaceId) switchWorkspace(id); };
   const [mobileNav, setMobileNav] = useState(false);
   const [quickAction, setQuickAction] = useState("");
@@ -394,7 +396,7 @@ function AppShell() {
 
         <nav className="side-nav">
           {navGroupsFor(ws?.kind).map((group) => {
-            const open = group.items.some(i => i.name === activeNav) || !navCollapsed.includes(group.label);
+            const open = navOpen === group.label;
             const renderItem = (item: NavItem) => { const Icon = item.icon; return (
               <button key={item.name} className={`nav-item ${activeNav === item.name ? "active" : ""}`} onClick={() => { setActiveNav(item.name); setMobileNav(false); }}>
                 <Icon size={18} strokeWidth={1.8} /><span>{item.label ?? item.name}</span>
