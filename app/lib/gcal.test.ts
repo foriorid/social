@@ -40,3 +40,10 @@ test("dayOf uses Jakarta local day", () => {
   assert.equal(dayOf("2026-11-20T23:30:00Z"), "2026-11-21");
   assert.equal(dayOf("2026-11-21"), "2026-11-21");
 });
+
+test("guests become attendees: valid, unique, lowercase, max 10", async () => {
+  const { eventBody } = await import("../../supabase/functions/gcal/gcal.ts");
+  const b = eventBody({ summary: "x", start: "2026-11-20T10:00", hours: 2, guests: ["Rina@Mail.com", "rina@mail.com", "bukan-email", " "] });
+  assert.deepEqual(b.attendees, [{ email: "rina@mail.com" }]);
+  assert.ok(!("attendees" in eventBody({ summary: "x", start: "2026-11-20T10:00", hours: 2 })));
+});

@@ -67,7 +67,7 @@ const dayStart = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.
 /** Projects with a shoot from today on, soonest first. */
 const upcomingShoots = (rows: Row[]) => rows.filter(r => r.data.shootDate && new Date(r.data.shootDate).getTime() >= dayStart()).sort((a, b) => a.data.shootDate!.localeCompare(b.data.shootDate!));
 
-export type PlannerPlan = { clientName: string; clientWhatsapp?: string; propertyType: string; propertyName?: string; size?: string; areas?: string[]; details?: string; estimatedPhotos?: number; packageName?: string; packagePrice?: string; packageCount?: number; shootDate?: string; shootTime?: string };
+export type PlannerPlan = { clientName: string; clientWhatsapp?: string; clientEmail?: string; propertyType: string; propertyName?: string; size?: string; areas?: string[]; details?: string; estimatedPhotos?: number; packageName?: string; packagePrice?: string; packageCount?: number; shootDate?: string; shootTime?: string };
 
 /** Turns a Photo Planner plan into a project (gallery) in the active workspace. Nothing is typed twice. */
 export async function createProjectFromPlan(plan: PlannerPlan): Promise<string> {
@@ -80,7 +80,7 @@ export async function createProjectFromPlan(plan: PlannerPlan): Promise<string> 
     const id = crypto.randomUUID();
     const slug = uniqueSlug(slugify(title), taken);
     const g: Gallery = {
-      ...newGallery({ id, slug, title, client: { contact: plan.clientName, whatsapp: plan.clientWhatsapp ?? "" }, selectionLimit: plan.packageCount ?? 0 }),
+      ...newGallery({ id, slug, title, client: { contact: plan.clientName, whatsapp: plan.clientWhatsapp ?? "", ...(plan.clientEmail ? { email: plan.clientEmail } : {}) }, selectionLimit: plan.packageCount ?? 0 }),
       shootDate: plan.shootDate ? `${plan.shootDate}T${plan.shootTime || "10:00"}` : undefined,
       plan: { source: "planner", propertyType: plan.propertyType, propertyName: plan.propertyName, size: plan.size, areas: plan.areas, details: plan.details, estimatedPhotos: plan.estimatedPhotos, packageName: plan.packageName, packagePrice: plan.packagePrice }
     };
