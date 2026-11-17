@@ -3085,3 +3085,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sc-detail-desc { margin:0; padding:12px; border-radius:12px; background:#faf8fe; border:1px solid #f0ebf6; font-size:13px; color:#3f3452; white-space:pre-wrap; max-height:220px; overflow:auto; }
 .sc-detail .cp-modal-actions { flex-wrap:wrap; } .sc-detail .cp-modal-actions a { text-decoration:none; }
 .sc-detail, .sc-detail * { text-align:left; } .sc-detail-head h2 { font-weight:800; } .sc-detail .cp-modal-actions { justify-content:flex-end; }
+/* Multi-email fields */
+.sc-emails { display:flex; flex-direction:column; gap:6px; }
+.sc-emails .cx-chipsel { min-height:46px; box-sizing:border-box; padding:6px 8px; border:1px solid #e1d8f0; border-radius:12px; background:#fdfcff; gap:6px; }
+.sc-emails .cx-chipsel:focus-within { border-color:#a47ef0; box-shadow:0 0 0 3px #ede4ff; background:#fff; }
+.sc-emails .cx-chipsel button { padding:4px 10px; font-size:12.5px; }
+.sc-emails .cx-chipsel input { flex:1 1 140px; min-height:32px; border:0; border-radius:0; padding:4px; background:transparent; box-shadow:none; }
+.sc-emails .cx-chipsel input:focus { box-shadow:none; }
+.sc-suggest { display:flex; flex-wrap:wrap; gap:6px; } .sc-suggest button { display:inline-flex; align-items:center; gap:3px; border:1px dashed #cdbdf0; background:#fff; color:#6a3fd0; border-radius:999px; padding:3px 9px; font-size:12px; font-weight:600; cursor:pointer; }

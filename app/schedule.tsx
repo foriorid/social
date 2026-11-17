@@ -16,7 +16,7 @@ import { PHASE_SHORT, type Gallery } from "../supabase/functions/gallery/deliver
 type Row = { id: string; data: Gallery };
 type Account = { id: string; email: string; color: string; is_default: boolean; calendar_id: string };
 /** Calendar link per project, kept in workspace state (not in the gallery, which clients can read). */
-type Sync = { accountId: string; email: string; eventId: string; start: string; hours: number; location: string; link: string; invited?: string };
+type Sync = { accountId: string; email: string; eventId: string; start: string; hours: number; location: string; link: string; guests?: string[] };
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 const DAYS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 const TYPES = ["Villa", "Rumah", "Apartemen", "Hotel", "Kantor", "Restoran / Cafe", "Kost", "Lainnya"];
@@ -54,9 +54,10 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
   const [hidden, setHidden] = useStored<string[]>("gcalHidden", []);
   const now = new Date();
   const [month, setMonth] = useState({ y: now.getFullYear(), m: now.getMonth() });
-  const [form, setForm] = useState<null | { client: string; wa: string; email: string; invite: boolean; name: string; type: string; date: string; time: string; hours: number; location: string; quota: number; notes: string; account: string }>(null);
+  const [form, setForm] = useState<null | { client: string; wa: string; clientEmails: string[]; crew: string[]; invite: boolean; name: string; type: string; date: string; time: string; hours: number; location: string; quota: number; notes: string; account: string }>(null);
   const [busy, setBusy] = useState("");
   const [picked, setPicked] = useState<CalEvent | null>(null);
+  const [crewBook, setCrewBook] = useStored<string[]>("crewEmails", []);
   const isAdmin = ["owner", "admin"].includes(cloud.workspaces.find(w => w.id === ws)?.role ?? "");
   const hasClient = !!cloud.keys.google_client_id && !!cloud.keys.google_client_secret;
 
@@ -105,13 +106,13 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
   const pushToCalendar = async (r: Row, accountId: string, extra: Partial<Sync> = {}) => {
     const prev = sync[r.id], g = r.data;
     if (!g.shootDate) return notify("Project ini belum punya jadwal shoot.");
-    const hours = extra.hours ?? prev?.hours ?? 2, location = extra.location ?? prev?.location ?? "", invited = extra.invited ?? prev?.invited ?? "";
+    const hours = extra.hours ?? prev?.hours ?? 2, location = extra.location ?? prev?.location ?? "", guests = extra.guests ?? prev?.guests ?? [];
     const link = `${window.location.origin}${window.location.pathname}`;
     const res = await gcal<{ eventId: string; link: string; email: string; accountId: string }>("upsert", {
-      accountId, eventId: prev?.accountId === accountId ? prev.eventId : undefined, start: g.shootDate, hours, location, guests: extra.invited ? [extra.invited] : [],
+      accountId, eventId: prev?.accountId === accountId ? prev.eventId : undefined, start: g.shootDate, hours, location, guests: extra.guests ?? [], // only new invitations; Google keeps existing guests on update
       summary: `📷 Shoot · ${g.title}`, description: [g.client?.company && `Klien: ${g.client.company}`, g.client?.contact && `PIC: ${g.client.contact}`, g.client?.whatsapp && `WA: ${g.client.whatsapp}`, g.client?.email && `Email: ${g.client.email}`, g.selectionLimit ? `Kuota edit: ${g.selectionLimit} foto` : "", g.plan?.details, `Project: ${link}`].filter(Boolean).join("\n")
     });
-    setSync(o => ({ ...o, [r.id]: { accountId: res.accountId, email: res.email, eventId: res.eventId, start: g.shootDate!, hours, location, link: res.link, ...(invited ? { invited } : {}) } }));
+    setSync(o => ({ ...o, [r.id]: { accountId: res.accountId, email: res.email, eventId: res.eventId, start: g.shootDate!, hours, location, link: res.link, ...(guests.length ? { guests } : {}) } }));
     return res;
   };
   const sendRow = async (r: Row) => {
@@ -120,17 +121,19 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
     setBusy(r.id);
     try { const res = await pushToCalendar(r, acct); if (res) notify(`Masuk ke Google Calendar ${res.email}.`); loadEvents(); } catch (e) { notify(e instanceof Error ? e.message : String(e)); } finally { setBusy(""); }
   };
-  const openNew = (date = "") => setForm({ client: "", wa: "", email: "", invite: true, name: "", type: TYPES[0], date: date || todayIso(), time: "10:00", hours: 2, location: "", quota: 20, notes: "", account: accounts.find(a => a.is_default)?.id ?? "" });
+  const openNew = (date = "") => setForm({ client: "", wa: "", clientEmails: [], crew: [], invite: true, name: "", type: TYPES[0], date: date || todayIso(), time: "10:00", hours: 2, location: "", quota: 20, notes: "", account: accounts.find(a => a.is_default)?.id ?? "" });
   const saveNew = async () => {
     if (!form) return;
     if (!form.client.trim() || !form.name.trim()) return notify("Isi nama klien dan nama project/properti.");
     if (!form.date || !/^\d{2}:\d{2}$/.test(form.time)) return notify("Isi tanggal dan jam shoot.");
-    if (form.email.trim() && !isEmail(form.email.trim())) return notify("Email klien belum valid.");
+    const guests = [...new Set([...form.clientEmails, ...form.crew])];
+    if (guests.length > 10) return notify("Maksimal 10 email undangan per shoot.");
     setBusy("new");
     try {
-      const id = await createProjectFromPlan({ clientName: form.client.trim(), clientWhatsapp: form.wa.trim(), clientEmail: form.email.trim().toLowerCase() || undefined, propertyType: form.type, propertyName: form.name.trim(), details: form.notes.trim(), packageCount: Math.max(0, form.quota), shootDate: form.date, shootTime: form.time });
+      const id = await createProjectFromPlan({ clientName: form.client.trim(), clientWhatsapp: form.wa.trim(), clientEmail: form.clientEmails[0], propertyType: form.type, propertyName: form.name.trim(), details: form.notes.trim(), packageCount: Math.max(0, form.quota), shootDate: form.date, shootTime: form.time });
       const { data } = await supabase.from("galleries").select("id, data").eq("id", id).single();
-      if (form.account && data) { try { await pushToCalendar(data as Row, form.account, { hours: form.hours, location: form.location.trim(), ...(form.invite && form.email.trim() ? { invited: form.email.trim().toLowerCase() } : {}) }); } catch (e) { notify(`Project dibuat, tapi gagal masuk Calendar: ${e instanceof Error ? e.message : e}`); } }
+      if (form.crew.length) setCrewBook(b => [...new Set([...form.crew, ...b])].slice(0, 20));
+      if (form.account && data) { try { await pushToCalendar(data as Row, form.account, { hours: form.hours, location: form.location.trim(), ...(form.invite && guests.length ? { guests } : {}) }); } catch (e) { notify(`Project dibuat, tapi gagal masuk Calendar: ${e instanceof Error ? e.message : e}`); } }
       else setSync(o => ({ ...o, [id]: { accountId: "", email: "", eventId: "", start: `${form.date}T${form.time}`, hours: form.hours, location: form.location.trim(), link: "" } }));
       setForm(null); notify("Shoot dijadwalkan dan project dibuat di Photo Delivery."); loadBase(); loadEvents();
     } catch (e) { notify(e instanceof Error ? e.message : String(e)); }
@@ -198,7 +201,7 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
       {picked.description && <p className="sc-detail-desc">{picked.description}</p>}
       <div className="cp-modal-actions">
         {picked.link && <a className="outline-button" href={picked.link} target="_blank" rel="noreferrer">Buka di Google Calendar</a>}
-        <button className="primary-button" onClick={() => { const e = picked; const d = e.allDay ? e.start : dayOf(e.start); const t = e.allDay ? "10:00" : jkt(e.start, { hour: "2-digit", minute: "2-digit", hour12: false }).replace(".", ":"); const hours = e.allDay ? 2 : Math.max(0.5, Math.round(((Date.parse(e.end) - Date.parse(e.start)) / 36e5) * 2) / 2); setPicked(null); setForm({ client: "", wa: "", email: "", invite: false, name: e.summary.replace(/^\[[^\]]*\]\s*/, ""), type: TYPES[0], date: d, time: t, hours, location: e.location, quota: 20, notes: e.description ?? "", account: "" }); }}><Plus size={15} /> Jadikan shoot</button>
+        <button className="primary-button" onClick={() => { const e = picked; const d = e.allDay ? e.start : dayOf(e.start); const t = e.allDay ? "10:00" : jkt(e.start, { hour: "2-digit", minute: "2-digit", hour12: false }).replace(".", ":"); const hours = e.allDay ? 2 : Math.max(0.5, Math.round(((Date.parse(e.end) - Date.parse(e.start)) / 36e5) * 2) / 2); setPicked(null); setForm({ client: "", wa: "", clientEmails: [], crew: [], invite: false, name: e.summary.replace(/^\[[^\]]*\]\s*/, ""), type: TYPES[0], date: d, time: t, hours, location: e.location, quota: 20, notes: e.description ?? "", account: "" }); }}><Plus size={15} /> Jadikan shoot</button>
       </div>
     </div></div>}
     {form && <div className="modal-backdrop" onClick={() => setForm(null)}><div className="quick-modal cp-modal" role="dialog" aria-label="Shoot baru" onClick={e => e.stopPropagation()}>
@@ -207,8 +210,9 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
       <div className="cx-form">
         <label className="cx-f"><span>Nama klien <b>*</b></span><input autoFocus value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} placeholder="Bu Rina / PT Mosaic" /></label>
         <label className="cx-f"><span>WhatsApp</span><input value={form.wa} inputMode="tel" onChange={e => setForm({ ...form, wa: e.target.value })} placeholder="0812…" /></label>
-        <label className="cx-f"><span>Email klien</span><input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="klien@email.com" autoComplete="off" /></label>
-        <label className="cx-f ad-check sc-invite"><input type="checkbox" checked={form.invite} disabled={!form.email.trim() || !form.account} onChange={e => setForm({ ...form, invite: e.target.checked })} /><span>Undang klien ke event Google Calendar<small>{!form.account ? "Pilih akun Calendar di bawah dulu." : "Klien menerima undangan & pengingat dari Google."}</small></span></label>
+        <div className="cx-f"><span>Email klien <small>bisa lebih dari satu</small></span><EmailChips value={form.clientEmails} onChange={v => setForm({ ...form, clientEmails: v })} placeholder="klien@email.com" /></div>
+        <div className="cx-f"><span>Email fotografer / tim</span><EmailChips value={form.crew} onChange={v => setForm({ ...form, crew: v })} placeholder="fotografer@email.com" suggestions={crewBook} /></div>
+        <label className="cx-f wide ad-check sc-invite"><input type="checkbox" checked={form.invite} disabled={!form.account || !(form.clientEmails.length + form.crew.length)} onChange={e => setForm({ ...form, invite: e.target.checked })} /><span>Kirim undangan Google Calendar ke {form.clientEmails.length + form.crew.length || "semua"} email di atas<small>{!form.account ? "Pilih akun Calendar di bawah dulu." : "Mereka menerima undangan & pengingat dari Google."}</small></span></label>
         <label className="cx-f"><span>Nama project / properti <b>*</b></span><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Villa Intragama Puncak" /></label>
         <label className="cx-f"><span>Tipe properti</span><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>{TYPES.map(t => <option key={t}>{t}</option>)}</select></label>
         <label className="cx-f"><span>Tanggal <b>*</b></span><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></label>
@@ -223,3 +227,22 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
   </div>;
 }
 
+
+/** Several emails in one field: Enter, comma or space adds one; click a chip to remove it. */
+function EmailChips({ value, onChange, placeholder, suggestions = [] }: { value: string[]; onChange: (v: string[]) => void; placeholder: string; suggestions?: string[] }) {
+  const [draft, setDraft] = useState("");
+  const add = (raw: string) => {
+    const parts = raw.split(/[\s,;]+/).map(x => x.trim().toLowerCase()).filter(Boolean);
+    const bad = parts.filter(x => !isEmail(x));
+    if (bad.length) notify(`Email belum valid: ${bad.join(", ")}`);
+    const next = [...new Set([...value, ...parts.filter(isEmail)])];
+    if (next.length !== value.length) onChange(next);
+    setDraft(bad.join(" "));
+  };
+  const left = suggestions.filter(x => !value.includes(x)).slice(0, 4);
+  return <div className="sc-emails">
+    <div className="cx-chipsel">{value.map(e => <button type="button" key={e} className="active" onClick={() => onChange(value.filter(x => x !== e))} aria-label={`Hapus ${e}`}>{e} <X size={12} /></button>)}
+      <input type="email" value={draft} placeholder={value.length ? "+ email lain" : placeholder} autoComplete="off" onChange={e => { const v = e.target.value; if (/[\s,;]$/.test(v)) add(v); else setDraft(v); }} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); if (draft.trim()) add(draft); } if (e.key === "Backspace" && !draft && value.length) onChange(value.slice(0, -1)); }} onBlur={() => draft.trim() && add(draft)} onPaste={e => { const t = e.clipboardData.getData("text"); if (/[\s,;]/.test(t.trim())) { e.preventDefault(); add(t); } }} /></div>
+    {left.length > 0 && <div className="sc-suggest">{left.map(x => <button type="button" key={x} onClick={() => onChange([...value, x])}><Plus size={11} /> {x}</button>)}</div>}
+  </div>;
+}
