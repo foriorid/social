@@ -4,7 +4,8 @@ export const SCOPES = "openid email https://www.googleapis.com/auth/calendar.eve
 export const TZ = "Asia/Jakarta";
 
 export type CalEvent = { id: string; accountId: string; email: string; color: string; summary: string; start: string; end: string; allDay: boolean; location: string; link: string };
-export type ShootInput = { summary: string; description?: string; location?: string; start: string; hours: number };
+export type ShootInput = { summary: string; description?: string; location?: string; start: string; hours: number; guests?: string[] };
+export const isEmail = (v: string) => /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(v) && v.length <= 200;
 
 const b64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const fromB64url = (s: string) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
@@ -50,7 +51,9 @@ export function addHours(local: string, hours: number): string {
 export function eventBody(s: ShootInput, tz = TZ) {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s.start)) throw new Error("Tanggal/jam shoot tidak valid.");
   const hours = Math.min(24, Math.max(0.5, Number(s.hours) || 2));
+  const guests = [...new Set((s.guests ?? []).map(g => g.trim().toLowerCase()).filter(isEmail))].slice(0, 10);
   return {
+    ...(guests.length ? { attendees: guests.map(email => ({ email })) } : {}),
     summary: s.summary.slice(0, 200) || "Shoot FORIOR",
     description: (s.description ?? "").slice(0, 4000),
     location: (s.location ?? "").slice(0, 300),

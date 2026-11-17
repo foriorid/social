@@ -117,10 +117,11 @@ Deno.serve(async req => {
       }
       case "upsert": {
         const a = await account(), token = await accessToken(ws, a.secret_id);
-        const ev = eventBody({ summary: String(body.summary ?? ""), description: String(body.description ?? ""), location: String(body.location ?? ""), start: String(body.start ?? ""), hours: Number(body.hours) });
+        const ev = eventBody({ summary: String(body.summary ?? ""), description: String(body.description ?? ""), location: String(body.location ?? ""), start: String(body.start ?? ""), hours: Number(body.hours), guests: Array.isArray(body.guests) ? body.guests.map(String) : [] });
         const eventId = typeof body.eventId === "string" && /^[A-Za-z0-9_-]{5,1024}$/.test(body.eventId) ? body.eventId : "";
         const path = `calendars/${encodeURIComponent(a.calendar_id)}/events${eventId ? `/${eventId}` : ""}`;
-        const data = await cal(token, path, { method: eventId ? "PATCH" : "POST", body: ev });
+        // Guests get Google's invitation email; without guests nobody is notified.
+        const data = await cal(token, path, { method: eventId ? "PATCH" : "POST", body: ev, query: "attendees" in ev ? { sendUpdates: "all" } : undefined });
         return json({ eventId: data.id, link: data.htmlLink, accountId: a.id, email: a.email });
       }
       case "delete": {
