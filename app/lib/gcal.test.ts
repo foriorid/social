@@ -47,3 +47,11 @@ test("guests become attendees: valid, unique, lowercase, max 10", async () => {
   assert.deepEqual(b.attendees, [{ email: "rina@mail.com" }]);
   assert.ok(!("attendees" in eventBody({ summary: "x", start: "2026-11-20T10:00", hours: 2 })));
 });
+
+test("fromGoogle keeps readable description, Meet link and guest count", async () => {
+  const { fromGoogle } = await import("../../supabase/functions/gcal/gcal.ts");
+  const e = fromGoogle({ id: "e9", summary: "Shoot", start: { dateTime: "2026-11-20T10:00:00+07:00" }, end: { dateTime: "2026-11-20T12:00:00+07:00" }, description: "Bawa <b>lampu</b><br>Parkir &amp; akses", hangoutLink: "https://meet.google.com/abc", attendees: [{ email: "a@b.co" }, { email: "c@d.co" }] }, { id: "a", email: "x@y.z", color: "#000000" })!;
+  assert.equal(e.description, "Bawa lampu\nParkir & akses");
+  assert.equal(e.meet, "https://meet.google.com/abc");
+  assert.equal(e.guests, 2);
+});

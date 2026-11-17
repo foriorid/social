@@ -3,7 +3,9 @@
 export const SCOPES = "openid email https://www.googleapis.com/auth/calendar.events";
 export const TZ = "Asia/Jakarta";
 
-export type CalEvent = { id: string; accountId: string; email: string; color: string; summary: string; start: string; end: string; allDay: boolean; location: string; link: string };
+export type CalEvent = { id: string; accountId: string; email: string; color: string; summary: string; start: string; end: string; allDay: boolean; location: string; link: string; description?: string; meet?: string; guests?: number };
+/** Google descriptions may hold simple HTML; keep readable text only. */
+export const plainText = (v: unknown) => String(v ?? "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li)>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, "\n\n").trim().slice(0, 2000);
 export type ShootInput = { summary: string; description?: string; location?: string; start: string; hours: number; guests?: string[] };
 export const isEmail = (v: string) => /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(v) && v.length <= 200;
 
@@ -67,7 +69,7 @@ export function eventBody(s: ShootInput, tz = TZ) {
 export function fromGoogle(e: Record<string, any>, acct: { id: string; email: string; color: string }): CalEvent | null {
   if (!e?.id || e.status === "cancelled") return null;
   const allDay = !!e.start?.date;
-  return { id: String(e.id), accountId: acct.id, email: acct.email, color: acct.color, summary: String(e.summary ?? "(tanpa judul)"), start: String(e.start?.dateTime ?? e.start?.date ?? ""), end: String(e.end?.dateTime ?? e.end?.date ?? ""), allDay, location: String(e.location ?? ""), link: String(e.htmlLink ?? "") };
+  return { id: String(e.id), accountId: acct.id, email: acct.email, color: acct.color, summary: String(e.summary ?? "(tanpa judul)"), start: String(e.start?.dateTime ?? e.start?.date ?? ""), end: String(e.end?.dateTime ?? e.end?.date ?? ""), allDay, location: String(e.location ?? ""), link: String(e.htmlLink ?? ""), description: plainText(e.description), meet: String(e.hangoutLink ?? e.conferenceData?.entryPoints?.find((p: { entryPointType?: string; uri?: string }) => p.entryPointType === "video")?.uri ?? ""), guests: Array.isArray(e.attendees) ? e.attendees.length : 0 };
 }
 
 /** Local calendar day (YYYY-MM-DD, Asia/Jakarta) of an event start. */
