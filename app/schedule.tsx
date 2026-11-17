@@ -3,7 +3,7 @@
 // Jadwal Shoot: shoots (projects with a shoot date) and events from several connected Google Calendars in one
 // month view. New shoots can be created here directly; they become a project and, optionally, a Calendar event.
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, Link2, Loader2, MapPin, Plus, RefreshCw, Star, Trash2, X } from "lucide-react";
+import { CalendarDays, Users, Check, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, Link2, Loader2, MapPin, Plus, RefreshCw, Star, Trash2, X } from "lucide-react";
 import { SUPABASE_URL, readCloud, supabase } from "./lib/cloud";
 import { useStored } from "./lib/store";
 import { monthGrid } from "./lib/flow";
@@ -31,6 +31,17 @@ async function gcal<T>(action: string, payload: Record<string, unknown> = {}): P
   return data as T;
 }
 
+const jkt = (iso: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", ...o }).format(new Date(iso));
+/** "Kam, 19 Nov 2026 · 10:00–11:00" or "Sab, 21 Nov 2026 · Sepanjang hari" (Google's all-day end date is exclusive). */
+function whenOf(e: CalEvent): string {
+  if (e.allDay) {
+    const last = new Date(new Date(`${e.end}T00:00:00Z`).getTime() - 864e5).toISOString().slice(0, 10);
+    const f = (d: string) => new Intl.DateTimeFormat("id-ID", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(new Date(`${d}T00:00:00Z`));
+    return `${f(e.start)}${last > e.start ? ` – ${f(last)}` : ""} · Sepanjang hari`;
+  }
+  return `${jkt(e.start, { weekday: "short", day: "numeric", month: "short", year: "numeric" })} · ${jkt(e.start, { hour: "2-digit", minute: "2-digit", hour12: false })}–${jkt(e.end, { hour: "2-digit", minute: "2-digit", hour12: false })}`;
+}
+
 export function CalendarPage({ openGallery }: { openGallery: (id: string) => void; go?: (nav: string) => void }) {
   const [cloud] = useCloud();
   const ws = readCloud().workspaceId ?? "";
@@ -45,6 +56,7 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
   const [month, setMonth] = useState({ y: now.getFullYear(), m: now.getMonth() });
   const [form, setForm] = useState<null | { client: string; wa: string; email: string; invite: boolean; name: string; type: string; date: string; time: string; hours: number; location: string; quota: number; notes: string; account: string }>(null);
   const [busy, setBusy] = useState("");
+  const [picked, setPicked] = useState<CalEvent | null>(null);
   const isAdmin = ["owner", "admin"].includes(cloud.workspaces.find(w => w.id === ws)?.role ?? "");
   const hasClient = !!cloud.keys.google_client_id && !!cloud.keys.google_client_secret;
 
@@ -131,7 +143,7 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
   const byDay = new Map<string, { kind: "shoot" | "event"; key: string; label: string; time: string; color: string; onClick: () => void }[]>();
   const put = (d: string, x: { kind: "shoot" | "event"; key: string; label: string; time: string; color: string; onClick: () => void }) => byDay.set(d, [...(byDay.get(d) ?? []), x]);
   for (const r of shoots) put(r.data.shootDate!.slice(0, 10), { kind: "shoot", key: r.id, label: r.data.title, time: timeOf(r.data.shootDate!), color: "#7c4de2", onClick: () => openGallery(r.id) });
-  for (const e of visible) put(dayOf(e.start), { kind: "event", key: e.accountId + e.id, label: e.summary, time: e.allDay ? "" : timeOf(new Date(e.start).toLocaleString("sv-SE", { timeZone: "Asia/Jakarta" }).replace(" ", "T")), color: e.color, onClick: () => e.link && window.open(e.link, "_blank", "noopener") });
+  for (const e of visible) put(dayOf(e.start), { kind: "event", key: e.accountId + e.id, label: e.summary, time: e.allDay ? "" : timeOf(new Date(e.start).toLocaleString("sv-SE", { timeZone: "Asia/Jakarta" }).replace(" ", "T")), color: e.color, onClick: () => setPicked(e) });
   for (const list of byDay.values()) list.sort((a, b) => a.time.localeCompare(b.time));
   const today = todayIso();
   const upcoming = shoots.filter(r => r.data.shootDate!.slice(0, 10) >= today).sort((a, b) => a.data.shootDate!.localeCompare(b.data.shootDate!));
@@ -174,6 +186,21 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
       </aside>
     </div>
 
+    {picked && <div className="modal-backdrop" onClick={() => setPicked(null)}><div className="quick-modal sc-detail" role="dialog" aria-label={picked.summary} onClick={e => e.stopPropagation()}>
+      <button className="modal-close" onClick={() => setPicked(null)} aria-label="Tutup"><X size={18} /></button>
+      <div className="sc-detail-head"><i style={{ background: picked.color }} /><div><h2>{picked.summary}</h2><p>{whenOf(picked)}</p></div></div>
+      <dl className="sc-detail-list">
+        {picked.location && <><dt><MapPin size={15} /></dt><dd><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(picked.location)}`} target="_blank" rel="noreferrer">{picked.location}</a></dd></>}
+        {picked.meet && <><dt><Link2 size={15} /></dt><dd><a href={picked.meet} target="_blank" rel="noreferrer">Gabung Google Meet</a></dd></>}
+        {(picked.guests ?? 0) > 0 && <><dt><Users size={15} /></dt><dd>{picked.guests} tamu diundang</dd></>}
+        <dt><CalendarDays size={15} /></dt><dd>{picked.email}</dd>
+      </dl>
+      {picked.description && <p className="sc-detail-desc">{picked.description}</p>}
+      <div className="cp-modal-actions">
+        {picked.link && <a className="outline-button" href={picked.link} target="_blank" rel="noreferrer">Buka di Google Calendar</a>}
+        <button className="primary-button" onClick={() => { const e = picked; const d = e.allDay ? e.start : dayOf(e.start); const t = e.allDay ? "10:00" : jkt(e.start, { hour: "2-digit", minute: "2-digit", hour12: false }).replace(".", ":"); const hours = e.allDay ? 2 : Math.max(0.5, Math.round(((Date.parse(e.end) - Date.parse(e.start)) / 36e5) * 2) / 2); setPicked(null); setForm({ client: "", wa: "", email: "", invite: false, name: e.summary.replace(/^\[[^\]]*\]\s*/, ""), type: TYPES[0], date: d, time: t, hours, location: e.location, quota: 20, notes: e.description ?? "", account: "" }); }}><Plus size={15} /> Jadikan shoot</button>
+      </div>
+    </div></div>}
     {form && <div className="modal-backdrop" onClick={() => setForm(null)}><div className="quick-modal cp-modal" role="dialog" aria-label="Shoot baru" onClick={e => e.stopPropagation()}>
       <button className="modal-close" onClick={() => setForm(null)} aria-label="Tutup"><X size={18} /></button>
       <div className="cp-modal-head"><span className="modal-icon"><CalendarDays size={21} /></span><div><h2>Shoot baru</h2><p>Langsung jadi project di Photo Delivery{accounts.length ? " dan, bila dipilih, event di Google Calendar" : ""}. Tidak perlu lewat Photo Planner.</p></div></div>
