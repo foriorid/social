@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
   trailingSlash: true,
   images: {
     unoptimized: true
+  },
+  // The client form public/photo-planner.html is linked as /photo-planner (app/business.tsx, and links
+  // already sent to clients). Static hosting used to map that to the .html file by itself; a server
+  // build does not, so map it explicitly.
+  async rewrites() {
+    return [{ source: "/photo-planner", destination: "/photo-planner.html" }];
   }
 };
 

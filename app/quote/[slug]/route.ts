@@ -18,17 +18,24 @@ const HEADERS = {
   "X-Robots-Tag": "noindex, nofollow"
 };
 
-const notFound = () => new Response(
-  `<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Penawaran tidak ditemukan</title>`
+const page = (status: number, title: string, line: string) => new Response(
+  `<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>`
   + `<style>body{font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;color:#222}div{text-align:center;padding:24px}</style></head>`
-  + `<body><div><h1>Penawaran tidak ditemukan</h1><p>Periksa kembali tautannya, atau hubungi FORIOR.</p></div></body></html>`,
-  { status: 404, headers: HEADERS }
+  + `<body><div><h1>${title}</h1><p>${line}</p></div></body></html>`,
+  { status, headers: HEADERS }
 );
+const notFound = () => page(404, "Penawaran tidak ditemukan", "Periksa kembali tautannya, atau hubungi FORIOR.");
+const unavailable = () => page(502, "Penawaran sedang tidak bisa dibuka", "Coba lagi sebentar lagi, atau hubungi FORIOR.");
 
 export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }> }) {
   const { slug } = await ctx.params;
   if (!SLUG.test(slug) || slug.includes("--")) return notFound();
-  const file = await fetch(`${SUPABASE_URL}/storage/v1/object/public/quotes/${slug}.html`, { cache: "no-store" });
+  let file: Response;
+  try {
+    file = await fetch(`${SUPABASE_URL}/storage/v1/object/public/quotes/${slug}.html`, { cache: "no-store" });
+  } catch {
+    return unavailable(); // storage unreachable: a readable page instead of a bare 500
+  }
   if (!file.ok || !file.body) return notFound();
   // Streamed straight through, so a large file (the sample quotation is 5.3 MB) is never held in memory.
   return new Response(file.body, { status: 200, headers: HEADERS });
