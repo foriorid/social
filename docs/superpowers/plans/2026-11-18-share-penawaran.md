@@ -20,7 +20,6 @@
 - Slug pattern, exactly: `^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$` and no `--`. 3–63 chars. `mytepro` must pass; `my`, `My-Tepro`, `a--b` must fail (spec §5.3).
 - HTML response headers, exactly: `Cache-Control: no-store`, `Content-Type: text/html; charset=utf-8`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow`, and the CSP in spec §5.7 verbatim (no `script-src` directive at all).
 - Only `GET` and `HEAD` are served; anything else → 405 (spec §5.4).
-- The edge function requires header `X-Quote-Key`; Hub sends it from a Vercel env var. Both hold the same secret, which never appears in the repo or in chat (spec §5.4).
 - Owner/Admin only, for read *and* write, via `public.has_workspace_role(workspace_id, 'admin')` (spec §6.2).
 - Image Storage path: `<workspace_id>/<slug>/<upload_id>/<n>.<ext>`; OG image at `<workspace_id>/<slug>/<upload_id>/og.jpg` (spec §5.2).
 - UI copy is Indonesian; code comments are English (repo convention).
@@ -294,16 +293,10 @@ git commit -m "Penawaran: tabel quotes + quote_opens, RLS admin-only, bucket quo
 - Consumes: `isSlug`, `isCrawler`, `injectMeta`, `escapeAttr`, `QuoteMeta` from `../../../supabase/functions/quote/quote.ts`; tables from Task 3.
 - Produces: the public `GET /quote/<slug>/` behaviour.
 
-- [ ] **Step 1: Create the shared secret in both places**
+- [ ] **Step 1: Rewrite the edge function as a JSON API**
 
-A random value, set as a Supabase edge-function secret `QUOTE_API_SECRET` and as a Vercel
-environment variable of the same name on `forior-creator-os` (all environments). It must
-not appear in the repo, in the plan, or in chat.
-
-- [ ] **Step 2: Rewrite the edge function as a JSON API**
-
-`POST` only. Reject unless header `X-Quote-Key` equals `QUOTE_API_SECRET` → 401.
-Body `{ slug, count, ua, referer }`. `!isSlug(slug)` → 404. Select
+`POST` only, public and unauthenticated — the same model as the live `functions/review`
+(spec §5.4 explains why, and what it costs). Body `{ slug, count, ua, referer }`. `!isSlug(slug)` → 404. Select
 `title, client_name, option_label, html, og_title, og_description, og_image`
 from `public.quotes where slug = $1 and not revoked`; no row → 404.
 When `count` is true, `update public.quotes set opens = opens + 1, last_opened_at = now()`
@@ -311,24 +304,24 @@ and `insert into public.quote_opens (slug, ua, referer)`. A write error is logge
 must not fail the response. Follow `supabase/functions/review/index.ts` for the client
 and error shape.
 
-- [ ] **Step 3: Rewrite the route handler**
+- [ ] **Step 2: Rewrite the route handler**
 
-`GET` and `HEAD` only; else 405. `!isSlug(slug)` → the 404 page from Step 4.
+`GET` and `HEAD` only; else 405. `!isSlug(slug)` → the 404 page from Step 3.
 Call the function with `count` false when `isCrawler(req.headers.get("user-agent"))` or
 the URL carries `preview=1`, true otherwise (spec §5.4). Build `og:url` from
 `X-Forwarded-Host`, falling back to `Host`. Return `injectMeta(html, meta)` with every
 header from Global Constraints.
 
-- [ ] **Step 4: Write the 404 page**
+- [ ] **Step 3: Write the 404 page**
 
 A small self-contained Indonesian page, status 404, same security headers: heading
 "Penawaran tidak ditemukan", one line "Periksa kembali tautannya, atau hubungi FORIOR."
 
-- [ ] **Step 5: Deploy the function, push, and seed one row by hand**
+- [ ] **Step 4: Deploy the function, push, and seed one row by hand**
 
 Insert a row with slug `zz-probe2`, a tiny HTML body, `og_image` null.
 
-- [ ] **Step 6: Verify end to end on the preview deployment**
+- [ ] **Step 5: Verify end to end on the preview deployment**
 
 | Check | Expected |
 |---|---|
@@ -339,19 +332,18 @@ Insert a row with slug `zz-probe2`, a tiny HTML body, `og_image` null.
 | `User-Agent: WhatsApp/2.23` | 200 with OG tags, `opens` still 1 |
 | `/quote/zz-probe2/?preview=1` | 200, `opens` still 1 |
 | `POST /quote/zz-probe2/` | 405 |
-| function called without `X-Quote-Key` | 401 |
 
-- [ ] **Step 7: Verify the no-image case** (Review Focus 2)
+- [ ] **Step 6: Verify the no-image case** (Review Focus 2)
 
 `zz-probe2` has `og_image` null: the response has `og:title` but no `og:image`, and the
 page renders.
 
-- [ ] **Step 8: Verify revoked and unknown slugs** (Review Focus 5)
+- [ ] **Step 7: Verify revoked and unknown slugs** (Review Focus 5)
 
 `revoked = true` → both `/quote/zz-probe2/` and `?preview=1` give the 404 page, and
 `/quote/does-not-exist/` likewise. Then delete the probe row.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add app/quote supabase/functions/quote/index.ts

@@ -291,11 +291,19 @@ Hanya `GET` dan `HEAD`; sisanya 405.
 atau 404. Bila `count` benar, ia menaikkan `opens`, menyetel `last_opened_at`, dan
 menulis satu baris `quote_opens`. Pencatatan tidak boleh menggagalkan respons.
 
-**Dilindungi secret bersama.** Function mewajibkan header `X-Quote-Key` yang cocok
-dengan secretnya; Hub mengirimkannya dari environment variable Vercel. Tanpa ini,
-function jadi API publik yang membagikan HTML penawaran siapa pun yang slug-nya
-tertebak — dan Alvian memilih slug bebas, jadi sebagian slug memang mudah ditebak.
-Ini perbaikan dibanding rancangan revisi 1, yang membiarkan function terbuka.
+**Function ini publik, dan itu disengaja.** Ide "secret bersama" dari draf revisi 2
+dibatalkan: alat yang menyimpan secret Supabase memang tidak pernah memberikan nilainya
+ke saya, jadi menaruh nilai yang sama di Vercel berarti Alvian harus menyetel dua
+dashboard secara manual dan memastikan keduanya cocok.
+
+Yang hilang karenanya cuma **keakuratan angka**, bukan kerahasiaan data: HTML penawaran
+sudah bisa dibaca siapa pun yang punya linknya, dan `functions/review` yang sudah live
+melakukan hal yang sama — menyajikan seluruh snapshot konten klien dari function publik
+tanpa autentikasi. Jadi ini sejalan dengan model yang sudah berjalan, bukan pelemahan.
+
+Yang benar-benar menentukan keterpaparan adalah **seberapa mudah slug ditebak**, dan itu
+dipegang Alvian sendiri per penawaran lewat tombol "+ akhiran acak" (§8.1). Secret tidak
+akan mengubah hal itu.
 
 Pola klien `postgres` dan bentuk error mengikuti `supabase/functions/review/index.ts`.
 
