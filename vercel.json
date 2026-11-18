@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/quote/:slug", "destination": "https://ojfezodyjvlzexxqbgak.supabase.co/functions/v1/quote/:slug" },
+    { "source": "/quote/:slug/", "destination": "https://ojfezodyjvlzexxqbgak.supabase.co/functions/v1/quote/:slug" }
+  ],
+  "headers": [
+    { "source": "/quote/:path*", "headers": [{ "key": "x-vercel-enable-rewrite-caching", "value": "0" }] }
+  ]
+}
