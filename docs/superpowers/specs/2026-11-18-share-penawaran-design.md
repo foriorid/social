@@ -2,6 +2,12 @@
 
 Tanggal: 2026-11-18 · Repo: `foriorid/social` · Branch: `claude/relaxed-meitner-qj6q8y`
 
+> **Revisi 2 (2026-11-18, setelah spike PR-1).** Approach A — Vercel rewrite ke Supabase
+> Edge Function yang menyajikan HTML — **terbukti tidak mungkin** dan sudah diganti
+> approach E (§4). Buktinya ada di §4-A. Yang berubah hanya **pengirim dokumen HTML**;
+> URL, hitungan buka, CSP bebas-script, preview WhatsApp, dan penyimpanan gambar di
+> Storage semuanya tetap seperti rancangan semula.
+
 ## 1. Maksud dan alasannya
 
 Hari ini penawaran FORIOR dikirim sebagai PDF lewat WhatsApp. Tiga akibatnya:
@@ -48,7 +54,8 @@ klien membukanya.
 
 | Batasan | Akibatnya pada desain |
 |---|---|
-| `next.config.ts` memakai `output: "export"` | Tidak ada API route, tidak ada SSR. Rewrite **harus** di `vercel.json`; rewrite di `next.config.ts` hilang saat static export. |
+| `next.config.ts` memakai `output: "export"` | **Dicabut di revisi 2.** Baris itu dibuang supaya Hub bisa menyajikan halaman sendiri (§4-E). Semua halaman lain `"use client"` dan tetap di-prerender. |
+| Supabase tidak mau menyajikan HTML ter-render, di Functions maupun Storage | Dokumen HTML tidak boleh disajikan dari `*.supabase.co`. Gambar boleh, dan terbukti sempurna. |
 | Link bersih yang ada sekarang (`/review/<token>`) balas **HTTP 404** | Jalan lewat `app/not-found.tsx` yang membaca pathname di browser. Isinya tampil, statusnya 404 → WhatsApp tidak bikin preview. Pola ini **tidak** dipakai di sini. |
 | Supabase Storage belum dipakai sama sekali di repo | Bucket `quotes` adalah infrastruktur baru pertama di Storage. |
 | `app.forior.id` masih milik project Vercel `forior` (Workspace lama) | Fitur ini live di `hub.forior.id` dulu. Migrasi domain menyusul, terpisah. |
@@ -57,17 +64,65 @@ klien membukanya.
 
 ## 4. Approaches yang ditimbang
 
-### A. `vercel.json` rewrite → Supabase Edge Function `quote` — **DIPILIH**
+### A. `vercel.json` rewrite → Supabase Edge Function — **TERBUKTI TIDAK MUNGKIN**
 
-Vercel mem-proxy `/quote/:slug` ke edge function. Function ambil HTML dari Postgres,
-sisipkan tag OG, catat kunjungan, balas `text/html` 200.
+Rencana semula. Dibuktikan gagal di spike PR-1, di preview, tanpa menyentuh produksi.
+Dicatat lengkap di sini supaya tidak ada yang mencobanya lagi.
 
-- ✅ URL persis seperti yang diminta, status 200, preview WhatsApp jalan
-- ✅ Hitungan dari sisi server — tidak bergantung JS di browser klien
-- ✅ Dokumen di luar React app, nol bentrokan CSS
-- ✅ Risiko terkurung: satu file config baru, satu function baru, tabel baru. Nol
-  perubahan pada route/function/tabel yang sudah jalan
-- ⚠️ Satu mekanisme baru (rewrite ke host eksternal) yang belum pernah dipakai repo ini
+Apa yang **berhasil** dan tetap berguna sebagai temuan:
+
+- Rewrite Vercel benar-benar mencapai edge function: 200, `x-served-by: supabase-edge-runtime`
+- Function berjalan **tanpa** header `apikey` maupun `Authorization`, persis seperti
+  `ig-webhook` yang dipanggil Meta. Keraguan terbesar di review awal, terjawab.
+- `cache-control: no-store` dan `x-vercel-cache: MISS` lolos utuh melalui proxy, jadi
+  risiko caching yang bisa merusak hitungan buka memang tertangani.
+
+Apa yang **mematikannya**, dua fakta platform yang bertumpuk:
+
+1. **Gateway Supabase melumpuhkan respons HTML.** Function yang mengirim
+   `text/html; charset=utf-8` kembali sebagai `content-type: text/plain` plus
+   `content-security-policy: default-src 'none'; sandbox` yang disuntikkan Supabase.
+   Dipastikan bukan gangguan proxy sesi, lewat dua kontrol: `functions/review`
+   mengembalikan `application/json` utuh, dan `showcase.forior.id` mengembalikan
+   `text/html` utuh. Ini proteksi anti-phishing Supabase.
+2. **Vercel meneruskan header itu dan tidak memberi jalan menimpanya.** `headers` di
+   `vercel.json` untuk `/quote/:path*` ternyata **tidak diterapkan sama sekali** pada
+   path yang ditangani rewrite eksternal — dibuktikan dengan header canary
+   `X-Probe-Override` yang tidak pernah muncul di respons.
+
+Kenapa tidak bisa diakali: **browser menerapkan irisan dari semua header CSP.**
+Menambahkan CSP yang longgar tidak pernah melonggarkan CSP yang ketat.
+
+Varian "sajikan HTML dari Supabase Storage" juga diuji dan **gagal identik**:
+`text/plain` + `default-src 'none'; sandbox`, walau `contentType` sudah disetel
+eksplisit saat upload. Jadi ini kebijakan Supabase menyeluruh, bukan khusus Functions.
+
+Yang **tidak** gagal, dan karena itu tetap dipakai: Storage menyajikan **gambar**
+dengan sempurna — `content-type: image/jpeg`, tanpa CSP, `max-age=31536000`.
+
+### E. Hub sendiri yang menyajikan halaman — **DIPILIH**
+
+Lepas `output: "export"`, dan sajikan `/quote/<slug>` dari **route handler** Next
+(`app/quote/[slug]/route.ts`) yang berjalan di server Vercel.
+
+- ✅ URL persis seperti diminta, status **200**, preview WhatsApp jalan
+- ✅ Header sepenuhnya milik kita: `Content-Type`, CSP, `no-store` — tidak ada gateway
+  pihak lain yang ikut menyuntik
+- ✅ Route handler membalas `Response` mentah, jadi dokumen HTML buatan Alvian keluar
+  apa adanya tanpa perlu dibungkus komponen React (masalah dokumen bersarang hilang)
+- ✅ Hitungan buka tetap dari sisi server
+- ✅ Nol project baru, nol layanan baru, nol dependency baru
+- ⚠️ Mengubah mode hosting seluruh Hub. Peredamnya: semua halaman Hub adalah
+  `"use client"`, jadi Next tetap mem-prerender-nya seperti sekarang; hanya
+  `/quote/[slug]` yang dinamis.
+- ⚠️ Workflow GitHub Pages berhenti bisa bekerja, karena Pages memang butuh
+  `output: "export"`. Penanganannya di §5.10.
+
+Kenapa bukan B (halaman statis + iframe): statusnya 404, jadi preview WhatsApp mati —
+gagal di goal yang justru jadi alasan fitur ini dipilih.
+Kenapa bukan project Vercel kedua atau subdomain sendiri: dua-duanya memberi hasil yang
+sama bagi klien, tapi menambah infrastruktur permanen. Alvian memilih Hub sendiri
+setelah diberi tahu risikonya, dua kali.
 
 ### B. Halaman statis + iframe
 
@@ -92,73 +147,39 @@ Ada presedennya: `public/photo-planner.html` (97 KB) disajikan di `hub.forior.id
 
 Ditolak: gagal di goal utama.
 
-### D. Buang `output: "export"`, pindah ke Next server-rendered
+### D. Buang `output: "export"` — ditolak di revisi 1, **menjadi E di revisi 2**
 
-`app/quote/[slug]/page.tsx` dengan metadata API. Paling rapi secara teknis.
-
-- ❌ Mengubah model deploy **seluruh** aplikasi yang sudah live, tepat sebelum
-  migrasi domain. `next.config.ts` masih punya jalur basePath GitHub Pages yang
-  ikut terdampak. Risiko menyebar ke semua fitur demi satu fitur baru.
-
-Ditolak: tidak sebanding risikonya.
+Di revisi 1 ini ditolak: "mengubah model deploy seluruh aplikasi tepat sebelum migrasi
+domain, tidak sebanding risikonya." Penilaian itu benar **selama approach A masih ada**.
+Begitu A terbukti mustahil, pembandingnya hilang dan ongkos-manfaatnya berubah: sekarang
+pilihannya bukan "A yang murah vs D yang berisiko", tapi "D, atau menambah project
+permanen". Lihat E.
 
 ## 5. Desain
 
 ### 5.1 Routing
 
-`vercel.json` baru di root:
+Tidak ada `vercel.json`, tidak ada rewrite. Halaman disajikan route handler Next:
 
-```json
-{
-  "rewrites": [
-    { "source": "/quote/:slug",  "destination": "https://ojfezodyjvlzexxqbgak.supabase.co/functions/v1/quote/:slug" },
-    { "source": "/quote/:slug/", "destination": "https://ojfezodyjvlzexxqbgak.supabase.co/functions/v1/quote/:slug" }
-  ]
-}
+```
+app/quote/[slug]/route.ts        ->  GET /quote/<slug>/
 ```
 
-Project ref Supabase itu nilai publik (sudah ada di `app/lib/cloud.ts`), bukan secret.
+`next.config.ts` kehilangan satu baris, `output: "export"`. `trailingSlash: true`
+dipertahankan, jadi `/quote/mytepro` dipantulkan 308 ke `/quote/mytepro/` seperti
+seluruh aplikasi, dan tombol salin link tetap menghasilkan bentuk bergaris-miring
+supaya tidak ada lompatan.
 
-**Redirect menang atas rewrite — sudah dipastikan, bukan dugaan.** Dokumentasi Vercel
-menyebut eksplisit: *"Redirects are always processed before rewrites."* Jadi dengan
-`trailingSlash: true`, `/quote/mytepro` dipantulkan 308 ke `/quote/mytepro/` lebih
-dulu, baru rewrite dipertimbangkan. Dua pola source di atas menangani keduanya, dan
-**tombol salin link menghasilkan URL dengan garis miring** (`…/quote/mytepro/`)
-supaya tidak ada lompatan 308 sama sekali.
+**Yang tidak rusak karena perubahan ini, dan alasannya.** `/review/<token>` dan
+`/gallery/<slug>` hari ini bekerja lewat `app/not-found.tsx` yang membaca pathname di
+browser. Next tetap merender boundary `not-found` untuk path yang tidak dikenal saat
+dirender di server, dan `not-found.tsx` tetap `"use client"`, jadi mekanismenya utuh —
+status tetap 404, isinya tetap tampil. Tidak ada link klien yang mati. **Ini wajib
+diverifikasi, bukan diasumsikan** (§5.11).
 
-**Function tidak butuh header `apikey` — sudah dipastikan dari repo ini.** Rewrite
-Vercel tidak mengirim `apikey`, sementara semua function publik yang ada dipanggil
-lewat `supabase.functions.invoke` yang menyertakannya. Yang menyelesaikan keraguan ini
-adalah `supabase/functions/ig-webhook/index.ts`: komentarnya sendiri menyatakan
-*"Public (verify_jwt off): Meta calls it."* Server Meta jelas tidak mengirim apikey
-Supabase. Jadi function dengan `verify_jwt` off memang bisa dipanggil tanpa header
-auth apa pun. Risiko paling mahal dari approach A gugur di sini.
-
-#### Urutan kerja: dua PR, bukan satu
-
-`ssoProtection` project ini **aktif** dengan cakupan `all_except_custom_domains`.
-Artinya seluruh URL `*.vercel.app`, preview termasuk, ada di balik login Vercel —
-dan crawler WhatsApp tidak akan pernah bisa menjangkaunya. Gate verifikasi tidak bisa
-dijalankan di preview. Satu-satunya permukaan publik adalah `hub.forior.id`, yaitu
-produksi.
-
-Karena itu pekerjaan dipecah dua:
-
-**PR-1 — spike routing (kecil, bisa dibuang).** Isinya hanya `vercel.json`, edge
-function `quote` versi minimal (balas HTML tetap, tanpa database), dan tidak ada yang
-lain. Lalu uji di produksi: `hub.forior.id/quote/__probe/` dan `…/quote/__probe`
-(tanpa garis miring), plus cek header responsnya tidak di-cache.
-
-Kenapa aman dilakukan di produksi: `/quote/*` **hari ini 404**. PR-1 tidak menyentuh
-satu pun route, function, atau tabel yang sudah jalan. Kalau rewrite-nya ternyata
-tidak jalan, revert satu PR kecil dan belum ada apa pun yang dibangun di atasnya.
-
-**PR-2 — fitur sebenarnya.** Migrasi, bucket, pipeline upload, UI, hitungan buka.
-Baru dikerjakan setelah PR-1 terbukti.
-
-Kalau PR-1 gagal, jangan diam-diam pindah ke approach B. Pilihan berikutnya, berurutan:
-`/q/:slug` (menghindari kemungkinan bentrok nama), lalu Vercel route config, lalu
-subdomain terpisah `quote.forior.id` yang menunjuk langsung ke function.
+**Function tidak lagi menyajikan HTML.** Ia jadi API JSON (§5.4). JSON dari Supabase
+memang lolos utuh sebagai `application/json` — itu salah satu kontrol yang dipakai
+untuk memastikan pelumpuhan HTML tadi nyata.
 
 ### 5.2 Penyimpanan
 
@@ -250,53 +271,33 @@ harga:
 - `quote_opens`: tidak ada policy untuk `authenticated` selain select admin. Penulisan
   baris open dilakukan function lewat `SUPABASE_DB_URL` (bypass RLS), seperti `review`.
 
-### 5.4 Edge Function `quote`
+### 5.4 Dua bagian: route handler Next + API JSON
 
-`supabase/functions/quote/index.ts`, `verify_jwt` **off** (publik, seperti `review`).
-Logika murni dipisah ke `supabase/functions/quote/quote.ts` agar bisa dites.
+**`app/quote/[slug]/route.ts`** — yang dilihat klien.
 
-Alur `GET /quote/<slug>`:
+1. `isSlug(slug)` gagal → 404 halaman "Penawaran tidak ditemukan".
+2. Minta data ke function (di bawah), kirimkan User-Agent asli dan apakah ini kunjungan
+   yang boleh dihitung: tidak dihitung bila `isCrawler(ua)` atau URL punya `preview=1`.
+3. Tidak ada baris / `revoked` → 404.
+4. Balas `injectMeta(html, meta)` dengan seluruh header di §5.6 dan §5.7. `og:url`
+   dibangun dari header `Host`/`X-Forwarded-Host`, bukan konstanta, supaya ikut benar
+   sendiri setelah migrasi domain (§5.9).
 
-1. Ambil slug dari pathname. Kalau pola salah → 404 halaman "Penawaran tidak ditemukan".
-2. `select` baris `where slug = $1 and not revoked`. Tidak ada → 404.
-3. `isCrawler(ua)`? Kalau **bukan** crawler: `update quotes set opens = opens + 1,
-   last_opened_at = now()` + `insert into quote_opens`. Crawler tetap dilayani
-   penuh (justru mereka yang butuh tag OG), hanya tidak dihitung.
-4. `injectMeta(html, meta)` menyisipkan sebelum `</head>`.
-5. Balas 200 `text/html; charset=utf-8` dengan header di §5.6 dan §5.7.
+Hanya `GET` dan `HEAD`; sisanya 405.
 
-Hanya `GET` dan `HEAD` dilayani; method lain → 405.
+**`supabase/functions/quote/index.ts`** — API JSON, bukan halaman.
 
-**Kunjungan Alvian sendiri tidak dihitung.** §5.8 menaruh tombol "buka di tab baru"
-persis di sebelah angkanya, jadi tanpa ini anti-goal #1 masuk lewat pintu lain:
-memeriksa link sendiri akan menaikkan hitungan. Route ini tanpa login, jadi tidak ada
-cara murah mengenali dia nanti. Solusinya: tombol di dashboard menambahkan
-`?preview=1`, dan function menghormatinya dengan **tidak** mencatat kunjungan.
+`POST { slug, count, ua, referer }` → `{ html, title, ogTitle, ogDescription, ogImage }`
+atau 404. Bila `count` benar, ia menaikkan `opens`, menyetel `last_opened_at`, dan
+menulis satu baris `quote_opens`. Pencatatan tidak boleh menggagalkan respons.
 
-Siapa pun bisa menambahkan parameter itu sendiri, dan itu tidak masalah — efeknya
-hanya menekan pencatatan, tidak membuka data apa pun. Yang perlu dihindari justru
-sebaliknya (hitungan naik tanpa klien benar-benar membuka), dan itu tertutup.
+**Dilindungi secret bersama.** Function mewajibkan header `X-Quote-Key` yang cocok
+dengan secretnya; Hub mengirimkannya dari environment variable Vercel. Tanpa ini,
+function jadi API publik yang membagikan HTML penawaran siapa pun yang slug-nya
+tertebak — dan Alvian memilih slug bebas, jadi sebagian slug memang mudah ditebak.
+Ini perbaikan dibanding rancangan revisi 1, yang membiarkan function terbuka.
 
-**`isCrawler(ua)`** cocokkan (case-insensitive): `whatsapp`, `facebookexternalhit`,
-`facebookcatalog`, `twitterbot`, `telegrambot`, `slackbot`, `linkedinbot`,
-`discordbot`, `googlebot`, `bingbot`, `applebot`, `skypeuripreview`, `embedly`,
-`quora link preview`, `vkshare`, `redditbot`, `pinterest`, lalu fallback umum
-`bot|crawler|spider|preview|fetcher`. UA kosong juga dianggap crawler.
-
-**`injectMeta`** menyisipkan:
-
-```html
-<meta property="og:type" content="website">
-<meta property="og:title" content="…">
-<meta property="og:description" content="…">
-<meta property="og:image" content="https://…/og.jpg">
-<meta property="og:url" content="https://hub.forior.id/quote/…">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="robots" content="noindex, nofollow">
-```
-
-Nilai di-escape untuk atribut HTML. `og:image` **wajib URL absolut** — WhatsApp
-mengabaikan path relatif.
+Pola klien `postgres` dan bentuk error mengikuti `supabase/functions/review/index.ts`.
 
 ### 5.5 Pipeline upload (di browser, saat upload)
 
@@ -325,30 +326,17 @@ HTML dan gambar ditimpa.
 
 ### 5.6 Caching
 
-- **HTML**: `Cache-Control: no-store`. Hanya 37 KB, dan tiap kunjungan harus
-  benar-benar sampai ke function supaya terhitung.
-- **Gambar**: dari Storage CDN dengan `cache-control: public, max-age=31536000, immutable`.
+- **HTML**: `Cache-Control: no-store`, disetel langsung oleh route handler. Hanya 37 KB,
+  dan tiap kunjungan harus benar-benar mencapai server supaya terhitung.
+- **Gambar**: dari Storage CDN, `cache-control: public, max-age=31536000` — sudah
+  diverifikasi apa adanya pada respons Storage yang sebenarnya.
 
-Jadi dua-duanya didapat: hitungan akurat *dan* buka cepat. Ini justru hasil dari
-memisahkan gambar — tanpa itu, no-store berarti mengunduh 5 MB setiap kali.
+Jadi dua-duanya didapat: hitungan akurat *dan* buka cepat. Ini hasil dari memisahkan
+gambar — tanpa itu, `no-store` berarti mengunduh 5 MB setiap kali.
 
-**Header `no-store` di sini menyangga seluruh fitur hitungan, bukan penghalusan.**
-Project ini dibuat ~11 November 2026, jadi ia memakai perilaku Vercel yang baru:
-**rewrite ke host eksternal di-cache secara default**, menghormati `cache-control`
-upstream. Kalau halaman penawaran sampai di-cache CDN, kunjungan klien tidak pernah
-mencapai function dan angka "dibuka" diam-diam salah hitung — persis anti-goal #1.
-
-Karena itu dipasang dua lapis, supaya tidak bergantung pada satu header saja:
-
-```json
-"headers": [
-  { "source": "/quote/:path*",
-    "headers": [{ "key": "x-vercel-enable-rewrite-caching", "value": "0" }] }
-]
-```
-
-Verifikasi di PR-1 wajib mencakup pembacaan header respons (`x-vercel-cache` harus
-`MISS`/`BYPASS`, bukan `HIT` pada permintaan kedua).
+Seluruh urusan `x-vercel-enable-rewrite-caching` dan caching rewrite eksternal dari
+revisi 1 **tidak berlaku lagi**: tidak ada rewrite eksternal. Route handler Next bukan
+rute yang di-cache CDN kecuali kita menyuruhnya, dan kita menyuruh sebaliknya.
 
 ### 5.7 Keamanan: ini bagian yang paling penting
 
@@ -371,6 +359,12 @@ X-Robots-Tag: noindex, nofollow
 
 `script-src` tidak ada → tidak ada JS yang jalan → sesi Hub tidak bisa disentuh,
 apa pun isi filenya.
+
+**Di revisi 2 CSP ini benar-benar bisa dipasang, dan itu bukan hal kecil.** Di revisi 1
+ia mustahil: Supabase menyuntikkan `default-src 'none'; sandbox` sendiri dan browser
+menerapkan irisan semua CSP, jadi halaman penawaran justru tidak akan tampil apa pun.
+Sekarang route handler Next memiliki responsnya sepenuhnya, jadi CSP di atas adalah
+satu-satunya yang berlaku.
 
 **Allowlist CSP ini sudah diaudit terhadap file aslinya, bukan dikira-kira.**
 File contoh ada di luar repo (dilampirkan Alvian di sesi ini, bukan di `public/`).
@@ -455,23 +449,22 @@ Satu hal yang harus diingat saat migrasi nanti: `vercel.json` **tidak perlu diub
 `og:url` yang disisipkan function sebaiknya dibangun dari header `Host`/
 `X-Forwarded-Host` permintaan, bukan konstanta — supaya ikut benar sendiri.
 
-### 5.10 GitHub Pages masih hidup — dan tidak punya rewrite
+### 5.10 GitHub Pages: tidak bisa lagi, dan harus ditangani
 
-`.github/workflows/deploy.yml` masih mem-publish ke `foriorid.github.io/social/`
-pada **setiap** push ke `main`, dan README menyebutnya didukung. Di sana tidak ada
-lapisan rewrite Vercel, jadi `/quote/*` akan jatuh ke `app/not-found.tsx` dan 404.
+`.github/workflows/deploy.yml` menjalankan `npm run build` lalu mengunggah `./out`.
+Direktori `out/` **hanya ada** kalau `output: "export"` aktif. Begitu baris itu dibuang
+(§4-E), workflow ini **gagal di setiap push ke `main`**.
 
-Ini berbenturan langsung dengan keputusan di §5.8 yang membangun link dari
-`window.location.origin` — keputusan yang membuat migrasi domain gratis, tapi di Pages
-justru menghasilkan **link mati tanpa peringatan**.
+Alvian menjawab "belum yakin" soal apakah Pages masih dipakai (§8), jadi menghapusnya
+bukan keputusan saya. Yang diambil: **pemicu `push` dibuang, `workflow_dispatch`
+dipertahankan.** Hasilnya workflow tidak pernah gagal sendiri, tidak ada deploy diam-diam
+ke tempat yang tidak dipantau, dan tidak ada yang hilang — kalau suatu saat Pages
+dibutuhkan lagi, keputusannya masih utuh di repo untuk dibahas, bukan sudah terhapus.
 
-Penanganannya: modul Penawaran mendeteksi host yang tidak punya lapisan rewrite
-(`*.github.io`) dan **menyembunyikan tombol salin link**, diganti satu baris
-penjelasan. Gagal terlihat, bukan diam-diam.
-
-**Diputuskan:** workflow dibiarkan (Alvian belum yakin apakah masih dipakai), dan
-penanganan aman di atas dipasang. Membuangnya nanti tidak mengubah apa pun di fitur
-ini, jadi keputusan itu bisa ditunda tanpa biaya.
+Dengan Pages tidak lagi auto-deploy, penanganan "sembunyikan tombol salin link di
+`*.github.io`" dari revisi 1 **tetap dipasang**. Alasannya tidak berubah: `window.location.origin`
+adalah yang membuat migrasi domain gratis, dan di host tanpa route handler ia akan
+menyerahkan link mati. Gagal terlihat lebih murah daripada link mati di WhatsApp klien.
 
 ### 5.11 Test
 
@@ -484,6 +477,13 @@ persis pola `app/lib/review.test.ts`. Kasus yang wajib ada:
 `mytepro` lolos, `my` ditolak, `My-Tepro` ditolak, `a--b` ditolak, UA WhatsApp
 dikenali crawler, UA Chrome Android tidak, `injectMeta` meng-escape `"` dan `<`,
 `injectMeta` pada HTML tanpa `</head>` tidak merusak dokumen.
+
+**Satu verifikasi manual yang wajib, dan tidak boleh diasumsikan:** setelah
+`output: "export"` dibuang, buka link review dan galeri yang sudah ada
+(`/review/<token>`, `/gallery/<slug>`) dan pastikan keduanya masih menampilkan isinya
+lewat `app/not-found.tsx`. Mekanisme itu bergantung pada Next merender boundary
+`not-found` untuk path tak dikenal; kalau ternyata berubah, link yang sudah dikirim ke
+klien mati, dan itu kerusakan yang jauh lebih mahal daripada fitur ini.
 
 ## 6. Keputusan yang saya ambil sendiri
 
