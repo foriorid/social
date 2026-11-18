@@ -3,7 +3,7 @@
 // Penawaran: upload a ready-made HTML quotation and get a link to send to the client.
 // The file is stored as-is in the Storage bucket `quotes` as <slug>.html; /quote/<slug>/ shows it.
 import { useEffect, useState } from "react";
-import { Copy, ExternalLink, FileText, RefreshCw, Trash2, Upload } from "lucide-react";
+import { Copy, ExternalLink, FileText, Pencil, RefreshCw, Trash2, Upload } from "lucide-react";
 import { supabase } from "./lib/cloud";
 import { notify } from "./modules";
 
@@ -56,6 +56,19 @@ export function QuotePage() {
     try { await navigator.clipboard.writeText(linkOf(s)); notify("Link disalin."); } catch { window.prompt("Salin link ini:", linkOf(s)); }
   };
 
+  const rename = async (from: string) => {
+    const typed = window.prompt(`Nama link baru untuk "${from}".\nLink lama tidak akan bisa dibuka lagi.`, from);
+    if (typed === null) return;
+    const to = typed.trim().toLowerCase().replace(/\s+/g, "-");
+    if (to === from) return;
+    if (!isSlug(to)) { notify("Nama link hanya boleh huruf kecil, angka, dan tanda minus (3–63 karakter)."); return; }
+    if (items?.some(i => i.slug === to)) { notify(`Nama link "${to}" sudah dipakai. Pakai nama lain.`); return; }
+    const { error } = await supabase.storage.from(BUCKET).move(`${from}.html`, `${to}.html`);
+    if (error) { notify(`Gagal mengubah link: ${error.message}`); return; }
+    notify(`Link diubah jadi ${linkOf(to)}`);
+    load();
+  };
+
   const remove = async (s: string) => {
     if (!window.confirm(`Hapus penawaran "${s}"? Link-nya tidak akan bisa dibuka lagi.`)) return;
     const { error } = await supabase.storage.from(BUCKET).remove([`${s}.html`]);
@@ -85,6 +98,7 @@ export function QuotePage() {
           <div className="qt-info"><b>{i.slug}</b><small>{linkOf(i.slug)}</small><small>{[when(i.updated), i.size ? sizeText(i.size) : ""].filter(Boolean).join(" · ")}</small></div>
           <div className="qt-actions">
             {!noServer && <button title="Salin link" onClick={() => copy(i.slug)}><Copy size={16} /> Salin link</button>}
+            <button title="Ubah link" onClick={() => rename(i.slug)}><Pencil size={16} /> Ubah link</button>
             <a title="Buka" href={linkOf(i.slug)} target="_blank" rel="noreferrer"><ExternalLink size={16} /></a>
             <button title="Hapus" onClick={() => remove(i.slug)}><Trash2 size={16} /></button>
           </div>
