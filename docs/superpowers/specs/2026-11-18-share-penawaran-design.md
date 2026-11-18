@@ -211,6 +211,8 @@ create table public.quotes (
   workspace_id uuid not null references public.workspaces (id) on delete cascade,
   title text not null check (length(title) between 1 and 200),
   client_name text check (length(client_name) <= 120),
+  -- "Option 1" / "Option 2": satu klien bisa menerima beberapa opsi sekaligus.
+  option_label text check (length(option_label) <= 40),
   html text not null check (length(html) <= 2000000),
   og_title text, og_description text, og_image text,
   revoked boolean not null default false,
@@ -228,7 +230,13 @@ create table public.quote_opens (
   ua text, referer text
 );
 create index quote_opens_slug_at on public.quote_opens (slug, at desc);
+create index quotes_ws_client on public.quotes (workspace_id, lower(client_name));
 ```
+
+**Beberapa opsi per klien tidak butuh tabel baru.** Pengelompokan dilakukan di UI
+lewat `lower(client_name)`; `option_label` memberi namanya. Tabel `quote_groups`
+tersendiri hanya akan menambah satu join dan satu layar form untuk sesuatu yang
+sudah bisa dijawab satu kolom.
 
 **Catatan slug:** pola `review_links` yang ada (`{6,88}`, minimal 8 karakter) akan
 **menolak** `mytepro` yang cuma 7 karakter. Karena itu pola di sini 3–63 karakter.
@@ -409,7 +417,16 @@ pekerjaan proyek — workspace personal brand tidak punya penawaran):
 - Daftar penawaran: judul, nama klien, slug, tanggal
 - **"Dibuka 3× · terakhir Sel 14:20"**, atau "Belum dibuka" kalau `opens = 0`
 - Tombol salin link, buka di tab baru
-- Form upload: file, slug, nama klien, keterangan OG
+- Form upload: file, slug, nama klien, label opsi ("Option 1"), keterangan OG
+- **Kolom slug bebas diisi**, dengan tombol **"+ akhiran acak"** di sebelahnya yang
+  menambahkan 4 karakter acak (`mytepro` → `mytepro-k7m2`). Tidak otomatis: Alvian
+  memutuskan per penawaran. Di bawahnya satu baris penjelasan singkat kenapa akhiran
+  itu ada, supaya pilihannya sadar dan bukan tebak-tebakan
+- **Dikelompokkan per klien.** Satu klien dengan beberapa opsi tampil sebagai satu
+  blok, opsi-opsinya berjajar di dalamnya dengan angka "dibuka" masing-masing
+  **berdampingan** — jadi terlihat opsi mana yang paling sering dilihat klien. Ini
+  justru nilai utama dari hitungan buka saat ada beberapa opsi: bukan sekadar
+  "sudah dibaca", tapi "yang mana yang dia timbang"
 - Ganti file (slug tetap), nonaktifkan (`revoked`), hapus
 - Dipakai kembali: kelas `.module-page`, `.panel`, `.primary-button`
 
@@ -452,8 +469,9 @@ Penanganannya: modul Penawaran mendeteksi host yang tidak punya lapisan rewrite
 (`*.github.io`) dan **menyembunyikan tombol salin link**, diganti satu baris
 penjelasan. Gagal terlihat, bukan diam-diam.
 
-Apakah Pages memang masih dipakai adalah pertanyaan untuk Alvian (§8) — kalau tidak,
-workflow-nya sebaiknya dibuang sekalian dan penanganan ini jadi tidak perlu.
+**Diputuskan:** workflow dibiarkan (Alvian belum yakin apakah masih dipakai), dan
+penanganan aman di atas dipasang. Membuangnya nanti tidak mengubah apa pun di fitur
+ini, jadi keputusan itu bisa ditunda tanpa biaya.
 
 ### 5.11 Test
 
@@ -503,6 +521,12 @@ Ditandai supaya mudah dibantah:
 14. **Pipeline upload memperingatkan** kalau menemukan host subresource di luar
     allowlist CSP (§5.7) — gagal berisik.
 15. **Modul menyembunyikan tombol salin link di `*.github.io`** (§5.10).
+16. **Beberapa opsi per klien tanpa tabel baru** (§5.3): dikelompokkan lewat
+    `lower(client_name)` + kolom `option_label`. Tabel tersendiri hanya menambah join
+    dan satu layar form untuk sesuatu yang bisa dijawab satu kolom.
+17. **Tombol "+ akhiran acak" tidak otomatis** (§5.8). Alvian memilih bebas per
+    penawaran, jadi memaksakan akhiran akan melawan jawabannya — tapi penjelasan satu
+    baris tetap ditampilkan supaya pilihannya sadar.
 
 ## 7. Yang diserahkan ke pembangun
 
@@ -511,19 +535,15 @@ Ditandai supaya mudah dibantah:
 - Apakah daftar riwayat buka perlu paginasi (volumenya kecil, kemungkinan tidak)
 - Nama file migrasi (timestamp) dan urutan commit di dalam PR
 
-## 8. Pertanyaan terbuka — hanya Alvian yang bisa menjawab
+## 8. Pertanyaan yang sudah dijawab Alvian
 
-Ketiganya memengaruhi apa yang dibangun, dan semuanya murah dijawab sekarang,
-mahal nanti.
+Ketiganya dijawab pada 2026-11-18, sebelum implementasi dimulai.
 
-1. **Slug pendek vs slug yang tidak bisa ditebak.** `mytepro` cantik tapi mudah
-   ditebak, sementara isinya daftar harga per klien. Kompetitor atau klien lain bisa
-   mencoba `/quote/<nama-proyek>/` dan menemukan penawaran yang bukan untuknya.
-   Pilihan: (a) persis seperti diminta, `/quote/mytepro/`; (b) tetap terbaca tapi
-   tidak bisa ditebak, `/quote/mytepro-k7m2/` — ini pola yang sudah dipakai
-   `review_links`; (c) bebas pilih per penawaran.
-2. **Apakah satu klien dapat beberapa penawaran sekaligus?** Judul file contoh
-   berbunyi "Quotation **Option 1**". Kalau Option 2 dan 3 juga dikirim, itu
-   mengubah skema slug dan cara daftar dikelompokkan di dashboard.
-3. **Apakah GitHub Pages masih dipakai?** (§5.10) Kalau tidak, workflow-nya dibuang
-   dan satu penanganan khusus jadi tidak perlu.
+1. **Bentuk slug → bebas pilih per penawaran.** Kolom slug bebas diisi, plus tombol
+   "+ akhiran acak" yang tidak otomatis. Alvian menilai sendiri per kasus: klien lama
+   boleh slug bersih, penawaran sensitif pakai akhiran. Lihat §5.8.
+2. **Beberapa opsi per klien → ya.** "Option 1/2/3" memang dikirim ke klien yang sama.
+   Berakibat pada §5.3 (kolom `option_label`, index pengelompokan) dan §5.8 (daftar
+   dikelompokkan per klien, angka buka berdampingan antar opsi).
+3. **GitHub Pages → belum yakin, biarkan.** Workflow tetap, penanganan aman dipasang.
+   Lihat §5.10.
