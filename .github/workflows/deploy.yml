@@ -1,8 +1,9 @@
 name: Deploy FORIOR Creator OS to GitHub Pages
 
+# Manual only. `out/` is produced only by `output: "export"`, which Hub dropped so that
+# /quote/<slug> can be served by a route handler. Left in place rather than deleted:
+# whether GitHub Pages is still wanted is an open question, and this keeps it askable.
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
 
 permissions:

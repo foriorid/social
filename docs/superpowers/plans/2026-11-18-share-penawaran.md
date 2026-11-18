@@ -4,7 +4,9 @@
 
 **Goal:** Upload a self-made standalone HTML quotation from the Hub dashboard and share it as `hub.forior.id/quote/<slug>/`, with a server-side count of how many times the client opened it.
 
-**Architecture:** A `vercel.json` rewrite proxies `/quote/:slug` to a public Supabase Edge Function. The function reads the quote's HTML from Postgres, injects OG tags, records non-crawler opens, and returns `text/html` 200 under a script-free CSP. Base64 images are stripped out in the browser at upload time and stored in a public Storage bucket, so the served HTML stays ~37 KB and can be sent uncached.
+**Architecture:** Hub serves the page itself. `output: "export"` is dropped and a Next route handler at `app/quote/[slug]/route.ts` returns the stored HTML with injected OG tags, its own script-free CSP, and `no-store`. The Supabase Edge Function becomes a JSON API behind a shared secret: it owns DB access and open-counting. Base64 images are stripped out in the browser at upload time into a public Storage bucket — proven to serve `image/jpeg` with immutable caching — so the served HTML stays ~37 KB and can be sent uncached.
+
+**Revision 2.** The original architecture (Vercel rewrite → Supabase function serving HTML) was proven impossible in the Task 1 spike; see spec §4-A for the evidence. Tasks 1 and 4 are rewritten; Tasks 2, 3, 5 and 6 are unchanged.
 
 **Tech Stack:** Next.js 15 static export (`output: "export"`), React 19, Supabase (Postgres + Edge Functions on Deno + Storage), Vercel, `node --test` with Node type-stripping.
 
@@ -13,14 +15,17 @@
 ## Global Constraints
 
 - Public URL shape: `https<host>/quote/<slug>/` **with** trailing slash; links are built from `window.location.origin`, never a hardcoded domain (spec §5.1, §5.8).
+- No `vercel.json` and no rewrite. The page is a Next route handler (spec §5.1).
+- The HTML document is never served from `*.supabase.co` — Supabase neutralises it. Images are, and that is verified (spec §4-A).
 - Slug pattern, exactly: `^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$` and no `--`. 3–63 chars. `mytepro` must pass; `my`, `My-Tepro`, `a--b` must fail (spec §5.3).
 - HTML response headers, exactly: `Cache-Control: no-store`, `Content-Type: text/html; charset=utf-8`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow`, and the CSP in spec §5.7 verbatim (no `script-src` directive at all).
 - Only `GET` and `HEAD` are served; anything else → 405 (spec §5.4).
+- The edge function requires header `X-Quote-Key`; Hub sends it from a Vercel env var. Both hold the same secret, which never appears in the repo or in chat (spec §5.4).
 - Owner/Admin only, for read *and* write, via `public.has_workspace_role(workspace_id, 'admin')` (spec §6.2).
 - Image Storage path: `<workspace_id>/<slug>/<upload_id>/<n>.<ext>`; OG image at `<workspace_id>/<slug>/<upload_id>/og.jpg` (spec §5.2).
 - UI copy is Indonesian; code comments are English (repo convention).
 - No new runtime dependency may be added to `package.json`.
-- Two PRs: Task 1 ships and is verified in production alone; Tasks 2–6 ship together (spec §5.1).
+- Two PRs: Task 1 ships and is verified alone; Tasks 2–6 ship together. Task 1 is now verifiable on a preview deployment, so it no longer needs a production merge to prove itself.
 
 ## Review Focus
 
@@ -34,75 +39,65 @@ Five things the spec implies, that a reasonable person would hit, and that no ta
 
 ---
 
-### Task 1: Routing spike — prove the rewrite works in production (PR-1)
+### Task 1: Foundation — Hub serves the page, and nothing existing breaks (PR-1)
 
-This task is its own pull request and must be verified live before Tasks 2–6 begin.
-`/quote/*` returns 404 today, so nothing in production can regress.
+Its own pull request. The risk here is **not** the new route; it is the hosting-mode
+change underneath every existing page. The deliverable is proof that nothing regressed.
 
 **Files:**
-- Create: `vercel.json`
-- Create: `supabase/functions/quote/index.ts` (temporary: fixed HTML, no database)
+- Modify: `next.config.ts` (remove `output: "export"`)
+- Delete: `vercel.json` (committed during the failed spike; no rewrite is needed now)
+- Modify: `.github/workflows/deploy.yml` (drop the `push` trigger, keep `workflow_dispatch`)
+- Create: `app/quote/[slug]/route.ts` (temporary: fixed HTML, no database)
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: a working `/quote/:slug` → edge function route, and the knowledge of whether `trailingSlash` interferes.
+- Produces: a real `GET /quote/<slug>/` route whose headers are entirely ours.
 
-- [ ] **Step 1: Write `vercel.json`**
+- [ ] **Step 1: Drop `output: "export"` and delete `vercel.json`**
 
-```json
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
-    { "source": "/quote/:slug",  "destination": "https://ojfezodyjvlzexxqbgak.supabase.co/functions/v1/quote/:slug" },
-    { "source": "/quote/:slug/", "destination": "https://ojfezodyjvlzexxqbgak.supabase.co/functions/v1/quote/:slug" }
-  ],
-  "headers": [
-    { "source": "/quote/:path*", "headers": [{ "key": "x-vercel-enable-rewrite-caching", "value": "0" }] }
-  ]
-}
-```
+Keep `trailingSlash: true` and the `basePath` line as they are.
 
-- [ ] **Step 2: Write the temporary probe function**
+- [ ] **Step 2: Stop GitHub Pages from auto-deploying**
 
-`supabase/functions/quote/index.ts` — `Deno.serve` returning status 200,
-`Content-Type: text/html; charset=utf-8`, `Cache-Control: no-store`, and a body
-containing the literal string `QUOTE_PROBE_OK` plus the slug it parsed from
-`new URL(req.url).pathname`.
+Remove the `on: push` trigger, keep `workflow_dispatch`. With `out/` no longer produced,
+that workflow would fail on every merge to `main` (spec §5.10). Nothing is deleted.
 
-- [ ] **Step 3: Deploy the function with `verify_jwt` off**
+- [ ] **Step 3: Write the temporary route handler**
 
-Deploy `quote` to project `ojfezodyjvlzexxqbgak`. It must be callable with **no**
-`apikey` and **no** `Authorization` header — the Vercel rewrite sends neither
-(spec §5.1). Confirm by calling the function's own Supabase URL with no headers.
-Expected: 200 and `QUOTE_PROBE_OK`.
+`app/quote/[slug]/route.ts`, exporting `GET`. Returns status 200, a body containing the
+literal `QUOTE_PROBE_OK` and the slug from the route params, and these headers:
+`Content-Type: text/html; charset=utf-8`, `Cache-Control: no-store`, and the CSP from
+spec §5.7 verbatim.
 
-- [ ] **Step 4: Commit and open PR-1 to `main`**
+- [ ] **Step 4: Build locally and verify the build mode changed**
+
+Run: `npm run build`
+Expected: succeeds, and `out/` is NOT produced (static export is off). `npm test` still passes.
+
+- [ ] **Step 5: Commit and push**
 
 ```bash
-git add vercel.json supabase/functions/quote/index.ts
-git commit -m "Spike: route /quote/<slug> ke Supabase Edge Function"
+git add next.config.ts .github/workflows/deploy.yml app/quote
+git rm vercel.json
+git commit -m "Hub menyajikan /quote sendiri: lepas static export"
 ```
 
-- [ ] **Step 5: Merge PR-1 (merge commit, not squash) and wait for the Vercel deploy to go READY**
+- [ ] **Step 6: Verify on the preview deployment — this is the gate**
 
-- [ ] **Step 6: Verify live — this is the gate**
-
-Check all four, on `hub.forior.id` (the only public surface; previews are SSO-locked):
+Fetch each with Vercel's authenticated fetch (previews are SSO-locked):
 
 | Request | Expected |
 |---|---|
-| `GET /quote/__probe/` | 200, body has `QUOTE_PROBE_OK`, slug parsed as `__probe` |
-| `GET /quote/__probe` | reaches the function (directly, or after one 308 to the trailing-slash form) |
-| same request twice | `x-vercel-cache` is `MISS` or `BYPASS` both times, never `HIT` |
-| response headers | `cache-control: no-store` survives the proxy |
+| `/quote/zz-probe/` | 200, `content-type: text/html; charset=utf-8`, our CSP, `cache-control: no-store`, body has `QUOTE_PROBE_OK` and slug `zz-probe` |
+| `/review/zz-nonexistent-token/` | still reaches `app/not-found.tsx` and renders the review view client-side, exactly as before |
+| `/gallery/zz-nonexistent-slug/` | same, for the gallery view |
+| `/` | the dashboard still loads |
 
-- [ ] **Step 7: If the gate fails, stop and revert PR-1**
+- [ ] **Step 7: If an existing route regressed, stop**
 
-Do **not** fall back to the iframe approach (spec §4 B) without saying so. Next
-options in order: `/q/:slug`, then Vercel route config, then a `quote.forior.id`
-subdomain pointed straight at the function. Report which one and why before continuing.
-
----
+A broken `/review/<token>` kills links already sent to clients — far more expensive than
+this feature. Revert and report rather than carrying on.
 
 ### Task 2: Pure logic module and its tests
 
@@ -289,78 +284,79 @@ git commit -m "Penawaran: tabel quotes + quote_opens, RLS admin-only, bucket quo
 
 ---
 
-### Task 4: The real edge function
+### Task 4: The real route handler and the JSON API behind it
 
 **Files:**
-- Modify: `supabase/functions/quote/index.ts` (replace the Task 1 probe entirely)
+- Modify: `app/quote/[slug]/route.ts` (replace the Task 1 probe entirely)
+- Modify: `supabase/functions/quote/index.ts` (replace the spike probe entirely)
 
 **Interfaces:**
-- Consumes: `isSlug`, `isCrawler`, `injectMeta`, `escapeAttr`, `QuoteMeta` from `./quote.ts`; tables from Task 3.
-- Produces: the public `GET /quote/<slug>` behaviour.
+- Consumes: `isSlug`, `isCrawler`, `injectMeta`, `escapeAttr`, `QuoteMeta` from `../../../supabase/functions/quote/quote.ts`; tables from Task 3.
+- Produces: the public `GET /quote/<slug>/` behaviour.
 
-Follow `supabase/functions/review/index.ts` for the `postgres` client and error shape.
+- [ ] **Step 1: Create the shared secret in both places**
 
-- [ ] **Step 1: Replace the probe with the real handler**
+A random value, set as a Supabase edge-function secret `QUOTE_API_SECRET` and as a Vercel
+environment variable of the same name on `forior-creator-os` (all environments). It must
+not appear in the repo, in the plan, or in chat.
 
-`Deno.serve`: reject non-`GET`/`HEAD` with 405. Parse the slug from
-`new URL(req.url).pathname`. `!isSlug(slug)` → 404 page. Select
+- [ ] **Step 2: Rewrite the edge function as a JSON API**
+
+`POST` only. Reject unless header `X-Quote-Key` equals `QUOTE_API_SECRET` → 401.
+Body `{ slug, count, ua, referer }`. `!isSlug(slug)` → 404. Select
 `title, client_name, option_label, html, og_title, og_description, og_image`
-from `public.quotes where slug = $1 and not revoked`; no row → 404 page.
+from `public.quotes where slug = $1 and not revoked`; no row → 404.
+When `count` is true, `update public.quotes set opens = opens + 1, last_opened_at = now()`
+and `insert into public.quote_opens (slug, ua, referer)`. A write error is logged and
+must not fail the response. Follow `supabase/functions/review/index.ts` for the client
+and error shape.
 
-Build `og:url` from the `X-Forwarded-Host` header, falling back to `Host`, **not** a
-constant — so it stays correct after the domain migration (spec §5.9).
+- [ ] **Step 3: Rewrite the route handler**
 
-Return `injectMeta(html, meta)` with every header from Global Constraints.
+`GET` and `HEAD` only; else 405. `!isSlug(slug)` → the 404 page from Step 4.
+Call the function with `count` false when `isCrawler(req.headers.get("user-agent"))` or
+the URL carries `preview=1`, true otherwise (spec §5.4). Build `og:url` from
+`X-Forwarded-Host`, falling back to `Host`. Return `injectMeta(html, meta)` with every
+header from Global Constraints.
 
-- [ ] **Step 2: Count the open, unless it should not be counted**
+- [ ] **Step 4: Write the 404 page**
 
-Skip counting when `isCrawler(req.headers.get("user-agent"))` **or** when the URL has
-`preview=1` (spec §5.4). Otherwise `update public.quotes set opens = opens + 1,
-last_opened_at = now()` and `insert into public.quote_opens (slug, ua, referer)`.
-Counting must never fail the response: wrap it so a write error is logged and the
-page is still served.
+A small self-contained Indonesian page, status 404, same security headers: heading
+"Penawaran tidak ditemukan", one line "Periksa kembali tautannya, atau hubungi FORIOR."
 
-- [ ] **Step 3: Write the 404 page**
+- [ ] **Step 5: Deploy the function, push, and seed one row by hand**
 
-A small self-contained Indonesian HTML page, status 404, same security headers:
-heading "Penawaran tidak ditemukan", one line "Periksa kembali tautannya, atau
-hubungi FORIOR." No Hub branding assets (it is served script-free and standalone).
+Insert a row with slug `zz-probe2`, a tiny HTML body, `og_image` null.
 
-- [ ] **Step 4: Deploy the function**
-
-- [ ] **Step 5: Seed one real quote row by hand and verify end to end**
-
-Insert a row with slug `__probe2`, a tiny HTML body, `og_image` null. Then on
-`hub.forior.id`:
+- [ ] **Step 6: Verify end to end on the preview deployment**
 
 | Check | Expected |
 |---|---|
-| `GET /quote/__probe2/` | 200, body is the seeded HTML with OG tags injected |
-| response CSP header | present, and contains no `script-src` |
+| `/quote/zz-probe2/` | 200, body is the seeded HTML with OG tags injected |
+| `content-type` | `text/html; charset=utf-8` — ours, not `text/plain` |
+| CSP header | present, ours, contains no `script-src` |
 | `opens` after that GET | 1 |
-| `GET` with `User-Agent: WhatsApp/2.23` | 200 and OG tags present, `opens` still 1 |
-| `GET /quote/__probe2/?preview=1` | 200, `opens` still 1 |
-| `POST /quote/__probe2/` | 405 |
+| `User-Agent: WhatsApp/2.23` | 200 with OG tags, `opens` still 1 |
+| `/quote/zz-probe2/?preview=1` | 200, `opens` still 1 |
+| `POST /quote/zz-probe2/` | 405 |
+| function called without `X-Quote-Key` | 401 |
 
-- [ ] **Step 6: Verify the no-image case**
+- [ ] **Step 7: Verify the no-image case** (Review Focus 2)
 
-The `__probe2` row has `og_image` null: confirm the response has `og:title` but no
-`og:image`, and the page renders. (Review Focus 2.)
+`zz-probe2` has `og_image` null: the response has `og:title` but no `og:image`, and the
+page renders.
 
-- [ ] **Step 7: Verify revoked and unknown slugs**
+- [ ] **Step 8: Verify revoked and unknown slugs** (Review Focus 5)
 
-`update public.quotes set revoked = true where slug = '__probe2'` → `GET /quote/__probe2/`
-and `GET /quote/__probe2/?preview=1` both return the 404 page, and
-`GET /quote/does-not-exist/` likewise. (Review Focus 5.) Then delete both probe rows.
+`revoked = true` → both `/quote/zz-probe2/` and `?preview=1` give the 404 page, and
+`/quote/does-not-exist/` likewise. Then delete the probe row.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add supabase/functions/quote/index.ts
-git commit -m "Penawaran: edge function publik — sajikan HTML, sisipkan OG, hitung buka"
+git add app/quote supabase/functions/quote/index.ts
+git commit -m "Penawaran: route handler menyajikan halaman, function jadi API JSON"
 ```
-
----
 
 ### Task 5: Browser-side upload pipeline
 
