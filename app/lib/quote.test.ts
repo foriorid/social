@@ -47,8 +47,8 @@ test("public snapshot drops the brief; page escapes text, keeps only https image
 });
 
 test("parseBrief reads fenced JSON into price-less sections", () => {
-  const d = parseBrief('Berikut:\n```json\n{"points":["3 show unit"],"questions":["Izin lokasi?"],"title":"Show Units","sections":[{"title":"Show Unit","layout":"cards","items":[{"name":"1BR","qty":"8","unit":"foto","tag":"1BR"}]},{"title":"X","layout":"weird","items":[]}]}\n```');
-  assert.deepEqual(d.points, ["3 show unit"]);
+  const d = parseBrief('Berikut:\n```json\n{"points":["3 show unit"],"questions":["Izin lokasi?"],"client":"Andrew — MytePro","title":"Show Units","sections":[{"title":"Show Unit","layout":"cards","items":[{"name":"1BR","qty":"8","unit":"foto","tag":"1BR"}]},{"title":"X","layout":"weird","items":[]}]}\n```');
+  assert.deepEqual(d.points, ["3 show unit"]); assert.equal(d.client, "Andrew — MytePro");
   assert.equal(d.sections[0].items[0].qty, 8);
   assert.equal(d.sections[0].items[0].price, 0);
   assert.equal(d.sections[1].layout, "cards");

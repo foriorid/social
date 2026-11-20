@@ -3183,3 +3183,5 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 @media (max-width:800px) { .qb-bottom { bottom:calc(64px + env(safe-area-inset-bottom)); } .qb-fab { bottom:calc(84px + env(safe-area-inset-bottom)); } body:has(.qb-bottom) .x-toast { bottom:calc(150px + env(safe-area-inset-bottom)); } }
 @media (min-width:801px) { body:has(.qb-bottom) .x-toast { bottom:100px; } }
+.qb-editor textarea.qb-chat { min-height:150px; font-size:14px; line-height:1.5; }
+.qb-asknote { background:#fbf4e2; border-color:#efdfb4; } .qb-asknote ul { margin:0; padding-left:18px; display:grid; gap:4px; font-size:13px; color:#6d5214; }
