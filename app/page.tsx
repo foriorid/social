@@ -22,8 +22,8 @@ import { AuditView, LegacyAudit } from "./research";
 import { auditPrompt, parseAudit, stageOf, type Audit } from "./lib/flow";
 import { PublicCampaignPage, usePlan, type CampaignData } from "./plan-data";
 import { AgentsPage, useAgentRunner } from "./agents";
-import { activeWorkspace, signOut, startCloud, switchWorkspace } from "./lib/cloud";
-import { GateLoading, LoginScreen, NoWorkspaceScreen, SetPasswordScreen } from "./login";
+import { activeWorkspace, pendingInvite, signOut, startCloud, switchWorkspace } from "./lib/cloud";
+import { AcceptInviteScreen, GateLoading, LoginScreen, NoWorkspaceScreen, SetPasswordScreen } from "./login";
 import { AssetLibraryPage } from "./assets";
 import { ContentPlanPage } from "./plan";
 import { AutoDmPage } from "./autodm";
@@ -606,12 +606,15 @@ function AppShell() {
 export default function DashboardPage() {
   const [cloud] = useCloud();
   const [publicCampaign, setPublicCampaign] = useState<CampaignData | null>(null);
+  const [invite, setInvite] = useState(false);
   useEffect(() => {
     const token = window.location.hash.startsWith("#share=") ? window.location.hash.slice(7) : "";
     if (token) { try { const data = JSON.parse(decodeURIComponent(escape(atob(token)))); if (data && data.name && Array.isArray(data.items)) { setPublicCampaign(data); return; } } catch { /* not a share link */ } }
+    if (pendingInvite()) { setInvite(true); return; }
     startCloud();
   }, []);
   if (publicCampaign) return <PublicCampaignPage data={publicCampaign} />;
+  if (invite) return <AcceptInviteScreen onDone={() => { setInvite(false); startCloud(); }} />;
   if (!cloud.ready) return <GateLoading />;
   if (!cloud.email) return <LoginScreen />;
   if (cloud.mustSetPassword) return <SetPasswordScreen email={cloud.email} />;

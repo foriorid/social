@@ -1,8 +1,8 @@
 "use client";
 
 // Settings › Anggota tim: invite people to the business workspace, change roles, remove members.
-// Invites produce a sign-in link that is shared by copy or WhatsApp (no email service needed);
-// the link lands on "Buat kata sandi", then the person is inside the workspace.
+// Invites produce a hub.forior.id/?invite=… link shared by copy or WhatsApp (no email service needed);
+// the link shows "Terima undangan", then "Buat kata sandi", then the person is inside the workspace.
 import { useCallback, useEffect, useState } from "react";
 import { Copy, Link2, Loader2, MessageCircle, UserPlus, Users, X } from "lucide-react";
 import { activeWorkspace, callServer, switchWorkspace, type Role } from "./lib/cloud";
