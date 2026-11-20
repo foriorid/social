@@ -83,3 +83,15 @@ test("per-section pricing: one package price, item prices ignored and hidden", (
   assert.ok(html.includes("Harga paket A — 30 foto") && html.includes("Rp 18.000.000") && !html.includes("Rp 999") && !html.includes("Dikonfirmasi kemudian"));
   assert.ok(renderQuoteHtml({ ...q, sections: [{ ...q.sections[0], price: null }] }).includes("Dikonfirmasi kemudian"));
 });
+
+test("info-only sections: no price anywhere, no letter, out of totals; package price shows in the section header", () => {
+  const q = { ...newQuote(), operational: [], sections: [
+    { id: "v", title: "Video", layout: "media" as const, pricing: "section" as const, price: 6_500_000, items: [{ id: "1", name: "Per villa", qty: 6, unit: "video", price: 0 }] },
+    { id: "d", title: "Deliverables", layout: "list" as const, pricing: "none" as const, items: [{ id: "2", name: "File high-res", price: 0 }] }] };
+  const html = renderQuoteHtml(q);
+  assert.equal(totals(q).grand, 6_500_000);
+  assert.ok(html.includes('class="sec-price">Rp 6.500.000<small>Harga paket</small>'));
+  assert.ok(html.includes("Termasuk paket"));
+  assert.ok(!html.includes("Harga paket B") && !html.includes("Rp 0") && !html.includes("Deliverables (B)"));
+  assert.deepEqual(stats(q).map(s => s.label), ["Video"]);
+});
