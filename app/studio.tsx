@@ -9,7 +9,7 @@ import { askAI } from "./lib/ai";
 import { STAGES, guidebookName, isVideo, stageOf, toSrt, videoGuidebook } from "./lib/flow";
 import { parseLines } from "./lib/logic";
 import { addApproval, useSettings, useStored, useTasks } from "./lib/store";
-import { AiButton, AiError, notify, useAI } from "./modules";
+import { AiButton, AiError, BackButton, notify, useAI } from "./modules";
 import { patchItem, usePlan, type AssetRef, type CampaignContent, type CampaignData, type Scene } from "./plan-data";
 import { ImageTile, SAMPLE_PHOTOS } from "./ui";
 import { SlideCanvas, TEMPLATES, brandOf, normalizeLook, renderPng, type Look } from "./slide";
@@ -133,7 +133,7 @@ export function StudioPage({ target, onOpenPlan, embedded }: { target: { campaig
   const uploadUrl = folders[0] ? `https://drive.google.com/drive/folders/${folders[0].id}` : "https://drive.google.com/drive/my-drive";
 
   return <div className={`module-page f-page st-page ${embedded ? "st-embedded" : ""}`}>
-    {!embedded && <button className="cx-crumbs st-back" onClick={() => setMode("board")}><ChevronLeft size={16} /> Antrian produksi</button>}
+    {!embedded && <BackButton label="Antrian produksi" onClick={() => setMode("board")} />}
     {!embedded && <section className="panel st-top">
       <label>Campaign</label>{campaignButton}
       <label>Konten</label>

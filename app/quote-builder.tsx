@@ -8,7 +8,8 @@ import { createPortal } from "react-dom";
 import { ArrowLeft, Check, Copy, Eye, MoreHorizontal, Pencil, Search, FileText, Image as ImageIcon, Link2, Loader2, MessageCircle, Plus, RefreshCw, Sparkles, Trash2, Upload, X, ChevronDown, ChevronUp, CopyPlus, ExternalLink, Send, Undo2 } from "lucide-react";
 import { supabase } from "./lib/cloud";
 import { useStored } from "./lib/store";
-import { notify } from "./modules";
+import { useDetail } from "./lib/hashnav";
+import { BackButton, notify } from "./modules";
 import { askAIDocs, AiSetupError, CHEAP_MODEL, type AiDoc } from "./lib/ai";
 import { docxText } from "./lib/docx";
 import { isSlug, newQuote, parseBrief, publicSnapshot, renderQuoteHtml, rid, shortIdr, slugify, idr, totals, type PortfolioItem, type QItem, type QLayout, type QRow, type QSection, type Quote, type QuoteAnswer } from "./lib/quote";
@@ -96,7 +97,7 @@ Aturan:
 // ---------- list ----------
 export function QuoteBuilder() {
   const [quotes, setQuotes] = useStored<Quote[]>("quotes", []);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useDetail("Penawaran");
   const [opens, setOpens] = useState<Opens>({});
   const [answers, setAnswers] = useState<Answers>({});
   const [menu, setMenu] = useState<string | null>(null);
@@ -165,8 +166,8 @@ function QuoteEditor({ quote: q, opens, answers, onChange, onBack, onDuplicate, 
   const dirty = isDirty(q);
 
   return <div className="qb-editor">
+    <BackButton label="Penawaran" onClick={onBack} />
     <div className="qb-head">
-      <button className="qb-icon" onClick={onBack} aria-label="Kembali ke daftar"><ArrowLeft size={18} /></button>
       <div className="qb-title"><b>{q.title || "Penawaran baru"}</b><small>{q.client.name || "Klien belum diisi"}{q.publishedAt ? (dirty ? " · ada perubahan belum dikirim" : " · terkirim") : " · draft"}</small></div>
       {dirty && <button className="primary-button qb-upd" disabled={updating} onClick={async () => { setUpdating(true); await onUpdate(); setUpdating(false); }}>{updating ? <Loader2 size={15} className="lg-spin" /> : <RefreshCw size={15} />}<span>Perbarui link</span></button>}
       <button className="qb-icon qb-only-mobile" onClick={() => setPreview(true)} aria-label="Pratinjau"><Eye size={18} /></button>

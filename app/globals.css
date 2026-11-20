@@ -2385,9 +2385,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .page-heading:has(.dl-top) > :not(.dl-top) { display:none; }
 .dl-top { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
 .dl-top-main { min-width:0; }
-.dl-crumb { display:flex; align-items:center; gap:6px; font-size:13.5px; color:#82788f; flex-wrap:wrap; }
-.dl-crumb button { border:0; background:none; padding:0; color:#82788f; font:inherit; cursor:pointer; } .dl-crumb button:hover { color:var(--purple); text-decoration:underline; }
-.dl-crumb b { color:#4a4060; font-weight:600; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .dl-top h1 { margin:4px 0 8px; font-family:Manrope,sans-serif; font-size:32px; line-height:1.15; letter-spacing:-1px; font-weight:800; overflow-wrap:anywhere; }
 .dl-top-chips { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px; }
 .dl-top-chips .dl-phase { gap:4px; }
@@ -2469,7 +2466,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (max-width:1180px) { .dl-layout { grid-template-columns:minmax(0,1fr); } .dl-side { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); } }
 @media (max-width:760px) {
   .dl-top h1 { font-size:24px; margin-bottom:6px; } .dl-top-actions { padding-top:0; width:100%; } .dl-top-actions > .outline-button, .dl-top-actions > a { flex:1; justify-content:center; font-size:13px; padding:0 8px; }
-  .dl-crumb { font-size:12.5px; } .dl-crumb b { max-width:140px; }
   .dl-detail .dl-phase-panel { padding:14px; } .dl-tracker small { font-size:10.5px; } .dl-flags small { margin-left:0; width:100%; }
   .dl-main { padding:0 14px 16px; } .dl-tabs { margin:0 -14px 14px; padding:0 8px; } .dl-tabs button { padding:14px 10px 12px; font-size:13.5px; }
   .dl-gcontrols { width:100%; } .dl-gcontrols .dl-seg:first-child { width:100%; overflow-x:auto; } .dl-sort { flex:1; } .dl-gcontrols .dropdown-wrap { flex:1; } .dl-add { width:100%; justify-content:center; }
@@ -2734,9 +2730,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 /* detail */
 .cx-detail { display:flex; flex-direction:column; gap:14px; }
-.cx-crumbs { display:flex; align-items:center; gap:8px; color:#8a80a0; font-size:13px; flex-wrap:wrap; }
-.cx-crumbs button { display:inline-flex; align-items:center; gap:6px; border:0; background:none; color:#4b3f5e; font-weight:700; cursor:pointer; padding:4px 0; font-size:13px; }
-.cx-crumbs span:last-child { color:var(--ink); font-weight:700; }
 .cx-dhead { display:grid; grid-template-columns:132px minmax(0,1fr) auto; gap:18px; align-items:center; }
 .cx-dthumb { width:132px; height:96px; border-radius:14px; }
 .cx-dtitle { display:flex; flex-direction:column; gap:6px; min-width:0; }
@@ -2982,9 +2975,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .dl-linkbox button::after { content:"Salin"; }
 .dl-linkbox button:hover { background:#e7dcfb !important; }
 @media (max-width:700px) {
-  .dl-crumb > span, .dl-crumb > svg, .dl-crumb > b { display:none; }
-  .dl-crumb > button { display:inline-flex; align-items:center; gap:4px; font-size:13px; }
-  .dl-crumb > button::before { content:"‹"; font-size:18px; line-height:1; }
   .dl-top h1 { font-size:26px; line-height:1.15; margin:2px 0 8px; }
   .dl-top-chips { gap:6px; } .dl-top-chips .dl-chip, .dl-top-chips .dl-phase { font-size:12px; padding:3px 9px; } .dl-due { flex-basis:100%; font-size:12.5px; }
   .dl-top-actions { display:grid; grid-template-columns:44px repeat(3,minmax(0,1fr)); gap:6px; margin-top:10px; }
@@ -3007,7 +2997,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sk-lib-bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px; } .sk-lib-bar select { border:1px solid #e1d8f0; border-radius:10px; padding:8px 10px; font:inherit; }
 .sk-tags { margin-bottom:12px; }
 .f-thumb { position:relative; } .sk-used { position:absolute; left:6px; bottom:6px; font-style:normal; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:999px; background:rgba(124,77,226,.92); color:#fff; }
-.st-back { margin:0 0 10px; border:0; background:none; cursor:pointer; }
 .pb { display:flex; flex-direction:column; gap:14px; }
 .pb-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; } .pb-bar select { min-height:44px; border:1px solid #ddd0f2; border-radius:12px; padding:0 12px; font:inherit; font-size:14px; background:#fff; }
 .pb-lanes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; align-items:start; }
@@ -3307,3 +3296,15 @@ body:has(.qb-pick) .qb-bottom, body:has(.qb-pick) .qb-fab { display:none; } .qb-
 .sx-page .sx-num .sx-rp input { font-size:18px; font-weight:800; width:100%; padding:4px 0; border:0; box-shadow:none; background:none; }
 .sx-modes button, .sx-two > * { min-width:0; }
 .app-shell .module-page .sx-num .sx-rp input { font-size:18px !important; }
+
+/* Back control shared by every detail view */
+.back-btn { display:inline-flex; align-items:center; gap:8px; min-height:40px; padding:0 14px 0 10px; margin:0 0 12px; border:1px solid #e6e0ef; border-radius:999px; background:#fff; color:var(--ink); font:inherit; font-size:14px; font-weight:600; cursor:pointer; box-shadow:0 1px 2px rgba(42,27,71,.05); }
+.back-btn:hover { border-color:var(--purple); color:var(--purple); }
+.back-btn:focus-visible { outline:2px solid var(--purple); outline-offset:2px; }
+.back-btn span { white-space:nowrap; }
+.back-btn { justify-self:start; align-self:flex-start; width:fit-content; }
+/* The gallery "more" menu sits on the left of its row, so open it rightwards (it was cut off on phones) */
+.dl-top-actions .dl-menu { left:0; right:auto; } .dl-menu button { justify-content:flex-start; }
+/* Drive sub-folder headings inside the admin photo grid */
+.dl-psec { grid-column:1/-1; margin:10px 0 0; font-size:13px; font-weight:700; color:#4a4060; display:flex; gap:8px; align-items:baseline; }
+.dl-psec small { font-weight:500; color:var(--muted); }

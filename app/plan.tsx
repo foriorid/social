@@ -9,7 +9,7 @@ import { enqueue, enqueueCampaign } from "./agents";
 import { KIND_LABEL, PIPELINE, STAGES, clock, dateOf, isVideo, monthGrid, nextStep, sceneTimes, secOf, stageKey, stageOf, type Stage } from "./lib/flow";
 import { addApproval, useIdeas, useStored, useTasks, writeStored, type Task } from "./lib/store";
 import { goalsOf } from "./plan-data";
-import { notify, useAiReady } from "./modules";
+import { BackButton, notify, useAiReady } from "./modules";
 import { campaignHtml, defaultKind, patchCampaign, patchItem, storyboardHtml, usePlan, type CampaignContent, type CampaignData, type CampaignKind, type Scene } from "./plan-data";
 import { BrandKitCard, BrandKitModal } from "./brandkit";
 import { CLIENT_LABEL, ClientFeedback, ReviewPanel, clientStatusOf, useReviewLink } from "./review";
@@ -109,7 +109,7 @@ function ContentDetail({ campaign, item, onBack, onOpenStudio }: { campaign: Cam
   };
 
   return <div className="cx-detail">
-    <nav className="cx-crumbs"><button onClick={onBack}><ArrowLeft size={16} /> Content Plan</button><ChevronRight size={14} /><span>{campaign.account}</span><ChevronRight size={14} /><span>{campaign.name}</span></nav>
+    <BackButton label="Content Plan" onClick={onBack} />
     <header className="panel cx-dhead">
       <ImageTile kind={thumbOf(item, campaign)} className="cx-dthumb" />
       <div className="cx-dtitle">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, Eye, EyeOff, FileText, Loader2, MessageCircle, Plus, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Copy, Eye, EyeOff, FileText, Loader2, MessageCircle, Plus, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { askAI, CHEAP_MODEL, type Tier } from "./lib/ai";
 import { costIdr, monthKey, rupiah } from "./lib/logic";
 import { parseLines } from "./lib/logic";
@@ -205,3 +205,8 @@ export async function runAgentTask(agent: { name: string; group: string }, task:
 }
 
 export const notify = (message: string) => writeStored<string>("toast", message, "");
+
+/** The one back control every detail view uses: arrow + where it leads, same place and size on every page. */
+export function BackButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return <button type="button" className="back-btn" onClick={onClick}><ArrowLeft size={17} /><span>{label}</span></button>;
+}
