@@ -293,11 +293,18 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
         <span className="qb-sec-p">{shortIdr(tot.sections.find(x => x.id === s.id)?.subtotal ?? 0)}</span>{open === s.id ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
       </button>
       {open === s.id && <div className="qb-sec-body">
+        <div className="qb-sec-tools">
+          <button className="qb-icon" aria-label="Naikkan seksi" onClick={() => move(s.id, -1)}><ChevronUp size={16} /></button>
+          <button className="qb-icon" aria-label="Turunkan seksi" onClick={() => move(s.id, 1)}><ChevronDown size={16} /></button>
+          <button className="outline-button x-danger" onClick={() => { if (window.confirm(`Hapus seksi "${s.title || "tanpa judul"}" beserta ${s.items.length} item di dalamnya?`)) set({ sections: q.sections.filter(x => x.id !== s.id) }); }}><Trash2 size={14} /> Hapus seksi</button>
+        </div>
         <div className="qb-grid">
           <F label="Judul seksi" wide><input value={s.title} onChange={e => setSection(s.id, { title: e.target.value })} /></F>
           <F label="Keterangan" wide><input value={s.subtitle ?? ""} onChange={e => setSection(s.id, { subtitle: e.target.value })} placeholder="24 foto · 8 foto per unit" /></F>
           <F label="Tampilan"><select value={s.layout} onChange={e => setSection(s.id, { layout: e.target.value as QLayout })}><option value="cards">Kartu foto (unit/ruangan)</option><option value="list">Daftar kategori</option><option value="media">Video / drone</option></select></F>
           <F label="Masuk total?"><select value={s.optional ? "1" : "0"} onChange={e => setSection(s.id, { optional: e.target.value === "1" })}><option value="0">Ya</option><option value="1">Tidak — add-on opsional</option></select></F>
+          <F label="Harga"><select value={s.pricing ?? "item"} onChange={e => setSection(s.id, { pricing: e.target.value as QSection["pricing"], ...(e.target.value === "section" && s.price === undefined ? { price: s.items.reduce((a, i) => a + (i.price ?? 0), 0) || null } : {}) })}><option value="item">Per item</option><option value="section">Per seksi (harga paket)</option></select></F>
+          {s.pricing === "section" && <F label="Harga paket seksi ini"><Price value={s.price ?? null} onChange={price => setSection(s.id, { price })} /></F>}
         </div>
         {s.items.map(i => <div className="qb-item" key={i.id}>
           <Slot quoteId={q.id} value={i.image} onChange={image => setItem(s.id, i.id, { image })} />
@@ -307,7 +314,7 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
             <div className="qb-row3">
               <input aria-label="Jumlah" type="number" min={0} value={i.qty ?? ""} onChange={e => setItem(s.id, i.id, { qty: e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)) })} placeholder="Jml" />
               <input aria-label="Satuan" value={i.unit ?? ""} onChange={e => setItem(s.id, i.id, { unit: e.target.value })} placeholder="foto" list="qb-units" />
-              <Price value={i.price} onChange={price => setItem(s.id, i.id, { price })} />
+              {s.pricing === "section" ? <span className="qb-inpkg">Termasuk paket</span> : <Price value={i.price} onChange={price => setItem(s.id, i.id, { price })} />}
             </div>
             {<textarea aria-label="Poin detail" rows={s.layout === "media" ? 3 : 2} value={(i.lines ?? []).join("\n")} onChange={e => setItem(s.id, i.id, { lines: e.target.value.split("\n").map(l => l.trimStart()).slice(0, 8) })} placeholder={s.layout === "media" ? "Detail scene, satu per baris\nFasad & arrival\nPemandangan gunung" : "Poin/sorotan (opsional), satu per baris\nPrivate jacuzzi"} />}
           </div>
@@ -315,9 +322,6 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
         </div>)}
         <div className="qb-actions">
           <button className="outline-button" onClick={() => setSection(s.id, { items: [...s.items, { id: rid(), name: "", qty: s.items.at(-1)?.qty, unit: s.items.at(-1)?.unit ?? "foto", price: 0 }] })}><Plus size={14} /> Item</button>
-          <button className="qb-icon" aria-label="Naikkan seksi" onClick={() => move(s.id, -1)}><ChevronUp size={16} /></button>
-          <button className="qb-icon" aria-label="Turunkan seksi" onClick={() => move(s.id, 1)}><ChevronDown size={16} /></button>
-          <button className="qb-icon qb-del" aria-label="Hapus seksi" onClick={() => { if (window.confirm(`Hapus seksi "${s.title}"?`)) set({ sections: q.sections.filter(x => x.id !== s.id) }); }}><Trash2 size={15} /></button>
         </div>
       </div>}
     </div>)}
