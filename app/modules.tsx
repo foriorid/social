@@ -64,7 +64,7 @@ export function ApprovalList({ limit, empty = "Tidak ada yang menunggu persetuju
   </article>)}</div>;
 }
 
-const MODELS = [["claude-haiku-5-5", "Claude Haiku 5.5 — termurah"], ["claude-sonnet-5-5", "Claude Sonnet 5.5 — seimbang"], ["claude-opus-5-5", "Claude Opus 5.5 — kualitas tertinggi"]];
+export const MODELS = [["claude-haiku-5-5", "Claude Haiku 5.5 — termurah"], ["claude-sonnet-5-5", "Claude Sonnet 5.5 — seimbang"], ["claude-opus-5-5", "Claude Opus 5.5 — kualitas tertinggi"]];
 
 export const useCloud = () => useStored<Cloud>("cloud", CLOUD_OFF);
 /** AI can run when the signed-in user has a key on the server, or a key is kept in this browser. */
@@ -79,7 +79,7 @@ export function AccountPanel() {
 }
 
 /** A key field: saved encrypted on the server when signed in, otherwise kept in this browser. */
-function KeyField({ id, label, hint, placeholder, server, local, setLocal }: { id: string; label: string; hint: React.ReactNode; placeholder: string; server: "anthropic" | "google" | "meta_token" | "ig_user_id" | "meta_app_secret" | "google_client_id" | "google_client_secret"; local: string; setLocal: (v: string) => void }) {
+export function KeyField({ id, label, hint, placeholder, server, local, setLocal }: { id: string; label: string; hint: React.ReactNode; placeholder: string; server: "anthropic" | "google" | "meta_token" | "ig_user_id" | "meta_app_secret" | "google_client_id" | "google_client_secret"; local: string; setLocal: (v: string) => void }) {
   const [cloud] = useCloud();
   const [draft, setDraft] = useState(""), [show, setShow] = useState(false);
   const ai = useAI();
@@ -98,7 +98,7 @@ function KeyField({ id, label, hint, placeholder, server, local, setLocal }: { i
 }
 
 /** Typical tokens per trigger (input, output) measured on short Indonesian drafts; used for the estimate column. */
-const TRIGGERS: [string, string, "light" | "creative", number, number][] = [
+export const TRIGGERS: [string, string, "light" | "creative", number, number][] = [
   ["Judul campaign", "Buat campaign / Susun ulang judul (30 judul)", "creative", 450, 1300],
   ["Brief lengkap siap review", "Jalankan agen per konten (brief + storyboard + caption + jadwal)", "creative", 550, 900],
   ["Paket produksi", "Studio → Paket produksi (bila diminta)", "light", 650, 650],
