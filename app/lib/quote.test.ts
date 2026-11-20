@@ -64,3 +64,14 @@ test("parseBrief also reads requests, notes, operational (no price) and terms", 
   const html = renderQuoteHtml({ ...newQuote(), sections: d.sections });
   assert.ok(html.includes("<li>Private jacuzzi</li>") && !html.includes("<li></li>"));
 });
+
+test("portfolio cards link out; questions become a form (disabled in preview, thank-you after sending)", () => {
+  const q = { ...newQuote(), portfolio: [{ id: "p", title: "Wemori Villa", location: "Bandung", image: "https://x/img.jpg", url: "https://showcase.forior.id/p/wemori-villa" }], questions: [{ id: "1", text: "Tanggal shooting?" }, { id: "2", text: "  " }] };
+  const html = renderQuoteHtml(q);
+  assert.ok(html.includes('href="https://showcase.forior.id/p/wemori-villa"') && html.includes("Wemori Villa"));
+  assert.ok(html.includes('method="post"') && html.includes('name="a0"') && !html.includes('name="a1"'));
+  assert.ok(renderQuoteHtml(q, { preview: true }).includes("disabled"));
+  const sent = renderQuoteHtml(q, { sent: true });
+  assert.ok(sent.includes("jawaban Anda sudah terkirim") && !sent.includes('method="post"'));
+  assert.ok(!renderQuoteHtml(newQuote()).includes('method="post"'));
+});
