@@ -4,7 +4,7 @@
 // a short loading state, and the message for an account that belongs to no workspace yet.
 import { useState } from "react";
 import { ArrowRight, Eye, EyeOff, Image as ImageIcon, Layers, Loader2, Lock, Mail, Users } from "lucide-react";
-import { sendPasswordReset, setNewPassword, signInWithEmail, signInWithPassword, signOut } from "./lib/cloud";
+import { acceptInvite, sendPasswordReset, setNewPassword, signInWithEmail, signInWithPassword, signOut, skipInvite } from "./lib/cloud";
 
 function Brand() {
   return <div className="lg-brand"><span className="lg-mark" aria-hidden="true"><i /><i /></span><b>FORIOR</b></div>;
@@ -89,6 +89,23 @@ export function SetPasswordScreen({ email }: { email: string | null }) {
       {error && <p className="lg-error" role="alert">{error}</p>}
       <button type="submit" className="lg-submit" disabled={busy}>{busy && <Loader2 size={17} className="lg-spin" />}Simpan &amp; lanjutkan</button>
     </form>
+  </Shell>;
+}
+
+/** Opened from an invite link: nothing is used until the person presses the button (link previews cannot). */
+export function AcceptInviteScreen({ onDone }: { onDone: () => void }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const accept = async () => {
+    setBusy(true); setError("");
+    try { await acceptInvite(); onDone(); } catch (err) { setError(err instanceof Error ? err.message : String(err)); } finally { setBusy(false); }
+  };
+  return <Shell>
+    <div className="lg-card">
+      <div className="lg-head"><h2>Undangan FORIOR Hub</h2><p>Anda diundang bergabung ke FORIOR Hub. Tekan tombol di bawah, lalu buat kata sandi untuk masuk berikutnya.</p></div>
+      {error && <p className="lg-error" role="alert">{error}</p>}
+      <button type="button" className="lg-submit" disabled={busy} onClick={accept} autoFocus>{busy && <Loader2 size={17} className="lg-spin" />}Terima undangan <ArrowRight size={17} aria-hidden="true" /></button>
+      {error && <button type="button" className="lg-link" onClick={() => { skipInvite(); onDone(); }}>Ke halaman masuk</button>}
+    </div>
   </Shell>;
 }
 

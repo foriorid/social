@@ -13,6 +13,24 @@ const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "sb_pub
 // consumes the hash, so the app can ask for a new password before anything else.
 const LINK_TYPE = typeof window === "undefined" ? null : new URLSearchParams(window.location.hash.slice(1)).get("type");
 
+// Invite links from Settings › Anggota tim: "?invite=<token hash>&t=invite|recovery". The token is spent only
+// when the person presses "Terima undangan", so link previews (WhatsApp) cannot use it up.
+const INVITE = typeof window === "undefined" ? null : (() => {
+  const q = new URLSearchParams(window.location.search), hash = q.get("invite"), type = q.get("t");
+  return hash && (type === "invite" || type === "recovery") ? { hash, type } as const : null;
+})();
+let inviteAccepted = false;
+export const pendingInvite = () => (INVITE && !inviteAccepted ? INVITE : null);
+const dropInviteFromUrl = () => window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+export async function acceptInvite() {
+  if (!INVITE) return;
+  const { error } = await supabase.auth.verifyOtp({ token_hash: INVITE.hash, type: INVITE.type });
+  if (error) throw new Error(/expired|invalid|not found/i.test(error.message) ? "Link undangan ini sudah dipakai atau kedaluwarsa. Minta admin FORIOR membuat link baru." : error.message);
+  inviteAccepted = true;
+  dropInviteFromUrl();
+}
+export const skipInvite = () => { dropInviteFromUrl(); };
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
 
 export type Role = "owner" | "admin" | "editor";
@@ -113,7 +131,7 @@ export function startCloud() {
   if (started) return;
   started = true;
   // The cached cloud state may be from an earlier visit: nothing counts until the session is checked again.
-  setCloud({ ready: false, mustSetPassword: LINK_TYPE === "invite" || LINK_TYPE === "recovery" });
+  setCloud({ ready: false, mustSetPassword: inviteAccepted || LINK_TYPE === "invite" || LINK_TYPE === "recovery" });
   supabase.auth.getSession().then(({ data }) => onSession(data.session));
   supabase.auth.onAuthStateChange((event, next) => {
     if (event === "PASSWORD_RECOVERY") setCloud({ mustSetPassword: true });

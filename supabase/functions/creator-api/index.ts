@@ -47,13 +47,17 @@ Deno.serve(async req => {
   if (!member) return fail("forbidden", "Anda bukan anggota workspace ini.", 403);
   const role = String(member.role), kind = String(member.kind);
   const redirectTo = typeof body.redirectTo === "string" && /^https:\/\/[^\s]+$/.test(body.redirectTo) ? body.redirectTo : undefined;
+  /** Invite links open Hub itself, and the token is used only when the person presses "Terima undangan":
+   *  Supabase's own link is spent by the first GET, which WhatsApp's link preview already makes. */
+  const hubBase = (() => { try { const u = new URL(redirectTo ?? ""); if (u.hostname === "forior.id" || u.hostname.endsWith(".forior.id")) return u.origin; } catch { /* default */ } return "https://hub.forior.id"; })();
   /** A fresh sign-in link that lands on "choose a password": invite for new accounts, recovery once confirmed. */
   const inviteLink = async (email: string) => {
-    const first = await admin.auth.admin.generateLink({ type: "invite", email, options: { redirectTo } });
-    if (!first.error) return { link: first.data.properties.action_link, userId: first.data.user.id };
-    const again = await admin.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo } });
+    const hubLink = (type: string, hash: string) => `${hubBase}/?invite=${encodeURIComponent(hash)}&t=${type}`;
+    const first = await admin.auth.admin.generateLink({ type: "invite", email });
+    if (!first.error) return { link: hubLink("invite", first.data.properties.hashed_token), userId: first.data.user.id };
+    const again = await admin.auth.admin.generateLink({ type: "recovery", email });
     if (again.error) throw new Error(again.error.message);
-    return { link: again.data.properties.action_link, userId: again.data.user.id };
+    return { link: hubLink("recovery", again.data.properties.hashed_token), userId: again.data.user.id };
   };
 
   try {
