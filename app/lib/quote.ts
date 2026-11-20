@@ -200,7 +200,8 @@ img{display:block;max-width:100%}svg.i{width:20px;height:20px;stroke:currentColo
 
 const bullets = (all?: string[]) => { const lines = all?.filter(l => l.trim()); return lines?.length ? `<ul class="pts">${lines.map(l => `<li>${esc(l)}</li>`).join("")}</ul>` : ""; };
 function sectionHtml(s: QSection, letter: string, t: typeof T.id): string {
-  const sub = sectionSubtotal(s), perSection = s.pricing === "section", noPrice = isInfo(s);
+  // A package priced at Rp 0 is a section that has no price yet: never show "Rp 0" to the client.
+  const sub = sectionSubtotal(s), perSection = s.pricing === "section" && s.price !== 0, noPrice = isInfo(s) || (s.pricing === "section" && s.price === 0);
   const qty = (i: QItem) => (i.qty ? `${i.qty} ${esc(i.unit || "")}`.trim() : "");
   const priceOf = (p: number | null) => (noPrice ? "" : perSection ? `<span class="inpkg">${t.inPackage}</span>` : p === null ? `<span class="tbc">${t.tbc}</span>` : p > 0 ? `<span class="price">${idr(p)}</span>` : "");
   const totalQty = s.items.reduce((a, i) => a + (i.qty || 0), 0);
