@@ -90,7 +90,7 @@ test("info-only sections: no price anywhere, no letter, out of totals; package p
     { id: "d", title: "Deliverables", layout: "list" as const, pricing: "none" as const, items: [{ id: "2", name: "File high-res", price: 0 }] }] };
   const html = renderQuoteHtml(q);
   assert.equal(totals(q).grand, 6_500_000);
-  assert.ok(html.includes('class="sec-price">Rp 6.500.000<small>Harga paket</small>'));
+  assert.ok(!html.includes('class="sec-price"') && html.includes("Harga paket A — 6 video"));
   assert.ok(html.includes("Termasuk paket"));
   assert.ok(!html.includes("Harga paket B") && !html.includes("Rp 0") && !html.includes("Deliverables (B)"));
   assert.deepEqual(stats(q).map(s => s.label), ["Video"]);
@@ -100,4 +100,11 @@ test("a package priced at Rp 0 shows no price at all", () => {
   const q = { ...newQuote(), operational: [], sections: [{ id: "d", title: "Deliverables", layout: "list" as const, pricing: "section" as const, price: 0, items: [{ id: "1", name: "File", price: 0 }] }] };
   const html = renderQuoteHtml(q);
   assert.ok(!html.includes("Rp 0<small>") && !html.includes("Harga paket A") && !html.includes("Termasuk paket"));
+});
+
+test("one deliverables block: with an info section the notes block is titled Catatan", () => {
+  const base = { ...newQuote(), operational: [] };
+  assert.ok(renderQuoteHtml(base).includes("Deliverables & Catatan"));
+  const withInfo = renderQuoteHtml({ ...base, sections: [{ id: "d", title: "Deliverables & Hak Penggunaan", layout: "list" as const, pricing: "none" as const, items: [{ id: "1", name: "File", price: 0 }] }] });
+  assert.ok(!withInfo.includes("Deliverables & Catatan") && withInfo.includes("<h2>Catatan</h2>"));
 });
