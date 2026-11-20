@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { Copy, ExternalLink, FileText, Pencil, RefreshCw, Trash2, Upload } from "lucide-react";
 import { supabase } from "./lib/cloud";
 import { notify } from "./modules";
+import { QuoteBuilder } from "./quote-builder";
+import { useStored } from "./lib/store";
 
 const BUCKET = "quotes";
 const SLUG = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
@@ -16,7 +18,7 @@ const sizeText = (n: number) => (n > 1e6 ? (n / 1e6).toFixed(1) + " MB" : Math.m
 
 type Item = { slug: string; updated: string; size: number };
 
-export function QuotePage() {
+function HtmlQuotes() {
   const [items, setItems] = useState<Item[] | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [slug, setSlug] = useState("");
@@ -77,7 +79,7 @@ export function QuotePage() {
     load();
   };
 
-  return <div className="module-page">
+  return <>
     <section className="panel">
       <div className="agent-section-heading"><div><h3>Upload penawaran</h3><p>File HTML ditampilkan apa adanya lewat link. Kirim link-nya ke klien lewat WhatsApp.</p></div></div>
       <div className="qt-form">
@@ -104,5 +106,14 @@ export function QuotePage() {
           </div>
         </li>)}</ul>}
     </section>
+  </>;
+}
+
+/** Penawaran: the builder (quotations made in Hub) and, as before, ready-made HTML files shown as they are. */
+export function QuotePage() {
+  const [mode, setMode] = useStored<"builder" | "html">("quoteMode", "builder");
+  return <div className="module-page qb-page">
+    <div className="qb-seg qb-mode" role="tablist" aria-label="Jenis penawaran"><button role="tab" aria-selected={mode === "builder"} className={mode === "builder" ? "on" : ""} onClick={() => setMode("builder")}><b>Builder</b></button><button role="tab" aria-selected={mode === "html"} className={mode === "html" ? "on" : ""} onClick={() => setMode("html")}><b>Upload HTML</b></button></div>
+    {mode === "builder" ? <QuoteBuilder /> : <HtmlQuotes />}
   </div>;
 }

@@ -39,7 +39,7 @@ type Range = "Last 7 Days" | "Last 30 Days" | "Last 90 Days";
 
 type NavItem = { name: string; icon: typeof Home; label?: string };
 /** Menu per workspace: the personal brand gets social tools; FORIOR adds a Project group above them. */
-function navGroupsFor(kind: "personal" | "business" | undefined): { label: string; items: NavItem[] }[] {
+function navGroupsFor(kind: "personal" | "business" | undefined, role?: string): { label: string; items: NavItem[] }[] {
   const sosmed: NavItem[] = [
     { name: "Research & Insight", icon: Compass },
     { name: "Content Plan", icon: CalendarDays },
@@ -51,7 +51,7 @@ function navGroupsFor(kind: "personal" | "business" | undefined): { label: strin
   ];
   if (kind === "business") return [
     { label: "WORKSPACE", items: [{ name: "Dashboard", icon: Home }] },
-    { label: "PROJECT", items: [{ name: "Photo Delivery", icon: Images }, { name: "Photo Planner", icon: ClipboardList }, { name: "Penawaran", icon: FileText }, { name: "Calendar", icon: CalendarClock, label: "Jadwal Shoot" }, { name: "Inbox & Leads", icon: MessageCircle, label: "Leads & Klien" }] },
+    { label: "PROJECT", items: [{ name: "Photo Delivery", icon: Images }, { name: "Photo Planner", icon: ClipboardList }, ...(role === "editor" ? [] : [{ name: "Penawaran", icon: FileText }]), { name: "Calendar", icon: CalendarClock, label: "Jadwal Shoot" }, { name: "Inbox & Leads", icon: MessageCircle, label: "Leads & Klien" }] },
     { label: "SOSMED", items: sosmed }
   ];
   return [
@@ -319,7 +319,7 @@ function AppShell() {
   const ws = activeWorkspace(cloud);
   const wsLabel = (w: { kind: string }) => (w.kind === "personal" ? "Personal Brand" : "Business");
   const isBiz = ws?.kind === "business";
-  const currentItem = navGroupsFor(ws?.kind).flatMap(g => g.items).find(i => i.name === activeNav);
+  const currentItem = navGroupsFor(ws?.kind, ws?.role).flatMap(g => g.items).find(i => i.name === activeNav);
   // One group open at a time; all closed by default. Opening Project closes Sosmed and vice versa.
   const [navOpen, setNavOpen] = useStored<string>("navOpen", "");
   const toggleGroup = (label: string) => setNavOpen(o => (o === label ? "" : label));
@@ -396,7 +396,7 @@ function AppShell() {
         </div>
 
         <nav className="side-nav">
-          {navGroupsFor(ws?.kind).map((group) => {
+          {navGroupsFor(ws?.kind, ws?.role).map((group) => {
             const open = navOpen === group.label;
             const renderItem = (item: NavItem) => { const Icon = item.icon; return (
               <button key={item.name} className={`nav-item ${activeNav === item.name ? "active" : ""}`} onClick={() => { setActiveNav(item.name); setMobileNav(false); }}>
@@ -477,7 +477,7 @@ function AppShell() {
           </div>
         </header>
 
-        {activeNav !== "Dashboard" && activeNav !== "Research & Insight" && activeNav !== "Content Plan" && activeNav !== "Production Studio" && activeNav !== "Photo Delivery" && activeNav !== "Photo Planner" && activeNav !== "Calendar" && activeNav !== "Feed & Carousel" && activeNav !== "Reels & Video" && activeNav !== "Templates" && activeNav !== "Asset Library" && activeNav !== "AI Agent Team" && activeNav !== "Analytics" && activeNav !== "Asset Library" && activeNav !== "Settings" && activeNav !== "Automation" && activeNav !== "Auto DM" && activeNav !== "Inbox & Leads" && (
+        {activeNav !== "Dashboard" && activeNav !== "Research & Insight" && activeNav !== "Content Plan" && activeNav !== "Production Studio" && activeNav !== "Photo Delivery" && activeNav !== "Photo Planner" && activeNav !== "Calendar" && activeNav !== "Feed & Carousel" && activeNav !== "Reels & Video" && activeNav !== "Templates" && activeNav !== "Asset Library" && activeNav !== "AI Agent Team" && activeNav !== "Analytics" && activeNav !== "Asset Library" && activeNav !== "Settings" && activeNav !== "Automation" && activeNav !== "Auto DM" && activeNav !== "Inbox & Leads" && activeNav !== "Penawaran" && (
           <div className="section-notice">
             <div><b>{activeNav}</b><span>Preview navigasi — modul ini akan dikembangkan pada tahap berikutnya.</span></div>
             <button onClick={() => setActiveNav("Dashboard")}>Kembali ke Dashboard <ArrowRight size={15} /></button>

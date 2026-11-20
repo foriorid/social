@@ -104,3 +104,25 @@ export async function fetchInstagramPosts(username: string): Promise<{ followers
     posts: (discovery.media?.data ?? []).map((m: Record<string, unknown>) => ({ caption: String(m.caption ?? ""), likes: Number(m.like_count ?? 0), comments: Number(m.comments_count ?? 0), type: String(m.media_type ?? ""), date: String(m.timestamp ?? "").slice(0, 10) }))
   };
 }
+
+export type AiDoc = { name: string; kind: "pdf" | "image" | "text"; mediaType: string; data: string };
+/**
+ * Reads client documents (PDF, images, text from Word) with Claude. Server only: the files go through the
+ * creator-api Edge Function. Haiku by default (≈Rp50 for a 6-page PDF); Sonnet when asked for a closer read.
+ */
+export async function askAIDocs({ docs, prompt, model = CHEAP_MODEL, label, maxTokens = 3000 }: { docs: AiDoc[]; prompt: string; model?: string; label: string; maxTokens?: number }): Promise<string> {
+  const settings = getSettings();
+  if (!isSignedIn() || !readCloudKeys().anthropic) throw new AiSetupError("Analisis dokumen butuh API key Anthropic yang tersimpan di server. Buka Settings → AI & Models.");
+  const usage = currentUsage();
+  if (settings.budgetIdr > 0 && usage.idr >= settings.budgetIdr) throw new AiSetupError("Batas biaya AI bulan ini sudah tercapai. Naikkan batas di Settings → AI & Models.");
+  const system = `Kamu membantu ${settings.brandName}, studio fotografi & video interior/properti di Indonesia, menyusun penawaran harga dari dokumen kebutuhan klien. Jawab dalam bahasa Indonesia.`;
+  try {
+    const r = await callServer<{ text: string; stop_reason: string; usage: { input_tokens: number; output_tokens: number } }>("ai", { model, system, prompt, maxTokens, documents: docs });
+    const idr = costIdr(model, r.usage.input_tokens, r.usage.output_tokens, settings.usdToIdr);
+    writeStored<Usage>("usage", { month: monthKey(), inputTokens: usage.inputTokens + r.usage.input_tokens, outputTokens: usage.outputTokens + r.usage.output_tokens, idr: usage.idr + idr, calls: usage.calls + 1 }, EMPTY_USAGE);
+    writeStored<CallLog[]>("usageLog", old => [{ at: new Date().toISOString(), label, model, input: r.usage.input_tokens, output: r.usage.output_tokens, idr }, ...old].slice(0, 150), []);
+    if (r.stop_reason === "refusal") throw new Error("Model menolak permintaan ini. Coba dokumen lain.");
+    if (!r.text) throw new Error("Model tidak mengembalikan teks. Coba lagi.");
+    return r.text;
+  } catch (error) { if (error instanceof ServerSetupError) throw new AiSetupError(error.message); throw error; }
+}
