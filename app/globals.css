@@ -3106,3 +3106,4 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .qt-actions { display:flex; align-items:center; gap:6px; }
 .qt-actions button, .qt-actions a { display:inline-flex; align-items:center; gap:6px; background:none; border:1px solid var(--line, #e5e5e5); border-radius:8px; padding:6px 10px; cursor:pointer; color:inherit; font-size:13px; text-decoration:none; }
 @media (max-width: 640px) { .qt-list li { flex-wrap:wrap; } .qt-actions { width:100%; justify-content:flex-end; } }
+.dl-hint .link-button { background:none; border:0; padding:0; color:#6a3fd0; font:inherit; font-weight:600; text-decoration:underline; cursor:pointer; }

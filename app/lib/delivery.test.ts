@@ -72,3 +72,16 @@ test("fromWorkspace keeps the Workspace document and fills gaps", async () => {
   assert.equal(g.previewPhotos[0].selected, true); assert.deepEqual(g.draftPhotos, []); assert.equal((g as Record<string, unknown>)._id, undefined);
   assert.equal(fromWorkspace({ id: "x", phase: "Weird" }, "x").phase, "Preview");
 });
+
+test("mergeImport keeps Hub notes and picks, adds Workspace notes written after the import", async () => {
+  const { mergeImport } = await import("../../supabase/functions/gallery/delivery.ts");
+  const ph = (id: string, over = {}) => ({ id, name: `${id}.jpg`, section: null, thumbnailUrl: "", url: "", selected: false, rawSelected: false, note: "", ...over });
+  const hub = { ...base(), title: "Hub title", phase: "Client Review" as const, previewPhotos: [ph("a", { note: "hub note", selected: true }), ph("b"), ph("h")], revisions: [{ id: "r1", text: "x", photoNotes: [], status: "Open" as const, createdAt: "" }] };
+  const ws = { ...base(), title: "WS title", phase: "Done" as const, previewPhotos: [ph("a", { note: "ws note", rawSelected: true }), ph("b", { note: "baru dari klien", selected: true }), ph("w")], revisions: [{ id: "r1", text: "x", photoNotes: [], status: "Open" as const, createdAt: "" }, { id: "r2", text: "y", photoNotes: [], status: "Open" as const, createdAt: "" }] };
+  const g = mergeImport(hub, ws, true);
+  assert.deepEqual(g.previewPhotos.map(p => [p.id, p.note, p.selected, p.rawSelected]), [["a", "hub note", true, false], ["b", "baru dari klien", true, false], ["w", "", false, false], ["h", "", false, false]]);
+  assert.equal(g.title, "Hub title"); assert.equal(g.phase, "Client Review");
+  assert.deepEqual(g.revisions.map(r => r.id), ["r1", "r2"]);
+  const fresh = mergeImport(hub, ws, false);
+  assert.equal(fresh.title, "WS title"); assert.equal(fresh.phase, "Done"); assert.equal(fresh.slug, hub.slug);
+});
