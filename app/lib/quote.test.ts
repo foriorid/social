@@ -95,3 +95,9 @@ test("info-only sections: no price anywhere, no letter, out of totals; package p
   assert.ok(!html.includes("Harga paket B") && !html.includes("Rp 0") && !html.includes("Deliverables (B)"));
   assert.deepEqual(stats(q).map(s => s.label), ["Video"]);
 });
+
+test("a package priced at Rp 0 shows no price at all", () => {
+  const q = { ...newQuote(), operational: [], sections: [{ id: "d", title: "Deliverables", layout: "list" as const, pricing: "section" as const, price: 0, items: [{ id: "1", name: "File", price: 0 }] }] };
+  const html = renderQuoteHtml(q);
+  assert.ok(!html.includes("Rp 0<small>") && !html.includes("Harga paket A") && !html.includes("Termasuk paket"));
+});
