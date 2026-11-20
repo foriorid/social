@@ -4,7 +4,9 @@
 
 export type QItem = { id: string; name: string; tag?: string; desc?: string; qty?: number; unit?: string; price: number | null; image?: string; lines?: string[] };
 export type QLayout = "cards" | "list" | "media";
-export type QSection = { id: string; title: string; subtitle?: string; layout: QLayout; optional?: boolean; image?: string; items: QItem[] };
+/** pricing "section": one price for the whole section (a package); item prices are then ignored and hidden. */
+export type QSection = { id: string; title: string; subtitle?: string; layout: QLayout; optional?: boolean; image?: string; items: QItem[]; pricing?: "item" | "section"; price?: number | null };
+export const sectionSubtotal = (s: QSection) => (s.pricing === "section" ? s.price ?? 0 : s.items.reduce((a, i) => a + (i.price ?? 0), 0));
 export type QRow = { id: string; name: string; note?: string; price: number | null };
 export type QNote = { id: string; title: string; text: string };
 export type PortfolioItem = { id: string; title: string; location?: string; category?: string; image?: string; url: string };
@@ -56,7 +58,7 @@ export function newQuote(now = new Date()): Quote {
 
 /** Totals: optional sections (add-ons) and "to be confirmed" prices stay out of the grand total. */
 export function totals(q: Pick<Quote, "sections" | "operational" | "terms">) {
-  const sub = (s: QSection) => s.items.reduce((a, i) => a + (i.price ?? 0), 0);
+  const sub = sectionSubtotal;
   const sections = q.sections.map(s => ({ id: s.id, title: s.title, optional: !!s.optional, subtotal: sub(s) }));
   const services = sections.filter(s => !s.optional).reduce((a, s) => a + s.subtotal, 0);
   const operational = q.operational.reduce((a, r) => a + (r.price ?? 0), 0);
@@ -119,8 +121,8 @@ export function parseBrief(text: string): BriefDraft {
 
 // ---------- Client page ----------
 const T = {
-  id: { prepared: "Disiapkan untuk", location: "Lokasi project", quoteNo: "No.", valid: "Berlaku", days: "hari", subtotal: "Subtotal", optional: "Opsional", tbc: "Dikonfirmasi kemudian", notes: "Deliverables & Catatan", notesSub: "Yang Anda terima dan yang perlu diperhatikan", terms: "Ketentuan", termsSub: "Jadwal, revisi, dan pembayaran", confirm: "Konfirmasi", production: "Produksi", editing: "Editing & Revisi", delivery: "Pengiriman Final", dp: "DP saat konfirmasi", rest: "Sebelum file final dikirim", payment: "Pembayaran", validity: "Masa berlaku", ops: "Biaya Operasional", opsSub: "Estimasi biaya produksi", grand: "Grand total", services: "Subtotal jasa", opsLine: "Biaya operasional", ask: "Tanya via WhatsApp", pdf: "PDF", hello: "Halo FORIOR, saya ingin bertanya tentang penawaran", dpOf: "DP", photos: "foto", portfolio: "Portofolio", portfolioSub: "Contoh project FORIOR yang serupa", viewProject: "Lihat project", allWork: "Lihat semua portofolio", askTitle: "Pertanyaan untuk Anda", askSub: "Jawaban Anda membantu kami menyesuaikan penawaran", yourName: "Nama Anda", send: "Kirim jawaban", sent: "Terima kasih, jawaban Anda sudah terkirim ke FORIOR.", addons: "Opsi tambahan · belum termasuk total" },
-  en: { prepared: "Prepared for", location: "Project location", quoteNo: "Quote No.", valid: "Valid", days: "days", subtotal: "Subtotal", optional: "Optional", tbc: "To be confirmed", notes: "Deliverables & Notes", notesSub: "What to expect and what may affect coverage", terms: "Commercial Terms", termsSub: "Timeline, revisions and payment", confirm: "Confirmation", production: "Production", editing: "Editing & Revisions", delivery: "Final Delivery", dp: "Down payment upon confirmation", rest: "Before final delivery", payment: "Payment terms", validity: "Quotation validity", ops: "Production & Operational Costs", opsSub: "Operational budget estimate", grand: "Grand total", services: "Service subtotal", opsLine: "Operational costs", ask: "Ask on WhatsApp", pdf: "PDF", hello: "Hello FORIOR, I have a question about quotation", dpOf: "DP", photos: "photos", portfolio: "Portfolio", portfolioSub: "Similar FORIOR projects", viewProject: "View project", allWork: "See full portfolio", askTitle: "Questions for you", askSub: "Your answers help us tailor this quotation", yourName: "Your name", send: "Send answers", sent: "Thank you, your answers have been sent to FORIOR.", addons: "Optional add-ons · not included" }
+  id: { prepared: "Disiapkan untuk", location: "Lokasi project", quoteNo: "No.", valid: "Berlaku", days: "hari", subtotal: "Subtotal", optional: "Opsional", tbc: "Dikonfirmasi kemudian", notes: "Deliverables & Catatan", notesSub: "Yang Anda terima dan yang perlu diperhatikan", terms: "Ketentuan", termsSub: "Jadwal, revisi, dan pembayaran", confirm: "Konfirmasi", production: "Produksi", editing: "Editing & Revisi", delivery: "Pengiriman Final", dp: "DP saat konfirmasi", rest: "Sebelum file final dikirim", payment: "Pembayaran", validity: "Masa berlaku", ops: "Biaya Operasional", opsSub: "Estimasi biaya produksi", grand: "Grand total", services: "Subtotal jasa", opsLine: "Biaya operasional", ask: "Tanya via WhatsApp", pdf: "PDF", hello: "Halo FORIOR, saya ingin bertanya tentang penawaran", dpOf: "DP", photos: "foto", package: "Harga paket", portfolio: "Portofolio", portfolioSub: "Contoh project FORIOR yang serupa", viewProject: "Lihat project", allWork: "Lihat semua portofolio", askTitle: "Pertanyaan untuk Anda", askSub: "Jawaban Anda membantu kami menyesuaikan penawaran", yourName: "Nama Anda", send: "Kirim jawaban", sent: "Terima kasih, jawaban Anda sudah terkirim ke FORIOR.", addons: "Opsi tambahan · belum termasuk total" },
+  en: { prepared: "Prepared for", location: "Project location", quoteNo: "Quote No.", valid: "Valid", days: "days", subtotal: "Subtotal", optional: "Optional", tbc: "To be confirmed", notes: "Deliverables & Notes", notesSub: "What to expect and what may affect coverage", terms: "Commercial Terms", termsSub: "Timeline, revisions and payment", confirm: "Confirmation", production: "Production", editing: "Editing & Revisions", delivery: "Final Delivery", dp: "Down payment upon confirmation", rest: "Before final delivery", payment: "Payment terms", validity: "Quotation validity", ops: "Production & Operational Costs", opsSub: "Operational budget estimate", grand: "Grand total", services: "Service subtotal", opsLine: "Operational costs", ask: "Ask on WhatsApp", pdf: "PDF", hello: "Hello FORIOR, I have a question about quotation", dpOf: "DP", photos: "photos", package: "Package price", portfolio: "Portfolio", portfolioSub: "Similar FORIOR projects", viewProject: "View project", allWork: "See full portfolio", askTitle: "Questions for you", askSub: "Your answers help us tailor this quotation", yourName: "Your name", send: "Send answers", sent: "Thank you, your answers have been sent to FORIOR.", addons: "Optional add-ons · not included" }
 };
 export const FORIOR_CONTACT = { website: "www.forior.id", wa: "6281542048268", phone: "0815 4204 8268" };
 /** The one inline script on the client page; its hash goes into the page's CSP. */
@@ -196,9 +198,9 @@ img{display:block;max-width:100%}svg.i{width:20px;height:20px;stroke:currentColo
 
 const bullets = (all?: string[]) => { const lines = all?.filter(l => l.trim()); return lines?.length ? `<ul class="pts">${lines.map(l => `<li>${esc(l)}</li>`).join("")}</ul>` : ""; };
 function sectionHtml(s: QSection, letter: string, t: typeof T.id): string {
-  const sub = s.items.reduce((a, i) => a + (i.price ?? 0), 0);
+  const sub = sectionSubtotal(s), perSection = s.pricing === "section";
   const qty = (i: QItem) => (i.qty ? `${i.qty} ${esc(i.unit || "")}`.trim() : "");
-  const priceOf = (p: number | null) => (p === null ? `<span class="tbc">${t.tbc}</span>` : p > 0 ? `<span class="price">${idr(p)}</span>` : "");
+  const priceOf = (p: number | null) => (perSection ? "" : p === null ? `<span class="tbc">${t.tbc}</span>` : p > 0 ? `<span class="price">${idr(p)}</span>` : "");
   const totalQty = s.items.reduce((a, i) => a + (i.qty || 0), 0);
   const unit = s.items.find(i => i.unit)?.unit ?? "";
   const head = `<div class="sec-head"><div class="sec-num">${esc(letter)}</div><div><h2>${esc(s.title)}${s.optional ? `<span class="pill">${t.optional}</span>` : ""}</h2>${s.subtitle ? `<p>${esc(s.subtitle)}</p>` : ""}</div></div>`;
@@ -210,7 +212,9 @@ function sectionHtml(s: QSection, letter: string, t: typeof T.id): string {
   } else {
     body = `<div class="grid units">${s.items.map(i => `<div class="unit">${ph(i.image, i.name, i.tag ? `<span class="tag">${esc(i.tag)}</span>` : "")}<div class="body"><div><b>${esc(i.name)}</b>${i.desc || qty(i) ? `<small style="display:block">${esc(i.desc || "")}${i.desc && qty(i) ? " · " : ""}${qty(i)}</small>` : ""}${bullets(i.lines)}</div>${priceOf(i.price)}</div></div>`).join("")}</div>`;
   }
-  const bar = sub > 0 && s.items.length > 1 ? `<div class="subbar"><span>${t.subtotal} ${esc(letter)}${totalQty ? ` — ${totalQty} ${esc(unit)}` : ""}</span><b>${idr(sub)}</b></div>` : "";
+  const label = `${perSection ? t.package : t.subtotal} ${esc(letter)}${totalQty ? ` — ${totalQty} ${esc(unit)}` : ""}`;
+  const bar = perSection ? `<div class="subbar"><span>${label}</span><b>${s.price === null || s.price === undefined ? t.tbc : idr(sub)}</b></div>`
+    : sub > 0 && s.items.length > 1 ? `<div class="subbar"><span>${label}</span><b>${idr(sub)}</b></div>` : "";
   return head + body + bar;
 }
 

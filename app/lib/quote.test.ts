@@ -75,3 +75,11 @@ test("portfolio cards link out; questions become a form (disabled in preview, th
   assert.ok(sent.includes("jawaban Anda sudah terkirim") && !sent.includes('method="post"'));
   assert.ok(!renderQuoteHtml(newQuote()).includes('method="post"'));
 });
+
+test("per-section pricing: one package price, item prices ignored and hidden", () => {
+  const q = { ...newQuote(), sections: [{ id: "a", title: "Villa", layout: "cards" as const, pricing: "section" as const, price: 18_000_000, items: [{ id: "1", name: "Palmspring", qty: 15, unit: "foto", price: 999 }, { id: "2", name: "Homewood", qty: 15, unit: "foto", price: null }] }] };
+  assert.equal(totals(q).grand, 18_000_000);
+  const html = renderQuoteHtml(q);
+  assert.ok(html.includes("Harga paket A — 30 foto") && html.includes("Rp 18.000.000") && !html.includes("Rp 999") && !html.includes("Dikonfirmasi kemudian"));
+  assert.ok(renderQuoteHtml({ ...q, sections: [{ ...q.sections[0], price: null }] }).includes("Dikonfirmasi kemudian"));
+});
