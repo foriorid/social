@@ -90,7 +90,21 @@ Deno.serve(async req => {
         try {
           // Hidden reasoning is billed as output; drafting tasks don't need it (Opus can't turn it off).
           const thinking = model.includes("haiku") ? { thinking: { type: "disabled" as const } } : model.includes("sonnet") ? { thinking: { type: "between_tools" as const } } : {};
-          const response = await client.beta.messages.create({ ...fallback, ...thinking, model, max_tokens: maxTokens, output_config: { effort: "low" }, system: String(body.system ?? ""), messages: [{ role: "user", content: String(body.prompt ?? "") }] });
+          // Optional client documents (Penawaran › Brief): PDFs and images as base64, Word files as extracted text.
+          const docs = Array.isArray(body.documents) ? body.documents as Record<string, unknown>[] : [];
+          if (docs.length > 8) return fail("input", "Maksimal 8 dokumen sekali analisis.");
+          if (docs.reduce((a, d) => a + String(d?.data ?? "").length, 0) > 14_000_000) return fail("input", "Total dokumen terlalu besar (maks ±10 MB).");
+          const blocks: unknown[] = [];
+          for (const d of docs) {
+            const name = String(d?.name ?? "dokumen").slice(0, 120), data = String(d?.data ?? ""), media = String(d?.mediaType ?? "");
+            if (d?.kind === "pdf" && media === "application/pdf" && /^[A-Za-z0-9+/=]+$/.test(data)) blocks.push({ type: "document", title: name, source: { type: "base64", media_type: "application/pdf", data } });
+            else if (d?.kind === "image" && /^image\/(jpeg|png|webp|gif)$/.test(media) && /^[A-Za-z0-9+/=]+$/.test(data)) blocks.push({ type: "image", source: { type: "base64", media_type: media, data } });
+            else if (d?.kind === "text" && data.length <= 200_000) blocks.push({ type: "document", title: name, source: { type: "text", media_type: "text/plain", data } });
+            else return fail("input", `Dokumen "${name}" tidak didukung.`);
+          }
+          const content = blocks.length ? [...blocks, { type: "text", text: String(body.prompt ?? "") }] : String(body.prompt ?? "");
+          // deno-lint-ignore no-explicit-any
+          const response = await client.beta.messages.create({ ...fallback, ...thinking, model, max_tokens: maxTokens, output_config: { effort: "low" }, system: String(body.system ?? ""), messages: [{ role: "user", content: content as any }] });
           const text = response.content.map(b => (b.type === "text" ? b.text : "")).join("").trim();
           return json({ text, stop_reason: response.stop_reason, model: response.model, usage: { input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } });
         } catch (e) {
