@@ -33,6 +33,7 @@ import { BusinessDashboard, PhotoPlannerPage } from "./business";
 import { CalendarPage } from "./schedule";
 import { TeamSettings } from "./team";
 import { QuotePage } from "./quote";
+import { greeting } from "./lib/dashboard";
 
 type Platform = "All channels" | "Instagram" | "TikTok" | "YouTube";
 type Range = "Last 7 Days" | "Last 30 Days" | "Last 90 Days";
@@ -433,8 +434,8 @@ function AppShell() {
           <button className="mobile-menu" onClick={() => setMobileNav(true)} aria-label="Open navigation"><Menu size={21} /></button>
           <div className="page-heading" id="page-heading-slot">
             <span>{activeNav === "Dashboard" && !isBiz ? "Good Afternoon," : `WORKSPACE / ${(ws?.name ?? "").toUpperCase()}`}</span>
-            <h1>{activeNav === "Dashboard" ? (isBiz ? "Dashboard" : <>Alvian <span className="wave">👋</span></>) : (currentItem?.label ?? activeNav)}</h1>
-            <p>{isBiz ? (activeNav === "Dashboard" ? "Project berjalan dan ringkasan sosmed FORIOR" : "FORIOR · Business Workspace") : (activeNav === "Dashboard" ? "Personal Brand Content Command Center" : "Personal Brand Content Workspace")}</p>
+            <h1>{activeNav === "Dashboard" ? (isBiz ? greeting(new Date().getHours()) : <>Alvian <span className="wave">👋</span></>) : (currentItem?.label ?? activeNav)}</h1>
+            <p>{isBiz ? (activeNav === "Dashboard" ? new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "FORIOR · Business Workspace") : (activeNav === "Dashboard" ? "Personal Brand Content Command Center" : "Personal Brand Content Workspace")}</p>
           </div>
 
           {(activeNav === "Dashboard" && !isBiz) && <div className="top-filters">
@@ -580,7 +581,7 @@ function AppShell() {
       </section>
 
       <nav className="f-bottomnav" aria-label="Navigasi cepat">
-        {(isBiz ? [["Dashboard","Beranda",Home],["Photo Delivery","Delivery",Images],["Content Plan","Plan",CalendarDays],["Production Studio","Studio",Clapperboard]] : [["Dashboard","Beranda",Home],["Content Plan","Plan",CalendarDays],["Production Studio","Studio",Clapperboard],["AI Agent Team","Agen",Sparkles]]).map(([nav,label,Icon]: any) => <button key={nav} className={activeNav===nav?"active":""} onClick={() => setActiveNav(nav)}><Icon size={20} /><span>{label}</span>{nav==="AI Agent Team" && pendingApprovals>0 && <i>{pendingApprovals}</i>}</button>)}
+        {(isBiz ? [["Dashboard","Beranda",Home],["Photo Delivery","Delivery",Images],ws?.role === "editor" ? ["Content Plan","Plan",CalendarDays] : ["Penawaran","Penawaran",FileText],["Calendar","Jadwal",CalendarClock]] : [["Dashboard","Beranda",Home],["Content Plan","Plan",CalendarDays],["Production Studio","Studio",Clapperboard],["AI Agent Team","Agen",Sparkles]]).map(([nav,label,Icon]: any) => <button key={nav} className={activeNav===nav?"active":""} onClick={() => setActiveNav(nav)}><Icon size={20} /><span>{label}</span>{nav==="AI Agent Team" && pendingApprovals>0 && <i>{pendingApprovals}</i>}</button>)}
         <button onClick={() => setMobileNav(true)}><Menu size={20} /><span>Menu</span></button>
       </nav>
 

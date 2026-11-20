@@ -2,14 +2,17 @@
 
 // FORIOR (business) workspace pages: the project-first dashboard, the Photo Planner slot and Calendar.
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Copy, ExternalLink, Images, Link2, RefreshCw } from "lucide-react";
-import { readCloud, supabase } from "./lib/cloud";
-import { notify } from "./modules";
+import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Copy, ExternalLink, FileText, Images, Link2, Plus, RefreshCw } from "lucide-react";
+import { activeWorkspace, readCloud, supabase } from "./lib/cloud";
+import { notify, useCloud } from "./modules";
 import { stageOf } from "./lib/flow";
-import { useApprovals } from "./lib/store";
+import { useApprovals, useStored } from "./lib/store";
+import { focusItems, mergeAgenda } from "./lib/dashboard";
+import { shortIdr, totals, type Quote } from "./lib/quote";
+import type { CalEvent } from "../supabase/functions/gcal/gcal";
 import { PHASE_CLASS, fmtShoot, nextActionOf } from "./delivery";
 import { usePlan } from "./plan-data";
-import { PHASE_SHORT, newGallery, slugify, uniqueSlug, type Gallery } from "../supabase/functions/gallery/delivery";
+import { PHASE_SHORT, driveThumb, newGallery, slugify, uniqueSlug, type Gallery } from "../supabase/functions/gallery/delivery";
 
 type Row = { id: string; data: Gallery; updated_at: string };
 
@@ -27,38 +30,102 @@ export function BusinessDashboard({ go, openGallery }: { go: (nav: string) => vo
   const { rows, error } = useWorkspaceGalleries();
   const [plan] = usePlan();
   const [approvals] = useApprovals();
+  const [cloud] = useCloud();
+  const isEditor = activeWorkspace(cloud)?.role === "editor";
+  const [quotes] = useStored<Quote[]>("quotes", []);
+  const [events, setEvents] = useState<CalEvent[]>([]);
+  const [qstats, setQstats] = useState<Record<string, { n: number; last: string; answers: number }>>({});
+
+  useEffect(() => {
+    const from = new Date(); from.setHours(0, 0, 0, 0);
+    supabase.functions.invoke("gcal", { body: { action: "events", workspaceId: readCloud().workspaceId, timeMin: from.toISOString(), timeMax: new Date(from.getTime() + 14 * 864e5).toISOString() } })
+      .then(({ data }) => setEvents((data as { events?: CalEvent[] } | null)?.events ?? []), () => { /* no calendar connected: projects only */ });
+  }, []);
+  const published = quotes.filter(q => q.publishedAt && q.slug).map(q => q.slug);
+  const key = published.join(",");
+  useEffect(() => {
+    if (isEditor || !published.length) return;
+    Promise.all([
+      supabase.from("quote_opens").select("slug, at").in("slug", published).order("at", { ascending: false }).limit(2000),
+      supabase.from("quote_answers").select("slug").in("slug", published).limit(500)
+    ]).then(([o, a]) => {
+      const m: Record<string, { n: number; last: string; answers: number }> = {};
+      for (const r of o.data ?? []) { const x = m[r.slug] ?? { n: 0, last: r.at, answers: 0 }; x.n++; m[r.slug] = x; }
+      for (const r of a.data ?? []) { const x = m[r.slug] ?? { n: 0, last: "", answers: 0 }; x.answers++; m[r.slug] = x; }
+      setQstats(m);
+    });
+  }, [key, isEditor]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const list = (rows ?? []).map(r => ({ ...r, next: nextActionOf(r.data) })).sort((a, b) => a.next.rank - b.next.rank);
   const active = list.filter(r => r.data.phase !== "Done");
   const action = list.filter(r => r.next.rank <= 3);
   const openRev = list.reduce((n, r) => n + r.data.revisions.filter(x => x.status === "Open").length, 0);
-  const done = list.filter(r => r.data.phase === "Done").length;
-  const upcoming = upcomingShoots(rows ?? []);
+  const selecting = active.filter(r => r.data.phase === "Client Selection").length;
   const items = plan.campaigns.flatMap(c => c.items);
-  const stage = (s: string) => items.filter(i => stageOf(i.status) === s).length;
-  return <div className="module-page biz-page">
-    <section className="biz-stats">
-      <button className="panel" onClick={() => go("Photo Delivery")}><Images size={18} /><b>{rows ? active.length : "…"}</b><small>Delivery berjalan</small></button>
-      <button className="panel hot" onClick={() => go("Photo Delivery")}><Clock3 size={18} /><b>{rows ? action.length : "…"}</b><small>Butuh tindakan</small></button>
-      <button className="panel" onClick={() => go("Photo Delivery")}><RefreshCw size={18} /><b>{rows ? openRev : "…"}</b><small>Revisi terbuka</small></button>
-      <button className="panel" onClick={() => go("Photo Delivery")}><CheckCircle2 size={18} /><b>{rows ? done : "…"}</b><small>Selesai</small></button>
+  const stage = (st: string) => items.filter(i => stageOf(i.status) === st).length;
+  const now = new Date();
+  const agenda = mergeAgenda(
+    (rows ?? []).filter(r => r.data.shootDate).map(r => ({ key: r.id, start: r.data.shootDate!, title: r.data.title, where: r.data.plan?.propertyType, color: "#6a3fd0", source: "project" as const, galleryId: r.id })),
+    events.map(e => ({ key: e.id, start: e.start, title: e.summary, where: e.location, color: e.color, source: "google" as const, allDay: e.allDay })), now);
+  const week = agenda.filter(a => new Date(a.allDay ? `${a.start}T00:00:00` : a.start).getTime() < now.getTime() + 7 * 864e5);
+  const sentQuotes = quotes.filter(q => q.publishedAt).sort((a, b) => (qstats[b.slug]?.last || b.publishedAt || "").localeCompare(qstats[a.slug]?.last || a.publishedAt || ""));
+  const opened = sentQuotes.filter(q => qstats[q.slug]?.n).length, answered = sentQuotes.filter(q => qstats[q.slug]?.answers).length;
+  const focus = focusItems({ actions: list.map(r => ({ id: r.id, title: r.data.title, text: r.next.text, rank: r.next.rank })), agenda,
+    quotes: isEditor ? [] : sentQuotes.map(q => ({ title: q.client.name || q.title, lastOpen: qstats[q.slug]?.last, answers: qstats[q.slug]?.answers ?? 0 })), now });
+  const thumbOf = (g: Gallery, w = 640) => { const p = g.finalPhotos[0] ?? g.draftPhotos[0] ?? g.previewPhotos.find(x => x.selected) ?? g.previewPhotos[0]; return p ? driveThumb(p.id, w) : ""; };
+  const hero = list.filter(r => r.data.phase === "Done").map(r => thumbOf(r.data, 1400)).find(Boolean) ?? list.map(r => thumbOf(r.data, 1400)).find(Boolean);
+  const dayLabel = (iso: string, allDay?: boolean) => { const d = new Date(allDay ? `${iso}T00:00:00` : iso); return { dow: d.toLocaleDateString("id-ID", { weekday: "short" }), day: d.getDate(), time: allDay ? "Sepanjang hari" : d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) }; };
+  const ago = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 6e4); return m < 60 ? `${Math.max(1, m)} mnt lalu` : m < 1440 ? `${Math.round(m / 60)} jam lalu` : `${Math.round(m / 1440)} hari lalu`; };
+
+  return <div className="module-page bd-page">
+    <section className={`bd-hero${hero ? " photo" : ""}`}>
+      {hero && <img src={hero} alt="" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = "none"; }} />}
+      <div className="bd-hero-t">
+        <small>FOKUS HARI INI</small>
+        <h2>{focus.length ? <>{focus.length} hal butuh <span>perhatian</span></> : <>Create, deliver, <span>grow.</span></>}</h2>
+        <div className="bd-chips">{focus.length ? focus.map((f, k) => <button key={k} className={`bd-chip ${f.tone}`} onClick={() => (f.galleryId ? openGallery(f.galleryId) : go(f.nav))}>{f.tone === "warn" ? <Clock3 size={13} /> : f.tone === "info" ? <CalendarDays size={13} /> : <CheckCircle2 size={13} />}<span>{f.text}</span></button>)
+          : <span className="bd-chip ok"><CheckCircle2 size={13} /><span>Tidak ada yang mendesak. Saatnya cari klien baru.</span></span>}</div>
+        <div className="bd-qa">{!isEditor && <button className="primary-button" onClick={() => go("Penawaran")}><Plus size={15} /> Penawaran baru</button>}<button className="outline-button" onClick={() => go("Calendar")}><Plus size={15} /> Project / shoot</button></div>
+      </div>
     </section>
 
-    <section className="panel biz-card">
-      <div className="biz-head"><h2>Photo Delivery — butuh tindakan</h2><button className="outline-button" onClick={() => go("Photo Delivery")}>Semua galeri <ArrowRight size={15} /></button></div>
-      {error && <p className="x-error">{error}</p>}
-      {!rows ? <p className="x-empty">Memuat galeri…</p> : !list.length ? <p className="x-empty">Belum ada galeri. Buat atau impor di Photo Delivery.</p> :
-        <div className="biz-list">{list.slice(0, 8).map(r => <button key={r.id} className={`biz-row ${r.next.rank <= 1 ? "urgent" : ""}`} onClick={() => openGallery(r.id)}>
-          <b>{r.data.title}</b><em className={`dl-phase ${PHASE_CLASS[r.data.phase]}`}>{PHASE_SHORT[r.data.phase]}</em><span>{r.next.text}</span><ArrowRight size={16} />
-        </button>)}</div>}
+    <section className="bd-kpis">
+      <button className="bd-kpi" onClick={() => go("Photo Delivery")}><span className="ic p"><Images size={18} /></span><span><b>{rows ? active.length : "…"}</b><small>Delivery berjalan</small><em>{selecting ? `${selecting} di tahap pemilihan` : openRev ? `${openRev} revisi terbuka` : "Semua lancar"}</em></span></button>
+      <button className="bd-kpi" onClick={() => go("Photo Delivery")}><span className="ic w"><Clock3 size={18} /></span><span><b>{rows ? action.length : "…"}</b><small>Butuh tindakan</small><em className="w">{action[0] ? action[0].data.title : "Tidak ada"}</em></span></button>
+      {isEditor ? <button className="bd-kpi" onClick={() => go("Photo Delivery")}><span className="ic b"><RefreshCw size={18} /></span><span><b>{rows ? openRev : "…"}</b><small>Revisi terbuka</small><em>{openRev ? "Perlu dikerjakan" : "Aman"}</em></span></button>
+        : <button className="bd-kpi" onClick={() => go("Penawaran")}><span className="ic b"><FileText size={18} /></span><span><b>{sentQuotes.length}</b><small>Penawaran aktif</small><em className="g">{sentQuotes.length ? `${opened} dibuka · ${answered} dijawab` : "Belum ada yang dikirim"}</em></span></button>}
+      <button className="bd-kpi" onClick={() => go("Calendar")}><span className="ic g"><CalendarDays size={18} /></span><span><b>{week.length}</b><small>Shoot 7 hari</small><em>{week[0] ? `Berikutnya ${dayLabel(week[0].start, week[0].allDay).dow}, ${dayLabel(week[0].start, week[0].allDay).day}` : "Belum ada jadwal"}</em></span></button>
     </section>
 
-    <div className="biz-two">
-      <section className="panel biz-card"><div className="biz-head"><h2>Jadwal shoot</h2><button className="outline-button" onClick={() => go("Calendar")}>Semua jadwal <ArrowRight size={15} /></button></div>
-        {upcoming.length ? <div className="biz-list">{upcoming.slice(0, 3).map(r => <button key={r.id} className="biz-row biz-shoot" onClick={() => openGallery(r.id)}><b>{fmtShoot(r.data.shootDate)}</b><span>{r.data.title}</span><ArrowRight size={16} /></button>)}</div>
-          : <p className="x-empty">Belum ada shoot terjadwal. Buat rencana di Photo Planner atau isi jadwal di detail project.</p>}</section>
-      <section className="panel biz-card"><div className="biz-head"><h2>Sosmed FORIOR</h2><button className="outline-button" onClick={() => go("Content Plan")}>Content Plan <ArrowRight size={15} /></button></div>
-        <div className="biz-mini"><span><b>{plan.campaigns.length}</b>campaign</span><span><b>{stage("Draft") + stage("Brief Siap") + stage("Produksi")}</b>dikerjakan</span><span><b>{stage("Review")}</b>review</span><span><b>{approvals.filter(a => a.status === "pending").length}</b>menunggu approval</span></div>
+    <div className="bd-grid">
+      <section className="panel bd-card bd-delivery">
+        <div className="bd-head"><span className="bd-hi"><Images size={18} /></span><div><h3>Photo Delivery</h3><small>Urut dari yang paling butuh tindakan</small></div><button className="bd-link" onClick={() => go("Photo Delivery")}>Semua galeri <ArrowRight size={14} /></button></div>
+        {error && <p className="x-error">{error}</p>}
+        {!rows ? <p className="x-empty">Memuat galeri…</p> : !active.length ? <p className="x-empty">Belum ada delivery berjalan. Buat atau impor di Photo Delivery.</p> :
+          <div className="bd-dl">{active.slice(0, 8).map(r => { const t = thumbOf(r.data); return <button key={r.id} className={`bd-dc${t ? "" : " empty"}`} onClick={() => openGallery(r.id)}>
+            {t ? <img src={t} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = "none"; }} /> : null}
+            <span><b>{r.data.title}</b><small>{r.next.text}</small><em className={`dl-phase ${PHASE_CLASS[r.data.phase]}`}>{PHASE_SHORT[r.data.phase]}</em></span></button>; })}</div>}
       </section>
+
+      <div className="bd-side">
+        <section className="panel bd-card">
+          <div className="bd-head"><div><h3>Jadwal Shoot</h3><small>Project{events.length ? " & Google Calendar" : ""}</small></div><button className="bd-link" onClick={() => go("Calendar")}>Kalender <ArrowRight size={14} /></button></div>
+          {agenda.length ? agenda.slice(0, 4).map(a => { const d = dayLabel(a.start, a.allDay); return <button key={a.key} className="bd-row" onClick={() => (a.galleryId ? openGallery(a.galleryId) : go("Calendar"))}>
+            <span className="bd-date"><small>{d.dow}</small><b>{d.day}</b></span><span className="bd-x"><b>{a.title}</b><small>{[d.time, a.where].filter(Boolean).join(" · ")}</small></span><i style={{ background: a.color }} /></button>; })
+            : <p className="x-empty">Belum ada shoot 2 minggu ke depan.</p>}
+        </section>
+        {!isEditor && <section className="panel bd-card">
+          <div className="bd-head"><div><h3>Penawaran</h3><small>Status terbaru dari klien</small></div><button className="bd-link" onClick={() => go("Penawaran")}>Semua <ArrowRight size={14} /></button></div>
+          {sentQuotes.length ? sentQuotes.slice(0, 3).map(q => { const st = qstats[q.slug]; return <button key={q.id} className="bd-row" onClick={() => go("Penawaran")}>
+            <span className="bd-x"><b>{[q.client.name, q.eyebrow].filter(Boolean).join(" · ") || q.title}</b><small>{st?.n ? `Dibuka ${st.n}× · ${ago(st.last)}` : `Terkirim ${ago(q.publishedAt!)}`}</small></span>
+            {st?.answers ? <em className="bd-st a">{st.answers} jawaban</em> : st?.n ? <em className="bd-st o">Dibuka</em> : <em className="bd-st s">Belum dibuka</em>}<span className="bd-pr">{shortIdr(totals(q).grand)}</span></button>; })
+            : <p className="x-empty">Belum ada penawaran terkirim.</p>}
+        </section>}
+        <section className="panel bd-card">
+          <div className="bd-head"><div><h3>Sosmed FORIOR</h3><small>Content Plan</small></div><button className="bd-link" onClick={() => go("Content Plan")}>Content Plan <ArrowRight size={14} /></button></div>
+          <div className="bd-mini"><span><b>{plan.campaigns.length}</b>campaign</span><span><b>{stage("Draft") + stage("Brief Siap") + stage("Produksi")}</b>dikerjakan</span><span><b>{stage("Review")}</b>review</span><span><b>{approvals.filter(a => a.status === "pending").length}</b>approval</span></div>
+        </section>
+      </div>
     </div>
   </div>;
 }
