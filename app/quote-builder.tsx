@@ -89,7 +89,7 @@ Aturan:
 - layout "cards" untuk unit/villa/ruangan yang difoto, "list" untuk kategori/fasilitas umum/lingkungan, "media" untuk video/drone/film.
 - Yang diminta sebagai "opsi" atau tambahan jadi seksi terpisah dengan "optional": true.
 - Rentang jumlah (mis. 12-18 foto) → qty pakai angka terbesar, rentangnya tulis di desc.
-- Format file, orientasi foto, waktu pemotretan (siang/golden hour/malam), hak penggunaan, dan batasan editing masuk "notes".
+- Format file, orientasi foto, waktu pemotretan (siang/golden hour/malam), hak penggunaan, dan batasan editing masuk "notes", bukan seksi. Kalau tetap perlu seksi berisi info tanpa harga, beri "pricing": "none".
 - Lokasi di luar Jakarta → tambahkan "operational" transportasi & akomodasi.
 - JANGAN menulis harga. Jangan mengarang kebutuhan yang tidak ada di pesan/lampiran.`;
 
@@ -264,7 +264,7 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
   const setSection = (id: string, patch: Partial<QSection>) => set({ sections: q.sections.map(s => (s.id === id ? { ...s, ...patch } : s)) });
   const setItem = (sid: string, iid: string, patch: Partial<QItem>) => set({ sections: q.sections.map(s => (s.id === sid ? { ...s, items: s.items.map(i => (i.id === iid ? { ...i, ...patch } : i)) } : s)) });
   const move = (id: string, d: -1 | 1) => { const i = q.sections.findIndex(s => s.id === id), j = i + d; if (j < 0 || j >= q.sections.length) return; const s = [...q.sections]; [s[i], s[j]] = [s[j], s[i]]; set({ sections: s }); };
-  const letterOf = (() => { let n = 0; const m = new Map<string, string>(); for (const s of q.sections) m.set(s.id, s.optional ? "+" : "ABCDEFGHIJ"[n++] ?? "•"); return m; })();
+  const letterOf = (() => { let n = 0; const m = new Map<string, string>(); for (const s of q.sections) m.set(s.id, s.optional ? "+" : s.pricing === "none" ? "i" : "ABCDEFGHIJ"[n++] ?? "•"); return m; })();
   const tot = totals(q);
   const ask = q.brief?.summary?.questions ?? [], req = q.brief?.summary?.requests ?? [];
   return <>
@@ -291,7 +291,7 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
     {q.sections.map(s => <div className="panel qb-sec" key={s.id}>
       <button className="qb-sec-head" onClick={() => setOpen(open === s.id ? null : s.id)} aria-expanded={open === s.id}>
         <span className="qb-letter">{letterOf.get(s.id)}</span><span className="qb-sec-t"><b>{s.title || "Seksi tanpa judul"}</b><small>{s.items.length} item{s.optional ? " · opsional" : ""}</small></span>
-        <span className="qb-sec-p">{shortIdr(tot.sections.find(x => x.id === s.id)?.subtotal ?? 0)}</span>{open === s.id ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
+        <span className="qb-sec-p">{s.pricing === "none" ? "Tanpa harga" : shortIdr(tot.sections.find(x => x.id === s.id)?.subtotal ?? 0)}</span>{open === s.id ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
       </button>
       {open === s.id && <div className="qb-sec-body">
         <div className="qb-sec-tools">
@@ -302,9 +302,9 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
         <div className="qb-grid">
           <F label="Judul seksi" wide><input value={s.title} onChange={e => setSection(s.id, { title: e.target.value })} /></F>
           <F label="Keterangan" wide><input value={s.subtitle ?? ""} onChange={e => setSection(s.id, { subtitle: e.target.value })} placeholder="24 foto · 8 foto per unit" /></F>
-          <F label="Tampilan"><select value={s.layout} onChange={e => setSection(s.id, { layout: e.target.value as QLayout })}><option value="cards">Kartu foto (unit/ruangan)</option><option value="list">Daftar kategori</option><option value="media">Video / drone</option></select></F>
+          <div className="qb-f wide"><span>Tampilan di halaman klien</span><LayoutPicker value={s.layout} onChange={layout => setSection(s.id, { layout })} /></div>
           <F label="Masuk total?"><select value={s.optional ? "1" : "0"} onChange={e => setSection(s.id, { optional: e.target.value === "1" })}><option value="0">Ya</option><option value="1">Tidak — add-on opsional</option></select></F>
-          <F label="Harga"><select value={s.pricing ?? "item"} onChange={e => setSection(s.id, { pricing: e.target.value as QSection["pricing"], ...(e.target.value === "section" && s.price === undefined ? { price: s.items.reduce((a, i) => a + (i.price ?? 0), 0) || null } : {}) })}><option value="item">Per item</option><option value="section">Per seksi (harga paket)</option></select></F>
+          <F label="Harga"><select value={s.pricing ?? "item"} onChange={e => setSection(s.id, { pricing: e.target.value as QSection["pricing"], ...(e.target.value === "section" && s.price === undefined ? { price: s.items.reduce((a, i) => a + (i.price ?? 0), 0) || null } : {}) })}><option value="item">Per item</option><option value="section">Satu harga (paket)</option><option value="none">Tanpa harga</option></select></F>
           {s.pricing === "section" && <F label="Harga paket seksi ini"><Price value={s.price ?? null} onChange={price => setSection(s.id, { price })} /></F>}
         </div>
         {s.items.map(i => <div className="qb-item" key={i.id}>
@@ -315,7 +315,7 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
             <div className="qb-row3">
               <input aria-label="Jumlah" type="number" min={0} value={i.qty ?? ""} onChange={e => setItem(s.id, i.id, { qty: e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)) })} placeholder="Jml" />
               <input aria-label="Satuan" value={i.unit ?? ""} onChange={e => setItem(s.id, i.id, { unit: e.target.value })} placeholder="foto" list="qb-units" />
-              {s.pricing === "section" ? <span className="qb-inpkg">Termasuk paket</span> : <Price value={i.price} onChange={price => setItem(s.id, i.id, { price })} />}
+              {s.pricing === "none" ? <span className="qb-inpkg">Tanpa harga</span> : s.pricing === "section" ? <span className="qb-inpkg">Termasuk paket</span> : <Price value={i.price} onChange={price => setItem(s.id, i.id, { price })} />}
             </div>
             {<textarea aria-label="Poin detail" rows={s.layout === "media" ? 3 : 2} value={(i.lines ?? []).join("\n")} onChange={e => setItem(s.id, i.id, { lines: e.target.value.split("\n").map(l => l.trimStart()).slice(0, 8) })} placeholder={s.layout === "media" ? "Detail scene, satu per baris\nFasad & arrival\nPemandangan gunung" : "Poin/sorotan (opsional), satu per baris\nPrivate jacuzzi"} />}
           </div>
@@ -373,6 +373,18 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
       <F label="Catatan kaki (opsional)" wide><input value={q.footnote ?? ""} onChange={e => set({ footnote: e.target.value })} placeholder="Ketentuan komersial dapat berubah setelah konfirmasi." /></F>
     </div>
   </>;
+}
+
+/** The three ways a section can look on the client page, each with a small sketch so the choice is obvious. */
+const LAYOUTS: { id: QLayout; name: string; hint: string }[] = [
+  { id: "cards", name: "Kartu foto", hint: "Satu kartu bergambar per item. Untuk villa, kamar, unit, ruangan." },
+  { id: "list", name: "Daftar", hint: "Baris ringkas, satu foto untuk seksi. Untuk kategori, fasilitas, deliverables." },
+  { id: "media", name: "Kartu detail", hint: "Kartu dengan daftar poin/scene. Untuk video, drone, paket layanan." }
+];
+function LayoutPicker({ value, onChange }: { value: QLayout; onChange: (v: QLayout) => void }) {
+  return <div className="qb-layouts" role="radiogroup" aria-label="Tampilan seksi">{LAYOUTS.map(l => <button key={l.id} type="button" role="radio" aria-checked={value === l.id} className={value === l.id ? "on" : ""} onClick={() => onChange(l.id)}>
+    <span className={`qb-sketch ${l.id}`} aria-hidden="true">{l.id === "cards" ? <><i /><i /><i /></> : l.id === "list" ? <><i /><b /><b /><b /></> : <><i /><b /><b /></>}</span>
+    <strong>{l.name}</strong><small>{l.hint}</small></button>)}<p className="qb-layout-hint">{LAYOUTS.find(l => l.id === value)?.hint}</p></div>;
 }
 
 const F = ({ label, wide, children }: { label: string; wide?: boolean; children: React.ReactNode }) => <label className={`qb-f${wide ? " wide" : ""}`}><span>{label}</span>{children}</label>;
@@ -480,15 +492,22 @@ function ShowcasePicker({ quoteId, picked, onDone, onClose }: { quoteId: string;
 // ---------- photo slot ----------
 function Slot({ quoteId, value, onChange, wide }: { quoteId: string; value?: string; onChange: (v?: string) => void; wide?: boolean }) {
   const [menu, setMenu] = useState(false), [busy, setBusy] = useState(false), [gallery, setGallery] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLInputElement>(null), box = useRef<HTMLDivElement>(null);
+  // Close the menu on any tap outside it (on phones the file picker can leave it open otherwise).
+  useEffect(() => {
+    if (!menu) return;
+    const off = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setMenu(false); };
+    document.addEventListener("pointerdown", off);
+    return () => document.removeEventListener("pointerdown", off);
+  }, [menu]);
   const upload = async (f?: File) => { if (!f) return; setBusy(true); setMenu(false); try { onChange(await uploadPhoto(quoteId, f)); } catch (e) { notify(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); } };
-  return <div className={`qb-slot${wide ? " wide" : ""}`}>
+  return <div className={`qb-slot${wide ? " wide" : ""}`} ref={box}>
     <button type="button" className={`qb-slot-btn${value ? "" : " empty"}`} onClick={() => setMenu(m => !m)} aria-label={value ? "Ganti foto" : "Tambah foto"}>
       {busy ? <Loader2 size={18} className="lg-spin" /> : value ? <img src={value} alt="" referrerPolicy="no-referrer" /> : <><ImageIcon size={18} />{wide && <small>Tambah foto cover</small>}</>}
     </button>
     <input ref={input} type="file" accept="image/*" hidden onChange={e => { upload(e.target.files?.[0]); e.target.value = ""; }} />
     {menu && <div className="qb-menu" role="menu">
-      <button role="menuitem" onClick={() => input.current?.click()}><Upload size={15} /> Upload foto</button>
+      <button role="menuitem" onClick={() => { setMenu(false); input.current?.click(); }}><Upload size={15} /> Upload foto</button>
       <button role="menuitem" onClick={() => { setMenu(false); const link = window.prompt("Tempel link Google Drive foto (akses: siapa saja yang punya link)"); if (link) { const u = driveImage(link.trim()); if (u) onChange(u); else notify("Link Drive tidak dikenali."); } }}><Link2 size={15} /> Link Google Drive</button>
       <button role="menuitem" onClick={() => { setMenu(false); setGallery(true); }}><ImageIcon size={15} /> Dari galeri Photo Delivery</button>
       {value && <button role="menuitem" className="x-danger" onClick={() => { setMenu(false); onChange(undefined); }}><Trash2 size={15} /> Hapus foto</button>}

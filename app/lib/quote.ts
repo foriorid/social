@@ -4,9 +4,10 @@
 
 export type QItem = { id: string; name: string; tag?: string; desc?: string; qty?: number; unit?: string; price: number | null; image?: string; lines?: string[] };
 export type QLayout = "cards" | "list" | "media";
-/** pricing "section": one price for the whole section (a package); item prices are then ignored and hidden. */
-export type QSection = { id: string; title: string; subtitle?: string; layout: QLayout; optional?: boolean; image?: string; items: QItem[]; pricing?: "item" | "section"; price?: number | null };
-export const sectionSubtotal = (s: QSection) => (s.pricing === "section" ? s.price ?? 0 : s.items.reduce((a, i) => a + (i.price ?? 0), 0));
+/** pricing "section": one price for the whole section (a package), item prices ignored and hidden; "none": information only (deliverables, terms), no prices at all. */
+export type QSection = { id: string; title: string; subtitle?: string; layout: QLayout; optional?: boolean; image?: string; items: QItem[]; pricing?: "item" | "section" | "none"; price?: number | null };
+export const sectionSubtotal = (s: QSection) => (s.pricing === "none" ? 0 : s.pricing === "section" ? s.price ?? 0 : s.items.reduce((a, i) => a + (i.price ?? 0), 0));
+export const isInfo = (s: QSection) => s.pricing === "none";
 export type QRow = { id: string; name: string; note?: string; price: number | null };
 export type QNote = { id: string; title: string; text: string };
 export type PortfolioItem = { id: string; title: string; location?: string; category?: string; image?: string; url: string };
@@ -59,7 +60,7 @@ export function newQuote(now = new Date()): Quote {
 /** Totals: optional sections (add-ons) and "to be confirmed" prices stay out of the grand total. */
 export function totals(q: Pick<Quote, "sections" | "operational" | "terms">) {
   const sub = sectionSubtotal;
-  const sections = q.sections.map(s => ({ id: s.id, title: s.title, optional: !!s.optional, subtotal: sub(s) }));
+  const sections = q.sections.map(s => ({ id: s.id, title: s.title, optional: !!s.optional, info: isInfo(s), subtotal: sub(s) }));
   const services = sections.filter(s => !s.optional).reduce((a, s) => a + s.subtotal, 0);
   const operational = q.operational.reduce((a, r) => a + (r.price ?? 0), 0);
   const grand = services + operational;
@@ -69,7 +70,7 @@ export function totals(q: Pick<Quote, "sections" | "operational" | "terms">) {
 
 /** Headline numbers for the hero: one per (non-optional) section, summing quantities of its main unit. */
 export function stats(q: Pick<Quote, "sections">): { value: number; unit: string; label: string }[] {
-  return q.sections.filter(s => !s.optional).map(s => {
+  return q.sections.filter(s => !s.optional && !isInfo(s)).map(s => {
     const byUnit = new Map<string, number>();
     for (const i of s.items) if (i.qty && i.qty > 0) byUnit.set(i.unit || "", (byUnit.get(i.unit || "") ?? 0) + i.qty);
     const [unit, value] = [...byUnit.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["", 0];
@@ -109,7 +110,7 @@ export function parseBrief(text: string): BriefDraft {
     sections: arr(raw.sections).slice(0, 8).map((s: Record<string, unknown>) => ({
       id: rid(), title: str(s?.title, 80) || "Seksi", subtitle: str(s?.subtitle, 160),
       layout: layouts.includes(s?.layout as QLayout) ? (s.layout as QLayout) : "cards",
-      optional: s?.optional === true,
+      optional: s?.optional === true, ...(s?.pricing === "none" ? { pricing: "none" as const } : {}),
       items: arr(s?.items).slice(0, 12).map((i: Record<string, unknown>) => ({
         id: rid(), name: str(i?.name, 100) || "Item", tag: str(i?.tag, 12) || undefined, desc: str(i?.desc, 240) || undefined,
         qty: Number.isFinite(Number(i?.qty)) && Number(i?.qty) > 0 ? Math.round(Number(i.qty)) : undefined, unit: str(i?.unit, 20) || undefined,
@@ -121,8 +122,8 @@ export function parseBrief(text: string): BriefDraft {
 
 // ---------- Client page ----------
 const T = {
-  id: { prepared: "Disiapkan untuk", location: "Lokasi project", quoteNo: "No.", valid: "Berlaku", days: "hari", subtotal: "Subtotal", optional: "Opsional", tbc: "Dikonfirmasi kemudian", notes: "Deliverables & Catatan", notesSub: "Yang Anda terima dan yang perlu diperhatikan", terms: "Ketentuan", termsSub: "Jadwal, revisi, dan pembayaran", confirm: "Konfirmasi", production: "Produksi", editing: "Editing & Revisi", delivery: "Pengiriman Final", dp: "DP saat konfirmasi", rest: "Sebelum file final dikirim", payment: "Pembayaran", validity: "Masa berlaku", ops: "Biaya Operasional", opsSub: "Estimasi biaya produksi", grand: "Grand total", services: "Subtotal jasa", opsLine: "Biaya operasional", ask: "Tanya via WhatsApp", pdf: "PDF", hello: "Halo FORIOR, saya ingin bertanya tentang penawaran", dpOf: "DP", photos: "foto", package: "Harga paket", portfolio: "Portofolio", portfolioSub: "Contoh project FORIOR yang serupa", viewProject: "Lihat project", allWork: "Lihat semua portofolio", askTitle: "Pertanyaan untuk Anda", askSub: "Jawaban Anda membantu kami menyesuaikan penawaran", yourName: "Nama Anda", send: "Kirim jawaban", sent: "Terima kasih, jawaban Anda sudah terkirim ke FORIOR.", addons: "Opsi tambahan · belum termasuk total" },
-  en: { prepared: "Prepared for", location: "Project location", quoteNo: "Quote No.", valid: "Valid", days: "days", subtotal: "Subtotal", optional: "Optional", tbc: "To be confirmed", notes: "Deliverables & Notes", notesSub: "What to expect and what may affect coverage", terms: "Commercial Terms", termsSub: "Timeline, revisions and payment", confirm: "Confirmation", production: "Production", editing: "Editing & Revisions", delivery: "Final Delivery", dp: "Down payment upon confirmation", rest: "Before final delivery", payment: "Payment terms", validity: "Quotation validity", ops: "Production & Operational Costs", opsSub: "Operational budget estimate", grand: "Grand total", services: "Service subtotal", opsLine: "Operational costs", ask: "Ask on WhatsApp", pdf: "PDF", hello: "Hello FORIOR, I have a question about quotation", dpOf: "DP", photos: "photos", package: "Package price", portfolio: "Portfolio", portfolioSub: "Similar FORIOR projects", viewProject: "View project", allWork: "See full portfolio", askTitle: "Questions for you", askSub: "Your answers help us tailor this quotation", yourName: "Your name", send: "Send answers", sent: "Thank you, your answers have been sent to FORIOR.", addons: "Optional add-ons · not included" }
+  id: { prepared: "Disiapkan untuk", location: "Lokasi project", quoteNo: "No.", valid: "Berlaku", days: "hari", subtotal: "Subtotal", optional: "Opsional", tbc: "Dikonfirmasi kemudian", notes: "Deliverables & Catatan", notesSub: "Yang Anda terima dan yang perlu diperhatikan", terms: "Ketentuan", termsSub: "Jadwal, revisi, dan pembayaran", confirm: "Konfirmasi", production: "Produksi", editing: "Editing & Revisi", delivery: "Pengiriman Final", dp: "DP saat konfirmasi", rest: "Sebelum file final dikirim", payment: "Pembayaran", validity: "Masa berlaku", ops: "Biaya Operasional", opsSub: "Estimasi biaya produksi", grand: "Grand total", services: "Subtotal jasa", opsLine: "Biaya operasional", ask: "Tanya via WhatsApp", pdf: "PDF", hello: "Halo FORIOR, saya ingin bertanya tentang penawaran", dpOf: "DP", photos: "foto", package: "Harga paket", inPackage: "Termasuk paket", portfolio: "Portofolio", portfolioSub: "Contoh project FORIOR yang serupa", viewProject: "Lihat project", allWork: "Lihat semua portofolio", askTitle: "Pertanyaan untuk Anda", askSub: "Jawaban Anda membantu kami menyesuaikan penawaran", yourName: "Nama Anda", send: "Kirim jawaban", sent: "Terima kasih, jawaban Anda sudah terkirim ke FORIOR.", addons: "Opsi tambahan · belum termasuk total" },
+  en: { prepared: "Prepared for", location: "Project location", quoteNo: "Quote No.", valid: "Valid", days: "days", subtotal: "Subtotal", optional: "Optional", tbc: "To be confirmed", notes: "Deliverables & Notes", notesSub: "What to expect and what may affect coverage", terms: "Commercial Terms", termsSub: "Timeline, revisions and payment", confirm: "Confirmation", production: "Production", editing: "Editing & Revisions", delivery: "Final Delivery", dp: "Down payment upon confirmation", rest: "Before final delivery", payment: "Payment terms", validity: "Quotation validity", ops: "Production & Operational Costs", opsSub: "Operational budget estimate", grand: "Grand total", services: "Service subtotal", opsLine: "Operational costs", ask: "Ask on WhatsApp", pdf: "PDF", hello: "Hello FORIOR, I have a question about quotation", dpOf: "DP", photos: "photos", package: "Package price", inPackage: "Included in package", portfolio: "Portfolio", portfolioSub: "Similar FORIOR projects", viewProject: "View project", allWork: "See full portfolio", askTitle: "Questions for you", askSub: "Your answers help us tailor this quotation", yourName: "Your name", send: "Send answers", sent: "Thank you, your answers have been sent to FORIOR.", addons: "Optional add-ons · not included" }
 };
 export const FORIOR_CONTACT = { website: "www.forior.id", wa: "6281542048268", phone: "0815 4204 8268" };
 /** The one inline script on the client page; its hash goes into the page's CSP. */
@@ -188,6 +189,7 @@ img{display:block;max-width:100%}svg.i{width:20px;height:20px;stroke:currentColo
 .total .opts{position:relative;z-index:1;margin-top:14px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.25)}.total .opts .lbl{color:#d9cff0;margin-bottom:2px}.total .opts .line{border-bottom:0;padding:5px 0;opacity:.9}
 .pf{grid-template-columns:1fr 1fr}.pfc{display:flex;flex-direction:column;background:var(--card);border-radius:16px;overflow:hidden;box-shadow:var(--sh);text-decoration:none;color:inherit}.pfc>.ph{aspect-ratio:4/3}.pfc .body{padding:10px 12px;display:grid;gap:2px}.pfc b{font-size:13px;color:var(--navy);line-height:1.3}.pfc small{font-size:11px;color:var(--muted)}.pfc span{font-size:11.5px;font-weight:700;color:var(--pi);margin-top:4px}.pf-all{margin:10px 2px 0;font-size:13px}.pf-all a{color:var(--pi);font-weight:700;text-decoration:none}
 .ask{display:grid;gap:12px}.ask label{display:grid;gap:6px}.ask span{font-size:13.5px;font-weight:700;color:var(--navy)}.ask textarea,.ask input{width:100%;font:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fafbfc;color:var(--ink)}.ask button{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:13px;padding:13px;background:var(--navy);color:#fff;font:inherit;font-weight:800;font-size:14px;cursor:pointer}.ask button svg.i{width:17px;height:17px}.sent{display:flex;gap:10px;align-items:center;color:#16884a}
+.sec-price{margin-left:auto;text-align:right;font-weight:800;color:var(--navy);font-size:15px;white-space:nowrap;line-height:1.2}.sec-price small{display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}.inpkg{font-size:11px;font-weight:700;color:var(--pi);background:var(--ps);padding:3px 8px;border-radius:999px;white-space:nowrap}
 .footer{margin-top:26px;background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:18px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}.footer .brand{color:var(--navy);font-size:19px}.footer .brand small{color:var(--muted)}.contacts{display:flex;gap:8px;flex-wrap:wrap}.contacts a{display:inline-flex;align-items:center;gap:7px;text-decoration:none;font-size:13px;font-weight:700;color:var(--navy);background:#f3f4f8;padding:9px 12px;border-radius:11px}.contacts svg.i{width:16px;height:16px}
 .fine{font-size:11.5px;color:var(--muted);text-align:center;margin-top:14px}
 .cta{position:fixed;left:0;right:0;bottom:0;z-index:20;padding:10px 14px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(238,240,244,0),#eef0f4 35%);display:flex;gap:8px;justify-content:center}.cta a{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;text-decoration:none;font-weight:800;font-size:13.5px;padding:13px 16px;border-radius:14px;background:#fff;color:var(--navy);box-shadow:0 6px 16px -8px rgba(0,0,0,.3);flex:1;max-width:200px}.cta a.wa{background:#1f9d55;color:#fff;flex:2;max-width:320px}.cta svg.i{width:17px;height:17px}
@@ -198,22 +200,23 @@ img{display:block;max-width:100%}svg.i{width:20px;height:20px;stroke:currentColo
 
 const bullets = (all?: string[]) => { const lines = all?.filter(l => l.trim()); return lines?.length ? `<ul class="pts">${lines.map(l => `<li>${esc(l)}</li>`).join("")}</ul>` : ""; };
 function sectionHtml(s: QSection, letter: string, t: typeof T.id): string {
-  const sub = sectionSubtotal(s), perSection = s.pricing === "section";
+  const sub = sectionSubtotal(s), perSection = s.pricing === "section", noPrice = isInfo(s);
   const qty = (i: QItem) => (i.qty ? `${i.qty} ${esc(i.unit || "")}`.trim() : "");
-  const priceOf = (p: number | null) => (perSection ? "" : p === null ? `<span class="tbc">${t.tbc}</span>` : p > 0 ? `<span class="price">${idr(p)}</span>` : "");
+  const priceOf = (p: number | null) => (noPrice ? "" : perSection ? `<span class="inpkg">${t.inPackage}</span>` : p === null ? `<span class="tbc">${t.tbc}</span>` : p > 0 ? `<span class="price">${idr(p)}</span>` : "");
   const totalQty = s.items.reduce((a, i) => a + (i.qty || 0), 0);
   const unit = s.items.find(i => i.unit)?.unit ?? "";
-  const head = `<div class="sec-head"><div class="sec-num">${esc(letter)}</div><div><h2>${esc(s.title)}${s.optional ? `<span class="pill">${t.optional}</span>` : ""}</h2>${s.subtitle ? `<p>${esc(s.subtitle)}</p>` : ""}</div></div>`;
+  const pkg = perSection ? `<span class="sec-price">${s.price === null || s.price === undefined ? t.tbc : idr(sub)}<small>${t.package}</small></span>` : "";
+  const head = `<div class="sec-head"><div class="sec-num">${noPrice ? ic("check", "width:18px;height:18px") : esc(letter)}</div><div><h2>${esc(s.title)}${s.optional ? `<span class="pill">${t.optional}</span>` : ""}</h2>${s.subtitle ? `<p>${esc(s.subtitle)}</p>` : ""}</div>${pkg}</div>`;
   let body = "";
   if (s.layout === "list") {
     body = `<div class="surr">${url(s.image) || url(s.items[0]?.image) ? ph(s.image || s.items[0]?.image, s.title) : ""}<div class="card">${s.items.map(i => `<div class="cat"><div class="ico">${ic(i.unit && /video|menit|min/i.test(i.unit) ? "film" : "camera")}</div><div class="t"><b>${esc(i.name)}</b>${i.desc ? `<small>${esc(i.desc)}</small>` : ""}${bullets(i.lines)}</div>${qty(i) ? `<span class="qty">${qty(i)}</span>` : ""}${i.price ? `&nbsp;${priceOf(i.price)}` : i.price === null ? `&nbsp;${priceOf(null)}` : ""}</div>`).join("")}</div></div>`;
   } else if (s.layout === "media") {
     body = `<div class="grid media">${s.items.map(i => `<div class="mcard${s.optional ? " opt" : ""}">${url(i.image) ? ph(i.image, i.name, i.tag ? `<span class="tag">${esc(i.tag)}</span>` : "") : ""}<div class="body"><h3>${esc(i.name)}</h3>${i.desc ? `<p class="mdesc">${esc(i.desc)}</p>` : ""}${i.lines?.some(l => l.trim()) ? `<div class="scenes">${i.lines.filter(l => l.trim()).map(l => `<div class="scene">${ic("check")}<span>${esc(l)}</span></div>`).join("")}</div>` : ""}<div class="foot"><small>${qty(i)}</small>${priceOf(i.price)}</div></div></div>`).join("")}</div>`;
   } else {
-    body = `<div class="grid units">${s.items.map(i => `<div class="unit">${ph(i.image, i.name, i.tag ? `<span class="tag">${esc(i.tag)}</span>` : "")}<div class="body"><div><b>${esc(i.name)}</b>${i.desc || qty(i) ? `<small style="display:block">${esc(i.desc || "")}${i.desc && qty(i) ? " · " : ""}${qty(i)}</small>` : ""}${bullets(i.lines)}</div>${priceOf(i.price)}</div></div>`).join("")}</div>`;
+    body = `<div class="grid units">${s.items.map(i => `<div class="unit">${ph(i.image, i.name, i.tag ? `<span class="tag">${esc(i.tag)}</span>` : "")}<div class="body"><div><b>${esc(i.name)}</b>${i.desc || qty(i) ? `<small style="display:block">${esc(i.desc || "")}${i.desc && qty(i) ? " · " : ""}${qty(i)}</small>` : ""}${bullets(i.lines)}</div>${perSection ? "" : priceOf(i.price)}</div></div>`).join("")}</div>`;
   }
   const label = `${perSection ? t.package : t.subtotal} ${esc(letter)}${totalQty ? ` — ${totalQty} ${esc(unit)}` : ""}`;
-  const bar = perSection ? `<div class="subbar"><span>${label}</span><b>${s.price === null || s.price === undefined ? t.tbc : idr(sub)}</b></div>`
+  const bar = noPrice ? "" : perSection ? `<div class="subbar"><span>${label}</span><b>${s.price === null || s.price === undefined ? t.tbc : idr(sub)}</b></div>`
     : sub > 0 && s.items.length > 1 ? `<div class="subbar"><span>${label}</span><b>${idr(sub)}</b></div>` : "";
   return head + body + bar;
 }
@@ -238,9 +241,9 @@ export function renderQuoteHtml(q: Omit<Quote, "brief">, opts: { pageUrl?: strin
   const t = T[q.lang] ?? T.id;
   const tot = totals(q), st = stats(q);
   const letters = "ABCDEFGHIJ";
-  const main = q.sections.filter(s => !s.optional), extra = q.sections.filter(s => s.optional);
-  const letterOf = new Map(main.map((s, i) => [s.id, letters[i] ?? "•"]));
-  const opsLetter = letters[main.length] ?? "•";
+  const main = q.sections.filter(s => !s.optional), extra = q.sections.filter(s => s.optional), priced = main.filter(s => !isInfo(s));
+  const letterOf = new Map(priced.map((s, i) => [s.id, letters[i] ?? "•"]));
+  const opsLetter = letters[priced.length] ?? "•";
   const title = [q.eyebrow, q.title].filter(Boolean).join(" — ") || "Quotation";
   const desc = `${t.prepared} ${q.client.name || "—"} · FORIOR`;
   const waText = encodeURIComponent(`${t.hello} ${q.title}${q.number ? ` (${q.number})` : ""}${opts.pageUrl ? `: ${opts.pageUrl}` : ""}`);
@@ -268,7 +271,7 @@ ${q.notes.length ? `<div class="sec-head"><div class="sec-num">${ic("send", "wid
 ${q.operational.length ? `<div class="sec-head"><div class="sec-num">${esc(opsLetter)}</div><div><h2>${t.ops}</h2><p>${t.opsSub}</p></div></div><div class="card ops">${q.operational.map(r => `<div class="row"><span>${esc(r.name)}${r.note ? `<small>${esc(r.note)}</small>` : ""}</span><span>${r.price === null ? `<span class="tbc">${t.tbc}</span>` : idr(r.price)}</span></div>`).join("")}</div>` : ""}
 ${portfolioHtml(q.portfolio ?? [], t)}
 ${questionsHtml(q.questions ?? [], t, opts)}
-<div class="total">${tot.sections.filter(s => !s.optional).map(s => `<div class="line"><span>${esc(s.title)} (${letterOf.get(s.id)})</span><span>${idr(s.subtotal)}</span></div>`).join("")}
+<div class="total">${tot.sections.filter(s => !s.optional && !s.info).map(s => `<div class="line"><span>${esc(s.title)} (${letterOf.get(s.id)})</span><span>${idr(s.subtotal)}</span></div>`).join("")}
 ${q.operational.length ? `<div class="line"><span><b>${t.services}</b></span><span><b>${idr(tot.services)}</b></span></div><div class="line"><span>${t.opsLine} (${opsLetter})</span><span>${idr(tot.operational)}</span></div>` : ""}
 <div class="grand"><div class="lbl">${t.grand}</div><div><b>${idr(tot.grand)}</b>${q.terms.dpPercent > 0 && q.terms.dpPercent < 100 ? `<small>${t.dpOf} ${q.terms.dpPercent}% · ${idr(tot.dp)}</small>` : ""}</div></div>
 ${tot.sections.some(s => s.optional && s.subtotal > 0) ? `<div class="opts"><div class="lbl">${t.addons}</div>${tot.sections.filter(s => s.optional && s.subtotal > 0).map(s => `<div class="line"><span>+ ${esc(s.title)}</span><span>${idr(s.subtotal)}</span></div>`).join("")}</div>` : ""}</div>
