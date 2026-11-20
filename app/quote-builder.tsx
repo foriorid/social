@@ -4,6 +4,7 @@
 // Drafts live in the workspace store ("quotes"); publishing writes a client-safe <slug>.json to the public
 // Storage bucket `quotes`, with photos under img/<quote id>/. The page itself is rendered by app/lib/quote.ts.
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft, Check, Copy, Eye, MoreHorizontal, Pencil, Search, FileText, Image as ImageIcon, Link2, Loader2, MessageCircle, Plus, RefreshCw, Sparkles, Trash2, Upload, X, ChevronDown, ChevronUp, CopyPlus, ExternalLink, Send, Undo2 } from "lucide-react";
 import { supabase } from "./lib/cloud";
 import { useStored } from "./lib/store";
@@ -385,22 +386,44 @@ function Price({ value, onChange }: { value: number | null; onChange: (v: number
 
 // ---------- portfolio (showcase.forior.id) ----------
 // The showcase keeps its projects in Firestore (public read); Hub copies the picked ones into the quotation.
+// Firestore pages by response size, and photo projects keep their picture inline (≈190 KB each), so a plain
+// listing stops after a handful. List the light fields first (all ~100 projects in one small page), then the
+// pictures page by page, filling the thumbnails in as they arrive.
 const SHOWCASE = "https://firestore.googleapis.com/v1/projects/forior-showcase/databases/(default)/documents/showcase_projects?pageSize=300&key=AIzaSyCJR4mH6VE3ci81zF3NzH9CtRtscZP_SqY";
+const LIGHT = ["title", "type", "category", "categories", "location", "link", "timestamp"].map(f => `&mask.fieldPaths=${f}`).join("");
 type FsValue = { stringValue?: string; arrayValue?: { values?: FsValue[] }; integerValue?: string };
+type FsDoc = { name: string; fields?: Record<string, FsValue> };
 const fsStr = (v?: FsValue) => v?.stringValue ?? "";
 const showcaseSlug = (s: string) => s.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
-async function loadShowcase(): Promise<(PortfolioItem & { type: string; at: number; dataImage?: string })[]> {
-  const r = await fetch(SHOWCASE);
-  if (!r.ok) throw new Error(`Showcase tidak bisa dibaca (${r.status}).`);
-  const data = await r.json() as { documents?: { name: string; fields: Record<string, FsValue> }[] };
-  return (data.documents ?? []).map(d => {
-    const f = d.fields, title = fsStr(f.title), type = fsStr(f.type) || "foto", link = fsStr(f.link);
-    const all = [fsStr(f.image), ...(f.gallery?.arrayValue?.values ?? []).map(fsStr)];
-    const imgs = all.filter(u => /^https:\/\//.test(u)), dataImage = imgs.length ? undefined : all.find(u => u.startsWith("data:image/"));
-    return { id: d.name.split("/").pop() ?? title, title, type, at: Number(f.timestamp?.integerValue ?? 0), location: fsStr(f.location), category: fsStr(f.category) || (type === "drone" ? "Drone" : ""),
-      image: imgs[0] ?? dataImage, dataImage, url: type === "foto" ? `https://showcase.forior.id/p/${showcaseSlug(title)}` : /^https:\/\//.test(link) ? link : "https://showcase.forior.id" };
+const docId = (d: FsDoc) => d.name.split("/").pop() ?? "";
+type ShowcaseItem = PortfolioItem & { type: string; at: number };
+/** Every page of a listing; onPage sees each page as it lands. */
+async function fsPages(query: string, onPage?: (docs: FsDoc[]) => void): Promise<FsDoc[]> {
+  const all: FsDoc[] = [];
+  let token = "";
+  for (let n = 0; n < 50; n++) {
+    const r = await fetch(SHOWCASE + query + (token ? `&pageToken=${encodeURIComponent(token)}` : ""));
+    if (!r.ok) throw new Error(`Showcase tidak bisa dibaca (${r.status}).`);
+    const j = await r.json() as { documents?: FsDoc[]; nextPageToken?: string };
+    all.push(...(j.documents ?? [])); onPage?.(j.documents ?? []);
+    if (!j.nextPageToken) break;
+    token = j.nextPageToken;
+  }
+  return all;
+}
+async function loadShowcase(): Promise<ShowcaseItem[]> {
+  const docs = await fsPages(LIGHT);
+  return docs.map(d => {
+    const f = d.fields ?? {}, title = fsStr(f.title), type = fsStr(f.type) || "foto", link = fsStr(f.link);
+    const category = fsStr(f.categories?.arrayValue?.values?.find(v => fsStr(v) && fsStr(v).toLowerCase() !== "komersial")) || fsStr(f.category).split(",")[0]?.trim() || "";
+    const label = type === "foto" ? "" : type[0].toUpperCase() + type.slice(1);
+    return { id: docId(d) || title, title, type, at: Number(f.timestamp?.integerValue ?? 0), location: fsStr(f.location), category: category || label,
+      url: type === "foto" ? `https://showcase.forior.id/p/${showcaseSlug(title)}` : /^https:\/\//.test(link) ? link : "https://showcase.forior.id" };
   }).filter(p => p.title).sort((a, b) => b.at - a.at);
 }
+/** Cover pictures (https or inline data:), delivered page by page. */
+const loadShowcaseImages = (onPage: (images: Record<string, string>) => void) =>
+  fsPages("&mask.fieldPaths=image", docs => onPage(Object.fromEntries(docs.map(d => [docId(d), fsStr(d.fields?.image)]).filter(([, u]) => /^(https:\/\/|data:image\/)/.test(u)))));
 
 function PortfolioPanel({ quoteId, value, onChange }: { quoteId: string; value: PortfolioItem[]; onChange: (v: PortfolioItem[]) => void }) {
   const [open, setOpen] = useState(false);
@@ -415,17 +438,24 @@ function PortfolioPanel({ quoteId, value, onChange }: { quoteId: string; value: 
 
 function ShowcasePicker({ quoteId, picked, onDone, onClose }: { quoteId: string; picked: PortfolioItem[]; onDone: (v: PortfolioItem[]) => void; onClose: () => void }) {
   const [saving, setSaving] = useState(false);
-  const [items, setItems] = useState<Awaited<ReturnType<typeof loadShowcase>> | null>(null);
+  const [items, setItems] = useState<ShowcaseItem[] | null>(null);
+  const [images, setImages] = useState<Record<string, string>>({});
+  const [type, setType] = useState("");
   const [error, setError] = useState(""), [q, setQ] = useState("");
   const [sel, setSel] = useState<Map<string, PortfolioItem>>(new Map(picked.map(p => [p.id, p])));
-  useEffect(() => { loadShowcase().then(setItems, e => setError(e instanceof Error ? e.message : String(e))); }, []);
-  const shown = (items ?? []).filter(p => !q || `${p.title} ${p.location} ${p.category}`.toLowerCase().includes(q.toLowerCase()));
-  const toggle = (p: PortfolioItem) => setSel(m => { const n = new Map(m); if (n.has(p.id)) n.delete(p.id); else n.set(p.id, { id: p.id, title: p.title, location: p.location, category: p.category, image: p.image, url: p.url }); return n; });
+  useEffect(() => {
+    let live = true;
+    loadShowcase().then(list => { if (!live) return; setItems(list); loadShowcaseImages(page => { if (live) setImages(m => ({ ...m, ...page })); }).catch(() => { /* thumbnails are optional */ }); }, e => setError(e instanceof Error ? e.message : String(e)));
+    return () => { live = false; };
+  }, []);
+  const types = [...new Set((items ?? []).map(p => p.type))];
+  const shown = (items ?? []).filter(p => (!type || p.type === type) && (!q || `${p.title} ${p.location} ${p.category}`.toLowerCase().includes(q.toLowerCase())));
+  const toggle = (p: PortfolioItem) => setSel(m => { const n = new Map(m); if (n.has(p.id)) n.delete(p.id); else n.set(p.id, { id: p.id, title: p.title, location: p.location, category: p.category, image: images[p.id] ?? p.image, url: p.url }); return n; });
   // Showcase photo projects keep their pictures inline (data:); store a small copy so the client page can show it.
   const done = async () => {
     setSaving(true);
     try {
-      const out = await Promise.all([...sel.values()].map(async p => {
+      const out = await Promise.all([...sel.values()].map(p => ({ ...p, image: p.image ?? images[p.id] })).map(async p => {
         if (!p.image?.startsWith("data:")) return p;
         const blob = await shrink(await (await fetch(p.image)).blob(), 1200, 0.82);
         const path = `img/${quoteId}/${rid()}${rid()}.jpg`;
@@ -435,15 +465,16 @@ function ShowcasePicker({ quoteId, picked, onDone, onClose }: { quoteId: string;
       onDone(out);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setSaving(false); }
   };
-  return <div className="cp-modal-backdrop" role="dialog" aria-label="Pilih portofolio" onClick={onClose}><div className="cp-modal qb-pick" onClick={e => e.stopPropagation()}>
+  return createPortal(<div className="modal-backdrop" role="dialog" aria-label="Pilih portofolio" onClick={onClose}><div className="quick-modal cp-modal qb-pick" onClick={e => e.stopPropagation()}>
     <div className="qb-pick-head"><b>Portofolio showcase</b><button className="qb-icon" onClick={onClose} aria-label="Tutup"><X size={17} /></button></div>
     <label className="qb-search"><Search size={15} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Cari villa, apartemen, kota…" /></label>
+    {items && types.length > 1 && <div className="qb-chips">{["", ...types].map(t0 => <button key={t0 || "all"} className={type === t0 ? "on" : ""} onClick={() => setType(t0)}>{t0 ? t0[0].toUpperCase() + t0.slice(1) : "Semua"} <small>{t0 ? items.filter(p => p.type === t0).length : items.length}</small></button>)}</div>}
     {error ? <p className="x-error">{error}</p> : !items ? <p className="x-empty"><Loader2 size={16} className="lg-spin" /> Memuat showcase…</p> :
       <div className="qb-sc-grid">{shown.map(p => <button key={p.id} className={`qb-sc${sel.has(p.id) ? " on" : ""}`} onClick={() => toggle(p)} aria-pressed={sel.has(p.id)}>
-        <span className="qb-sc-img">{p.image ? <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <ImageIcon size={18} />}{sel.has(p.id) && <i><Check size={14} /></i>}<em>{p.type === "drone" ? "Drone" : "Foto"}</em></span>
+        <span className="qb-sc-img">{images[p.id] ? <img src={images[p.id]} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <ImageIcon size={18} />}{sel.has(p.id) && <i><Check size={14} /></i>}<em>{p.type[0].toUpperCase() + p.type.slice(1)}</em></span>
         <b>{p.title}</b><small>{[p.category, p.location].filter(Boolean).join(" · ")}</small></button>)}{!shown.length && <p className="x-empty">Tidak ada yang cocok.</p>}</div>}
     <div className="cp-modal-actions"><button className="outline-button" onClick={onClose}>Batal</button><button className="primary-button" disabled={saving} onClick={done}>{saving ? <Loader2 size={15} className="lg-spin" /> : null}Pakai {sel.size} project</button></div>
-  </div></div>;
+  </div></div>, document.body);
 }
 
 // ---------- photo slot ----------
@@ -471,11 +502,11 @@ function GalleryPicker({ onPick, onClose }: { onPick: (url: string) => void; onC
   const [sel, setSel] = useState<string | null>(null);
   useEffect(() => { supabase.from("galleries").select("id, data").order("created_at", { ascending: false }).limit(40).then(({ data }) => setRows((data ?? []).map(r => { const g = r.data as { title?: string; finalPhotos?: { id: string; name: string }[]; previewPhotos?: { id: string; name: string }[] }; return { id: r.id, title: g.title ?? "Galeri", photos: (g.finalPhotos?.length ? g.finalPhotos : g.previewPhotos ?? []).slice(0, 60) }; }).filter(g => g.photos.length))); }, []);
   const g = rows?.find(r => r.id === sel);
-  return <div className="cp-modal-backdrop" role="dialog" aria-label="Pilih foto dari galeri" onClick={onClose}><div className="cp-modal qb-pick" onClick={e => e.stopPropagation()}>
+  return createPortal(<div className="modal-backdrop" role="dialog" aria-label="Pilih foto dari galeri" onClick={onClose}><div className="quick-modal cp-modal qb-pick" onClick={e => e.stopPropagation()}>
     <div className="qb-pick-head">{g && <button className="qb-icon" onClick={() => setSel(null)} aria-label="Kembali"><ArrowLeft size={17} /></button>}<b>{g ? g.title : "Pilih galeri"}</b><button className="qb-icon" onClick={onClose} aria-label="Tutup"><X size={17} /></button></div>
     {!rows ? <p className="x-empty"><Loader2 size={16} className="lg-spin" /> Memuat…</p> : !g ? <div className="qb-pick-list">{rows.map(r => <button key={r.id} onClick={() => setSel(r.id)}><img src={`https://drive.google.com/thumbnail?id=${r.photos[0].id}&sz=w240`} alt="" referrerPolicy="no-referrer" /><span>{r.title}<small>{r.photos.length} foto</small></span></button>)}{!rows.length && <p className="x-empty">Belum ada galeri berfoto.</p>}</div>
       : <div className="qb-pick-grid">{g.photos.map(p => <button key={p.id} onClick={() => onPick(`https://drive.google.com/thumbnail?id=${p.id}&sz=w1800`)} aria-label={p.name}><img src={`https://drive.google.com/thumbnail?id=${p.id}&sz=w320`} alt="" loading="lazy" referrerPolicy="no-referrer" /></button>)}</div>}
-  </div></div>;
+  </div></div>, document.body);
 }
 
 // ---------- 3 · Kirim ----------
