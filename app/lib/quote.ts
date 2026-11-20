@@ -18,7 +18,7 @@ export type Quote = {
   sections: QSection[]; operational: QRow[]; notes: QNote[];
   terms: { dpPercent: number; production: string; delivery: string; revisions: string };
   footnote?: string;
-  brief?: { files: BriefFile[]; summary?: BriefSummary };
+  brief?: { chat?: string; files: BriefFile[]; summary?: BriefSummary };
   publishedAt?: string; updatedAt: string; createdAt: string;
 };
 
@@ -76,7 +76,7 @@ export function publicSnapshot(q: Quote): Omit<Quote, "brief"> {
 }
 
 // ---------- AI brief → draft ----------
-export type BriefDraft = { points: string[]; questions: string[]; eyebrow?: string; title?: string; subtitle?: string; location?: string; sections: QSection[] };
+export type BriefDraft = { points: string[]; questions: string[]; client?: string; eyebrow?: string; title?: string; subtitle?: string; location?: string; sections: QSection[] };
 const str = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 /** Reads the model's JSON (tolerating ```json fences or text around it) into sections without prices. */
 export function parseBrief(text: string): BriefDraft {
@@ -89,7 +89,7 @@ export function parseBrief(text: string): BriefDraft {
   return {
     points: arr(raw.points).map(p => str(p, 240)).filter(Boolean).slice(0, 12),
     questions: arr(raw.questions).map(p => str(p, 240)).filter(Boolean).slice(0, 8),
-    eyebrow: str(raw.eyebrow, 80), title: str(raw.title, 120), subtitle: str(raw.subtitle, 240), location: str(raw.location, 120),
+    client: str(raw.client, 80), eyebrow: str(raw.eyebrow, 80), title: str(raw.title, 120), subtitle: str(raw.subtitle, 240), location: str(raw.location, 120),
     sections: arr(raw.sections).slice(0, 8).map((s: Record<string, unknown>) => ({
       id: rid(), title: str(s?.title, 80) || "Seksi", subtitle: str(s?.subtitle, 160),
       layout: layouts.includes(s?.layout as QLayout) ? (s.layout as QLayout) : "cards",

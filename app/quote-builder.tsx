@@ -52,9 +52,9 @@ async function toDoc(file: File): Promise<AiDoc> {
   throw new Error(`${file.name}: format belum didukung. Pakai PDF, gambar, Word (.docx), atau teks.`);
 }
 
-const BRIEF_PROMPT = `Baca dokumen kebutuhan klien di atas (shotlist, brief, denah, dll). Susun bahan penawaran jasa foto/video.
+const BRIEF_PROMPT = `Baca pesan klien (biasanya chat WhatsApp) dan lampiran di atas (layout, foto properti/kawasan, shotlist, dll). Susun bahan penawaran jasa foto/video.
 Balas HANYA dengan JSON valid, tanpa teks lain, format:
-{"points":["ringkasan kebutuhan, 4-8 poin singkat, sebut jumlah bila ada"],"questions":["hal yang belum jelas dan perlu ditanyakan ke klien, 0-5"],"eyebrow":"label pendek mis. Option 1","title":"judul penawaran singkat","subtitle":"1 kalimat cakupan","location":"lokasi project bila disebut","sections":[{"title":"nama seksi mis. Show Unit Photography","subtitle":"ringkas, mis. 24 foto · 8 per unit","layout":"cards|list|media","items":[{"name":"nama item","tag":"label pendek opsional mis. 1BR","desc":"keterangan singkat","qty":8,"unit":"foto|menit|video|klip","lines":["detail scene, hanya untuk layout media"]}]}]}
+{"points":["ringkasan kebutuhan, 4-8 poin singkat, sebut jumlah bila ada"],"questions":["hal yang belum jelas dan perlu ditanyakan ke klien, 0-5"],"client":"nama klien / perusahaan bila disebut","eyebrow":"label pendek mis. Option 1","title":"judul penawaran singkat","subtitle":"1 kalimat cakupan","location":"lokasi project bila disebut","sections":[{"title":"nama seksi mis. Show Unit Photography","subtitle":"ringkas, mis. 24 foto · 8 per unit","layout":"cards|list|media","items":[{"name":"nama item","tag":"label pendek opsional mis. 1BR","desc":"keterangan singkat","qty":8,"unit":"foto|menit|video|klip","lines":["detail scene, hanya untuk layout media"]}]}]}
 Aturan: layout "cards" untuk unit/ruangan berfoto, "list" untuk kategori lokasi/lingkungan, "media" untuk video/drone. JANGAN menulis harga. Jangan mengarang kebutuhan yang tidak ada di dokumen.`;
 
 // ---------- list ----------
@@ -132,49 +132,62 @@ function QuoteEditor({ quote: q, opens, onChange, onBack, onDuplicate, onDelete 
 // ---------- 1 · Brief ----------
 function BriefTab({ q, set, onDone }: { q: Quote; set: (p: Partial<Quote>) => void; onDone: () => void }) {
   const [files, setFiles] = useState<File[]>([]);
+  const [chat, setChat] = useState(q.brief?.chat ?? "");
   const [model, setModel] = useState(CHEAP_MODEL);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [draft, setDraft] = useState<ReturnType<typeof parseBrief> | null>(null);
   const summary = q.brief?.summary;
-  const add = (list: FileList | null) => { if (!list) return; setFiles(f => [...f, ...Array.from(list)].slice(0, 8)); setError(""); };
+  const add = (list: FileList | null) => { const picked = Array.from(list ?? []); if (!picked.length) return; setFiles(f => [...f, ...picked].slice(0, 8)); setError(""); }; // copy now: the input is cleared right after
   const run = async () => {
-    if (!files.length) return setError("Tambahkan minimal satu dokumen dari klien.");
+    if (!chat.trim() && !files.length) return setError("Tempel pesan klien atau tambahkan dokumen dulu.");
     setBusy(true); setError("");
     try {
       const docs = await Promise.all(files.map(toDoc));
+      if (chat.trim()) docs.unshift({ name: "Pesan klien (WhatsApp)", kind: "text", mediaType: "text/plain", data: chat.trim().slice(0, 100_000) });
       if (docs.reduce((a, d) => a + d.data.length, 0) > 13_500_000) throw new Error("Total dokumen terlalu besar. Kurangi jumlah atau ukuran file (maks ±10 MB).");
       const text = await askAIDocs({ docs, prompt: BRIEF_PROMPT, model, label: "Penawaran · analisis brief", maxTokens: model === SONNET ? 4000 : 3000 });
       const d = parseBrief(text);
       setDraft(d);
-      set({ brief: { files: files.map(f => ({ name: f.name, size: f.size, type: f.type })), summary: { points: d.points, questions: d.questions, at: new Date().toISOString(), model } } });
+      const filled = q.sections.some(s => s.items.some(i => i.name || i.price));
+      if (!filled && d.sections.length) { applyDraft(d, chat.trim()); return; }
+      set({ brief: { chat: chat.trim(), files: files.map(f => ({ name: f.name, size: f.size, type: f.type })), summary: { points: d.points, questions: d.questions, at: new Date().toISOString(), model } } });
     } catch (e) { setError(e instanceof AiSetupError || e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  };
+  /** Fills the quotation from the analysis; fields already typed in Hub are kept. */
+  const applyDraft = (d: NonNullable<typeof draft>, chatText = chat.trim()) => {
+    set({ sections: d.sections.length ? d.sections : q.sections, title: q.title || d.title || "", subtitle: q.subtitle || d.subtitle || "", eyebrow: q.eyebrow || d.eyebrow || "",
+      client: { ...q.client, name: q.client.name || d.client || "", location: q.client.location || d.location || "" },
+      brief: { chat: chatText, files: files.map(f => ({ name: f.name, size: f.size, type: f.type })), summary: { points: d.points, questions: d.questions, at: new Date().toISOString(), model } } });
+    notify("Penawaran terisi dari brief. Tinggal isi harga dan foto."); onDone();
   };
   const apply = () => {
     if (!draft) return;
-    const filled = q.sections.some(s => s.items.some(i => i.name || i.price));
-    if (filled && !window.confirm("Isi penawaran yang sudah ada akan diganti dengan draf dari brief. Lanjutkan?")) return;
-    set({ sections: draft.sections.length ? draft.sections : q.sections, title: q.title || draft.title || "", subtitle: q.subtitle || draft.subtitle || "", eyebrow: q.eyebrow || draft.eyebrow || "", client: { ...q.client, location: q.client.location || draft.location || "" } });
-    notify("Draf masuk. Tinggal isi harga dan foto."); onDone();
+    if (!window.confirm("Isi penawaran yang sudah ada akan diganti dengan draf dari brief. Lanjutkan?")) return;
+    applyDraft(draft);
   };
   return <>
     <div className="panel qb-card-p">
-      <h4 className="qb-h">Dokumen dari klien</h4>
+      <label className="qb-f wide"><span className="qb-h">Pesan / kebutuhan klien</span>
+        <textarea className="qb-chat" rows={7} value={chat} onChange={e => { setChat(e.target.value); setError(""); }} onBlur={() => { if (chat !== (q.brief?.chat ?? "")) set({ brief: { ...(q.brief ?? { files: [] }), chat } }); }}
+          onPaste={e => { const imgs = Array.from(e.clipboardData.files).filter(f => f.type.startsWith("image/")); if (imgs.length) { e.preventDefault(); setFiles(f => [...f, ...imgs].slice(0, 8)); notify(`${imgs.length} gambar ditambahkan sebagai lampiran.`); } }}
+          placeholder={"Tempel chat WhatsApp dari klien di sini, mis.:\n\"Halo kak, mau foto 3 unit show unit 1BR, 2BR, 3BR di Sentul, plus foto lingkungan sekitar dan video drone. Shooting minggu depan…\""} /></label>
+      <h4 className="qb-h">Lampiran (opsional)</h4>
       {files.length > 0 && <ul className="qb-files">{files.map((f, i) => <li key={i}><span className={`qb-ft ${f.type === "application/pdf" ? "pdf" : f.type.startsWith("image/") ? "img" : "doc"}`}>{f.type === "application/pdf" ? "PDF" : f.type.startsWith("image/") ? "IMG" : "DOC"}</span><span><b>{f.name}</b><small>{(f.size / 1e6).toFixed(1)} MB</small></span><button className="qb-icon" aria-label={`Hapus ${f.name}`} onClick={() => setFiles(x => x.filter((_, j) => j !== i))}><X size={15} /></button></li>)}</ul>}
-      <label className="qb-drop"><Upload size={18} /> Tambah dokumen<small>PDF, gambar, Word (.docx), teks · maks 8 file, ±10 MB</small><input type="file" multiple hidden accept=".pdf,image/*,.docx,.txt,.md,.csv" onChange={e => { add(e.target.files); e.target.value = ""; }} /></label>
+      <label className="qb-drop"><Upload size={18} /> Tambah lampiran<small>Layout, foto properti/kawasan, shotlist: PDF, gambar, Word, teks · maks 8 file</small><input type="file" multiple hidden accept=".pdf,image/*,.docx,.txt,.md,.csv" onChange={e => { add(e.target.files); e.target.value = ""; }} /></label>
       <div className="qb-seg" role="radiogroup" aria-label="Ketelitian analisis">
         <button role="radio" aria-checked={model === CHEAP_MODEL} className={model === CHEAP_MODEL ? "on" : ""} onClick={() => setModel(CHEAP_MODEL)}><b>Hemat</b><small>Haiku · ±Rp50–150</small></button>
         <button role="radio" aria-checked={model === SONNET} className={model === SONNET ? "on" : ""} onClick={() => setModel(SONNET)}><b>Lebih teliti</b><small>Sonnet · ±Rp500–2.000</small></button>
       </div>
       {error && <p className="x-error" role="alert">{error}</p>}
-      <button className="primary-button qb-wide" disabled={busy || !files.length} onClick={run}>{busy ? <><Loader2 size={15} className="lg-spin" /> Claude sedang membaca…</> : <><Sparkles size={15} /> Analisis dengan Claude</>}</button>
-      <p className="qb-hint">File hanya dikirim untuk dianalisis dan tidak disimpan. Yang disimpan: nama file dan ringkasannya. Foto tidak pernah dibuat lewat AI.</p>
+      <button className="primary-button qb-wide" disabled={busy || (!chat.trim() && !files.length)} onClick={run}>{busy ? <><Loader2 size={15} className="lg-spin" /> Claude sedang membaca…</> : <><Sparkles size={15} /> Analisis dengan Claude</>}</button>
+      <p className="qb-hint">Pesan klien disimpan di draf (tidak tampil ke klien). Lampiran hanya dikirim untuk dianalisis, yang disimpan nama file dan ringkasannya. Gambar bisa juga langsung di-paste ke kolom pesan.</p>
     </div>
     {summary && <div className="panel qb-ai">
       <h4><Sparkles size={16} /> Ringkasan kebutuhan</h4>
       <ul>{summary.points.map((p, i) => <li key={i}>{p}</li>)}</ul>
       {summary.questions.length > 0 && <div className="qb-ask"><b>Perlu ditanyakan ke klien</b><ul>{summary.questions.map((p, i) => <li key={i}>{p}</li>)}</ul></div>}
-      <small className="qb-hint">{q.brief?.files.map(f => f.name).join(", ")} · {when(summary.at)}</small>
-      {draft ? <button className="primary-button qb-wide qb-light" onClick={apply}><Sparkles size={15} /> Buat draf penawaran dari brief</button> : <p className="qb-hint">Analisis ulang dokumen untuk membuat draf baru.</p>}
+      <small className="qb-hint">{[q.brief?.chat ? "Pesan klien" : "", ...(q.brief?.files.map(f => f.name) ?? [])].filter(Boolean).join(", ")} · {when(summary.at)}</small>
+      {draft ? <button className="primary-button qb-wide qb-light" onClick={apply}><Sparkles size={15} /> Isi penawaran dari brief</button> : <p className="qb-hint">Klik Analisis lagi untuk membuat draf baru.</p>}
     </div>}
     {!summary && <button className="outline-button qb-wide" onClick={onDone}>Lewati, isi manual</button>}
   </>;
@@ -188,7 +201,9 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
   const move = (id: string, d: -1 | 1) => { const i = q.sections.findIndex(s => s.id === id), j = i + d; if (j < 0 || j >= q.sections.length) return; const s = [...q.sections]; [s[i], s[j]] = [s[j], s[i]]; set({ sections: s }); };
   const letterOf = (() => { let n = 0; const m = new Map<string, string>(); for (const s of q.sections) m.set(s.id, s.optional ? "+" : "ABCDEFGHIJ"[n++] ?? "•"); return m; })();
   const tot = totals(q);
+  const ask = q.brief?.summary?.questions ?? [];
   return <>
+    {ask.length > 0 && <div className="panel qb-card-p qb-asknote"><h4 className="qb-h">Perlu ditanyakan ke klien</h4><ul>{ask.map((x, i) => <li key={i}>{x}</li>)}</ul></div>}
     <div className="panel qb-card-p">
       <h4 className="qb-h">Info penawaran</h4>
       <div className="qb-grid">
