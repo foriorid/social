@@ -7,7 +7,8 @@ export type QLayout = "cards" | "list" | "media";
 /** pricing "section": one price for the whole section (a package), item prices ignored and hidden; "none": information only (deliverables, terms), no prices at all. */
 export type QSection = { id: string; title: string; subtitle?: string; layout: QLayout; optional?: boolean; image?: string; items: QItem[]; pricing?: "item" | "section" | "none"; price?: number | null };
 export const sectionSubtotal = (s: QSection) => (s.pricing === "none" ? 0 : s.pricing === "section" ? s.price ?? 0 : s.items.reduce((a, i) => a + (i.price ?? 0), 0));
-export const isInfo = (s: QSection) => s.pricing === "none";
+/** Information only: priced "none", or a package left at Rp 0 (never shown as "Rp 0"). */
+export const isInfo = (s: QSection) => s.pricing === "none" || (s.pricing === "section" && s.price === 0);
 export type QRow = { id: string; name: string; note?: string; price: number | null };
 export type QNote = { id: string; title: string; text: string };
 export type PortfolioItem = { id: string; title: string; location?: string; category?: string; image?: string; url: string };

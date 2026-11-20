@@ -108,3 +108,8 @@ test("one deliverables block: with an info section the notes block is titled Cat
   const withInfo = renderQuoteHtml({ ...base, sections: [{ id: "d", title: "Deliverables & Hak Penggunaan", layout: "list" as const, pricing: "none" as const, items: [{ id: "1", name: "File", price: 0 }] }] });
   assert.ok(!withInfo.includes("Deliverables & Catatan") && withInfo.includes("<h2>Catatan</h2>"));
 });
+
+test("a package left at Rp 0 counts as info: no letter, notes block titled Catatan", () => {
+  const html = renderQuoteHtml({ ...newQuote(), operational: [], sections: [{ id: "d", title: "Deliverables", layout: "list" as const, pricing: "section" as const, price: 0, items: [{ id: "1", name: "File", price: 0 }] }] });
+  assert.ok(html.includes("<h2>Catatan</h2>") && !html.includes("Deliverables (A)"));
+});
