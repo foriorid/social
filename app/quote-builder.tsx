@@ -52,10 +52,25 @@ async function toDoc(file: File): Promise<AiDoc> {
   throw new Error(`${file.name}: format belum didukung. Pakai PDF, gambar, Word (.docx), atau teks.`);
 }
 
-const BRIEF_PROMPT = `Baca pesan klien (biasanya chat WhatsApp) dan lampiran di atas (layout, foto properti/kawasan, shotlist, dll). Susun bahan penawaran jasa foto/video.
-Balas HANYA dengan JSON valid, tanpa teks lain, format:
-{"points":["ringkasan kebutuhan, 4-8 poin singkat, sebut jumlah bila ada"],"questions":["hal yang belum jelas dan perlu ditanyakan ke klien, 0-5"],"client":"nama klien / perusahaan bila disebut","eyebrow":"label pendek mis. Option 1","title":"judul penawaran singkat","subtitle":"1 kalimat cakupan","location":"lokasi project bila disebut","sections":[{"title":"nama seksi mis. Show Unit Photography","subtitle":"ringkas, mis. 24 foto · 8 per unit","layout":"cards|list|media","items":[{"name":"nama item","tag":"label pendek opsional mis. 1BR","desc":"keterangan singkat","qty":8,"unit":"foto|menit|video|klip","lines":["detail scene, hanya untuk layout media"]}]}]}
-Aturan: layout "cards" untuk unit/ruangan berfoto, "list" untuk kategori lokasi/lingkungan, "media" untuk video/drone. JANGAN menulis harga. Jangan mengarang kebutuhan yang tidak ada di dokumen.`;
+const BRIEF_PROMPT = `Baca pesan klien (biasanya chat WhatsApp) dan lampiran di atas (site plan/layout, foto properti/kawasan, shotlist, dll). Susun bahan penawaran jasa foto/video FORIOR untuk jenis properti apa pun (villa, apartemen, hotel, resort, kantor, restoran, rumah).
+Balas HANYA dengan JSON valid, tanpa teks lain:
+{"points":["ringkasan kebutuhan, 4-8 poin, sebut jumlah"],
+"questions":["hal yang belum jelas dan perlu FORIOR tanyakan ke klien, 0-5"],
+"requests":["hal yang klien minta dikirim/dijawab bersama penawaran, mis. portfolio, contoh foto malam, jadwal; 0-6"],
+"client":"nama klien/perusahaan","eyebrow":"label pendek mis. Option 1","title":"judul penawaran singkat","subtitle":"1 kalimat cakupan","location":"lokasi project","notice":"1 kalimat catatan penting untuk klien, opsional",
+"sections":[{"title":"nama seksi","subtitle":"ringkas, mis. 6 villa · 12-18 foto per villa","layout":"cards|list|media","optional":false,
+  "items":[{"name":"nama item","tag":"label pendek ≤12 huruf","desc":"keterangan singkat","qty":18,"unit":"foto|menit|video|klip","lines":["poin detail/sorotan, maks 4"]}]}],
+"notes":[{"title":"judul deliverable/catatan","text":"1-2 kalimat"}],
+"operational":[{"name":"biaya operasional mis. Transportasi & akomodasi tim","note":"asumsi singkat"}],
+"terms":{"production":"mis. 3 hari produksi","delivery":"mis. 10-14 hari kerja","revisions":"mis. 2 kali revisi"}}
+Aturan:
+- Satu item per unit/villa/kamar/area yang disebut. Pakai nama persis dari pesan atau label di lampiran (mis. nama villa di site plan). Sorotan khusus unit (mis. private jacuzzi) masuk "lines" item itu.
+- layout "cards" untuk unit/villa/ruangan yang difoto, "list" untuk kategori/fasilitas umum/lingkungan, "media" untuk video/drone/film.
+- Yang diminta sebagai "opsi" atau tambahan jadi seksi terpisah dengan "optional": true.
+- Rentang jumlah (mis. 12-18 foto) → qty pakai angka terbesar, rentangnya tulis di desc.
+- Format file, orientasi foto, waktu pemotretan (siang/golden hour/malam), hak penggunaan, dan batasan editing masuk "notes".
+- Lokasi di luar Jakarta → tambahkan "operational" transportasi & akomodasi.
+- JANGAN menulis harga. Jangan mengarang kebutuhan yang tidak ada di pesan/lampiran.`;
 
 // ---------- list ----------
 export function QuoteBuilder() {
@@ -150,14 +165,16 @@ function BriefTab({ q, set, onDone }: { q: Quote; set: (p: Partial<Quote>) => vo
       setDraft(d);
       const filled = q.sections.some(s => s.items.some(i => i.name || i.price));
       if (!filled && d.sections.length) { applyDraft(d, chat.trim()); return; }
-      set({ brief: { chat: chat.trim(), files: files.map(f => ({ name: f.name, size: f.size, type: f.type })), summary: { points: d.points, questions: d.questions, at: new Date().toISOString(), model } } });
+      set({ brief: { chat: chat.trim(), files: files.map(f => ({ name: f.name, size: f.size, type: f.type })), summary: { points: d.points, questions: d.questions, requests: d.requests, at: new Date().toISOString(), model } } });
     } catch (e) { setError(e instanceof AiSetupError || e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
   /** Fills the quotation from the analysis; fields already typed in Hub are kept. */
   const applyDraft = (d: NonNullable<typeof draft>, chatText = chat.trim()) => {
+    const untouchedNotes = q.notes.every(n => newQuote().notes.some(d0 => d0.title === n.title));
     set({ sections: d.sections.length ? d.sections : q.sections, title: q.title || d.title || "", subtitle: q.subtitle || d.subtitle || "", eyebrow: q.eyebrow || d.eyebrow || "",
       client: { ...q.client, name: q.client.name || d.client || "", location: q.client.location || d.location || "" },
-      brief: { chat: chatText, files: files.map(f => ({ name: f.name, size: f.size, type: f.type })), summary: { points: d.points, questions: d.questions, at: new Date().toISOString(), model } } });
+      notice: q.notice || d.notice, notes: d.notes.length && untouchedNotes ? d.notes : q.notes, operational: q.operational.length ? q.operational : d.operational, terms: { ...q.terms, ...d.terms },
+      brief: { chat: chatText, files: files.map(f => ({ name: f.name, size: f.size, type: f.type })), summary: { points: d.points, questions: d.questions, requests: d.requests, at: new Date().toISOString(), model } } });
     notify("Penawaran terisi dari brief. Tinggal isi harga dan foto."); onDone();
   };
   const apply = () => {
@@ -186,6 +203,7 @@ function BriefTab({ q, set, onDone }: { q: Quote; set: (p: Partial<Quote>) => vo
       <h4><Sparkles size={16} /> Ringkasan kebutuhan</h4>
       <ul>{summary.points.map((p, i) => <li key={i}>{p}</li>)}</ul>
       {summary.questions.length > 0 && <div className="qb-ask"><b>Perlu ditanyakan ke klien</b><ul>{summary.questions.map((p, i) => <li key={i}>{p}</li>)}</ul></div>}
+      {!!summary.requests?.length && <div className="qb-ask"><b>Diminta klien bersama penawaran</b><ul>{summary.requests.map((p, i) => <li key={i}>{p}</li>)}</ul></div>}
       <small className="qb-hint">{[q.brief?.chat ? "Pesan klien" : "", ...(q.brief?.files.map(f => f.name) ?? [])].filter(Boolean).join(", ")} · {when(summary.at)}</small>
       {draft ? <button className="primary-button qb-wide qb-light" onClick={apply}><Sparkles size={15} /> Isi penawaran dari brief</button> : <p className="qb-hint">Klik Analisis lagi untuk membuat draf baru.</p>}
     </div>}
@@ -201,9 +219,10 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
   const move = (id: string, d: -1 | 1) => { const i = q.sections.findIndex(s => s.id === id), j = i + d; if (j < 0 || j >= q.sections.length) return; const s = [...q.sections]; [s[i], s[j]] = [s[j], s[i]]; set({ sections: s }); };
   const letterOf = (() => { let n = 0; const m = new Map<string, string>(); for (const s of q.sections) m.set(s.id, s.optional ? "+" : "ABCDEFGHIJ"[n++] ?? "•"); return m; })();
   const tot = totals(q);
-  const ask = q.brief?.summary?.questions ?? [];
+  const ask = q.brief?.summary?.questions ?? [], req = q.brief?.summary?.requests ?? [];
   return <>
     {ask.length > 0 && <div className="panel qb-card-p qb-asknote"><h4 className="qb-h">Perlu ditanyakan ke klien</h4><ul>{ask.map((x, i) => <li key={i}>{x}</li>)}</ul></div>}
+    {req.length > 0 && <div className="panel qb-card-p qb-asknote"><h4 className="qb-h">Diminta klien bersama penawaran</h4><ul>{req.map((x, i) => <li key={i}>{x}</li>)}</ul></div>}
     <div className="panel qb-card-p">
       <h4 className="qb-h">Info penawaran</h4>
       <div className="qb-grid">
@@ -244,7 +263,7 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
               <input aria-label="Satuan" value={i.unit ?? ""} onChange={e => setItem(s.id, i.id, { unit: e.target.value })} placeholder="foto" list="qb-units" />
               <Price value={i.price} onChange={price => setItem(s.id, i.id, { price })} />
             </div>
-            {s.layout === "media" && <textarea aria-label="Detail scene" rows={3} value={(i.lines ?? []).join("\n")} onChange={e => setItem(s.id, i.id, { lines: e.target.value.split("\n").map(l => l.trimStart()).slice(0, 8) })} placeholder={"Detail scene, satu per baris\nFasad & arrival\nPemandangan gunung"} />}
+            {<textarea aria-label="Poin detail" rows={s.layout === "media" ? 3 : 2} value={(i.lines ?? []).join("\n")} onChange={e => setItem(s.id, i.id, { lines: e.target.value.split("\n").map(l => l.trimStart()).slice(0, 8) })} placeholder={s.layout === "media" ? "Detail scene, satu per baris\nFasad & arrival\nPemandangan gunung" : "Poin/sorotan (opsional), satu per baris\nPrivate jacuzzi"} />}
           </div>
           <button className="qb-icon qb-del" aria-label="Hapus item" onClick={() => setSection(s.id, { items: s.items.filter(x => x.id !== i.id) })}><Trash2 size={15} /></button>
         </div>)}

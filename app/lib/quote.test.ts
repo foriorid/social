@@ -54,3 +54,13 @@ test("parseBrief reads fenced JSON into price-less sections", () => {
   assert.equal(d.sections[1].layout, "cards");
   assert.throws(() => parseBrief("tidak ada json"));
 });
+
+test("parseBrief also reads requests, notes, operational (no price) and terms", () => {
+  const d = parseBrief(JSON.stringify({ points: [], requests: ["Portfolio"], notes: [{ title: "Hak penggunaan", text: "Website, OTA, iklan" }], operational: [{ name: "Transportasi & akomodasi", note: "Jakarta–Yogyakarta", price: 9 }], terms: { production: "3 hari", delivery: 5 }, sections: [{ title: "Villa", optional: true, items: [{ name: "Hunterwood", lines: ["Private jacuzzi", ""] }] }] }));
+  assert.deepEqual(d.requests, ["Portfolio"]);
+  assert.equal(d.notes[0].title, "Hak penggunaan");
+  assert.equal(d.operational[0].price, null);
+  assert.deepEqual(d.terms, { production: "3 hari" }); assert.equal(d.sections[0].optional, true);
+  const html = renderQuoteHtml({ ...newQuote(), sections: d.sections });
+  assert.ok(html.includes("<li>Private jacuzzi</li>") && !html.includes("<li></li>"));
+});

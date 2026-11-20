@@ -8,7 +8,7 @@ export type QSection = { id: string; title: string; subtitle?: string; layout: Q
 export type QRow = { id: string; name: string; note?: string; price: number | null };
 export type QNote = { id: string; title: string; text: string };
 export type BriefFile = { name: string; size: number; type: string };
-export type BriefSummary = { points: string[]; questions: string[]; at: string; model: string };
+export type BriefSummary = { points: string[]; questions: string[]; requests?: string[]; at: string; model: string };
 export type Quote = {
   id: string; slug: string; status: "draft" | "sent"; lang: "id" | "en";
   number: string; date: string; validDays: number;
@@ -76,7 +76,10 @@ export function publicSnapshot(q: Quote): Omit<Quote, "brief"> {
 }
 
 // ---------- AI brief → draft ----------
-export type BriefDraft = { points: string[]; questions: string[]; client?: string; eyebrow?: string; title?: string; subtitle?: string; location?: string; sections: QSection[] };
+export type BriefDraft = {
+  points: string[]; questions: string[]; requests: string[]; client?: string; eyebrow?: string; title?: string; subtitle?: string; location?: string; notice?: string;
+  sections: QSection[]; notes: QNote[]; operational: QRow[]; terms: Partial<Quote["terms"]>;
+};
 const str = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 /** Reads the model's JSON (tolerating ```json fences or text around it) into sections without prices. */
 export function parseBrief(text: string): BriefDraft {
@@ -89,10 +92,16 @@ export function parseBrief(text: string): BriefDraft {
   return {
     points: arr(raw.points).map(p => str(p, 240)).filter(Boolean).slice(0, 12),
     questions: arr(raw.questions).map(p => str(p, 240)).filter(Boolean).slice(0, 8),
+    requests: arr(raw.requests).map(p => str(p, 240)).filter(Boolean).slice(0, 8),
+    notice: str(raw.notice, 300) || undefined,
+    notes: arr(raw.notes).slice(0, 8).map((n: Record<string, unknown>) => ({ id: rid(), title: str(n?.title, 80), text: str(n?.text, 300) })).filter(n => n.title || n.text),
+    operational: arr(raw.operational).slice(0, 6).map((r: Record<string, unknown>) => ({ id: rid(), name: str(r?.name, 100), note: str(r?.note, 160) || undefined, price: null })).filter(r => r.name),
+    terms: (() => { const t = (raw.terms ?? {}) as Record<string, unknown>; const out: Partial<Quote["terms"]> = {}; for (const k of ["production", "delivery", "revisions"] as const) if (str(t[k], 60)) out[k] = str(t[k], 60); return out; })(),
     client: str(raw.client, 80), eyebrow: str(raw.eyebrow, 80), title: str(raw.title, 120), subtitle: str(raw.subtitle, 240), location: str(raw.location, 120),
     sections: arr(raw.sections).slice(0, 8).map((s: Record<string, unknown>) => ({
       id: rid(), title: str(s?.title, 80) || "Seksi", subtitle: str(s?.subtitle, 160),
       layout: layouts.includes(s?.layout as QLayout) ? (s.layout as QLayout) : "cards",
+      optional: s?.optional === true,
       items: arr(s?.items).slice(0, 12).map((i: Record<string, unknown>) => ({
         id: rid(), name: str(i?.name, 100) || "Item", tag: str(i?.tag, 12) || undefined, desc: str(i?.desc, 240) || undefined,
         qty: Number.isFinite(Number(i?.qty)) && Number(i?.qty) > 0 ? Math.round(Number(i.qty)) : undefined, unit: str(i?.unit, 20) || undefined,
@@ -104,8 +113,8 @@ export function parseBrief(text: string): BriefDraft {
 
 // ---------- Client page ----------
 const T = {
-  id: { prepared: "Disiapkan untuk", location: "Lokasi project", quoteNo: "No.", valid: "Berlaku", days: "hari", subtotal: "Subtotal", optional: "Opsional", tbc: "Dikonfirmasi kemudian", notes: "Deliverables & Catatan", notesSub: "Yang Anda terima dan yang perlu diperhatikan", terms: "Ketentuan", termsSub: "Jadwal, revisi, dan pembayaran", confirm: "Konfirmasi", production: "Produksi", editing: "Editing & Revisi", delivery: "Pengiriman Final", dp: "DP saat konfirmasi", rest: "Sebelum file final dikirim", payment: "Pembayaran", validity: "Masa berlaku", ops: "Biaya Operasional", opsSub: "Estimasi biaya produksi", grand: "Grand total", services: "Subtotal jasa", opsLine: "Biaya operasional", ask: "Tanya via WhatsApp", pdf: "PDF", hello: "Halo FORIOR, saya ingin bertanya tentang penawaran", dpOf: "DP", photos: "foto" },
-  en: { prepared: "Prepared for", location: "Project location", quoteNo: "Quote No.", valid: "Valid", days: "days", subtotal: "Subtotal", optional: "Optional", tbc: "To be confirmed", notes: "Deliverables & Notes", notesSub: "What to expect and what may affect coverage", terms: "Commercial Terms", termsSub: "Timeline, revisions and payment", confirm: "Confirmation", production: "Production", editing: "Editing & Revisions", delivery: "Final Delivery", dp: "Down payment upon confirmation", rest: "Before final delivery", payment: "Payment terms", validity: "Quotation validity", ops: "Production & Operational Costs", opsSub: "Operational budget estimate", grand: "Grand total", services: "Service subtotal", opsLine: "Operational costs", ask: "Ask on WhatsApp", pdf: "PDF", hello: "Hello FORIOR, I have a question about quotation", dpOf: "DP", photos: "photos" }
+  id: { prepared: "Disiapkan untuk", location: "Lokasi project", quoteNo: "No.", valid: "Berlaku", days: "hari", subtotal: "Subtotal", optional: "Opsional", tbc: "Dikonfirmasi kemudian", notes: "Deliverables & Catatan", notesSub: "Yang Anda terima dan yang perlu diperhatikan", terms: "Ketentuan", termsSub: "Jadwal, revisi, dan pembayaran", confirm: "Konfirmasi", production: "Produksi", editing: "Editing & Revisi", delivery: "Pengiriman Final", dp: "DP saat konfirmasi", rest: "Sebelum file final dikirim", payment: "Pembayaran", validity: "Masa berlaku", ops: "Biaya Operasional", opsSub: "Estimasi biaya produksi", grand: "Grand total", services: "Subtotal jasa", opsLine: "Biaya operasional", ask: "Tanya via WhatsApp", pdf: "PDF", hello: "Halo FORIOR, saya ingin bertanya tentang penawaran", dpOf: "DP", photos: "foto", addons: "Opsi tambahan · belum termasuk total" },
+  en: { prepared: "Prepared for", location: "Project location", quoteNo: "Quote No.", valid: "Valid", days: "days", subtotal: "Subtotal", optional: "Optional", tbc: "To be confirmed", notes: "Deliverables & Notes", notesSub: "What to expect and what may affect coverage", terms: "Commercial Terms", termsSub: "Timeline, revisions and payment", confirm: "Confirmation", production: "Production", editing: "Editing & Revisions", delivery: "Final Delivery", dp: "Down payment upon confirmation", rest: "Before final delivery", payment: "Payment terms", validity: "Quotation validity", ops: "Production & Operational Costs", opsSub: "Operational budget estimate", grand: "Grand total", services: "Service subtotal", opsLine: "Operational costs", ask: "Ask on WhatsApp", pdf: "PDF", hello: "Hello FORIOR, I have a question about quotation", dpOf: "DP", photos: "photos", addons: "Optional add-ons · not included" }
 };
 export const FORIOR_CONTACT = { website: "www.forior.id", wa: "6281542048268", phone: "0815 4204 8268" };
 /** The one inline script on the client page; its hash goes into the page's CSP. */
@@ -160,6 +169,7 @@ img{display:block;max-width:100%}svg.i{width:20px;height:20px;stroke:currentColo
 .scenes{background:#f8f7fc;border-radius:12px;padding:4px 12px}.scene{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--line);font-size:12.5px;color:#3b4456}.scene:last-child{border-bottom:0}.scene svg.i{width:16px;height:16px;color:var(--purple);margin-top:2px}
 .foot{margin-top:auto;padding-top:11px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px}.foot small{color:var(--muted);font-size:11.5px}
 .opt{border:1.5px dashed #cdbfe6;box-shadow:none;background:#fbfafe}
+.pts{margin:6px 0 0;padding-left:16px;font-size:12px;color:#3b4456;display:grid;gap:2px}.pts li::marker{color:var(--purple)}
 .deliv{grid-template-columns:1fr}.dl{display:flex;gap:12px;background:var(--card);border-radius:16px;padding:14px;box-shadow:var(--sh)}.dl p{margin:0;font-size:12.5px;color:#3b4456}.dl b{display:block;font-size:13.5px;color:var(--navy);margin-bottom:2px}
 .tl{display:grid;gap:14px;position:relative}.tl::before{content:"";position:absolute;left:23px;top:10px;bottom:10px;width:2px;background:repeating-linear-gradient(180deg,var(--purple) 0 6px,transparent 6px 12px)}.step{display:flex;gap:14px;align-items:center;position:relative}.step .ico{width:48px;height:48px;border-radius:50%;background:var(--navy);color:#fff;box-shadow:0 0 0 6px #fff}.step b{display:block;font-size:13px;color:var(--navy)}.step span{font-size:12px;color:var(--muted)}
 .pay{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}.pay div{border-radius:12px;padding:13px;color:#fff}.pay div:first-child{background:var(--purple)}.pay div:last-child{background:var(--navy)}.pay b{font-size:22px;display:block;line-height:1}.pay span{font-size:11.5px;opacity:.9}
@@ -167,6 +177,7 @@ img{display:block;max-width:100%}svg.i{width:20px;height:20px;stroke:currentColo
 .ops .row{align-items:center}.ops .row span:first-child{color:var(--ink);font-weight:700}.ops small{display:block;color:var(--muted);font-weight:500;font-size:11.5px}
 .total{background:linear-gradient(135deg,var(--navy),var(--navy-2) 60%,#4a3f7a);color:#fff;border-radius:22px;padding:20px;box-shadow:var(--sh);margin-top:26px;position:relative;overflow:hidden}.total::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;border-radius:50%;border:30px solid rgba(255,255,255,.05)}
 .total .line{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.14);font-size:13.5px;position:relative;z-index:1}.total .line span:first-child{opacity:.8}.total .grand{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-top:14px;flex-wrap:wrap;position:relative;z-index:1}.total .grand .lbl{color:#d9cff0}.total .grand b{font-size:clamp(24px,7vw,34px);line-height:1.1;display:block;text-align:right}.total .grand small{display:block;font-size:12.5px;color:var(--gold);font-weight:700;margin-top:4px;text-align:right}
+.total .opts{position:relative;z-index:1;margin-top:14px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.25)}.total .opts .lbl{color:#d9cff0;margin-bottom:2px}.total .opts .line{border-bottom:0;padding:5px 0;opacity:.9}
 .footer{margin-top:26px;background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:18px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}.footer .brand{color:var(--navy);font-size:19px}.footer .brand small{color:var(--muted)}.contacts{display:flex;gap:8px;flex-wrap:wrap}.contacts a{display:inline-flex;align-items:center;gap:7px;text-decoration:none;font-size:13px;font-weight:700;color:var(--navy);background:#f3f4f8;padding:9px 12px;border-radius:11px}.contacts svg.i{width:16px;height:16px}
 .fine{font-size:11.5px;color:var(--muted);text-align:center;margin-top:14px}
 .cta{position:fixed;left:0;right:0;bottom:0;z-index:20;padding:10px 14px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(238,240,244,0),#eef0f4 35%);display:flex;gap:8px;justify-content:center}.cta a{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;text-decoration:none;font-weight:800;font-size:13.5px;padding:13px 16px;border-radius:14px;background:#fff;color:var(--navy);box-shadow:0 6px 16px -8px rgba(0,0,0,.3);flex:1;max-width:200px}.cta a.wa{background:#1f9d55;color:#fff;flex:2;max-width:320px}.cta svg.i{width:17px;height:17px}
@@ -175,6 +186,7 @@ img{display:block;max-width:100%}svg.i{width:20px;height:20px;stroke:currentColo
 @media(min-width:900px){.units{grid-template-columns:repeat(3,1fr)}}
 @media print{body{background:#fff}.doc{max-width:none;padding:0}.cta{display:none}.card,.unit,.mcard,.stat,.dl,.footer{box-shadow:none;border:1px solid var(--line)}.hero,.total,.subbar,.pay div,.sec-num,.step .ico{-webkit-print-color-adjust:exact;print-color-adjust:exact}.unit,.mcard,.card,.total{break-inside:avoid}}`;
 
+const bullets = (all?: string[]) => { const lines = all?.filter(l => l.trim()); return lines?.length ? `<ul class="pts">${lines.map(l => `<li>${esc(l)}</li>`).join("")}</ul>` : ""; };
 function sectionHtml(s: QSection, letter: string, t: typeof T.id): string {
   const sub = s.items.reduce((a, i) => a + (i.price ?? 0), 0);
   const qty = (i: QItem) => (i.qty ? `${i.qty} ${esc(i.unit || "")}`.trim() : "");
@@ -184,11 +196,11 @@ function sectionHtml(s: QSection, letter: string, t: typeof T.id): string {
   const head = `<div class="sec-head"><div class="sec-num">${esc(letter)}</div><div><h2>${esc(s.title)}${s.optional ? `<span class="pill">${t.optional}</span>` : ""}</h2>${s.subtitle ? `<p>${esc(s.subtitle)}</p>` : ""}</div></div>`;
   let body = "";
   if (s.layout === "list") {
-    body = `<div class="surr">${url(s.image) || url(s.items[0]?.image) ? ph(s.image || s.items[0]?.image, s.title) : ""}<div class="card">${s.items.map(i => `<div class="cat"><div class="ico">${ic(i.unit && /video|menit|min/i.test(i.unit) ? "film" : "camera")}</div><div class="t"><b>${esc(i.name)}</b>${i.desc ? `<small>${esc(i.desc)}</small>` : ""}</div>${qty(i) ? `<span class="qty">${qty(i)}</span>` : ""}${i.price ? `&nbsp;${priceOf(i.price)}` : i.price === null ? `&nbsp;${priceOf(null)}` : ""}</div>`).join("")}</div></div>`;
+    body = `<div class="surr">${url(s.image) || url(s.items[0]?.image) ? ph(s.image || s.items[0]?.image, s.title) : ""}<div class="card">${s.items.map(i => `<div class="cat"><div class="ico">${ic(i.unit && /video|menit|min/i.test(i.unit) ? "film" : "camera")}</div><div class="t"><b>${esc(i.name)}</b>${i.desc ? `<small>${esc(i.desc)}</small>` : ""}${bullets(i.lines)}</div>${qty(i) ? `<span class="qty">${qty(i)}</span>` : ""}${i.price ? `&nbsp;${priceOf(i.price)}` : i.price === null ? `&nbsp;${priceOf(null)}` : ""}</div>`).join("")}</div></div>`;
   } else if (s.layout === "media") {
-    body = `<div class="grid media">${s.items.map(i => `<div class="mcard${s.optional ? " opt" : ""}">${url(i.image) ? ph(i.image, i.name, i.tag ? `<span class="tag">${esc(i.tag)}</span>` : "") : ""}<div class="body"><h3>${esc(i.name)}</h3>${i.desc ? `<p class="mdesc">${esc(i.desc)}</p>` : ""}${i.lines?.length ? `<div class="scenes">${i.lines.map(l => `<div class="scene">${ic("check")}<span>${esc(l)}</span></div>`).join("")}</div>` : ""}<div class="foot"><small>${qty(i)}</small>${priceOf(i.price)}</div></div></div>`).join("")}</div>`;
+    body = `<div class="grid media">${s.items.map(i => `<div class="mcard${s.optional ? " opt" : ""}">${url(i.image) ? ph(i.image, i.name, i.tag ? `<span class="tag">${esc(i.tag)}</span>` : "") : ""}<div class="body"><h3>${esc(i.name)}</h3>${i.desc ? `<p class="mdesc">${esc(i.desc)}</p>` : ""}${i.lines?.some(l => l.trim()) ? `<div class="scenes">${i.lines.filter(l => l.trim()).map(l => `<div class="scene">${ic("check")}<span>${esc(l)}</span></div>`).join("")}</div>` : ""}<div class="foot"><small>${qty(i)}</small>${priceOf(i.price)}</div></div></div>`).join("")}</div>`;
   } else {
-    body = `<div class="grid units">${s.items.map(i => `<div class="unit">${ph(i.image, i.name, i.tag ? `<span class="tag">${esc(i.tag)}</span>` : "")}<div class="body"><div><b>${esc(i.name)}</b>${i.desc || qty(i) ? `<small style="display:block">${esc(i.desc || "")}${i.desc && qty(i) ? " · " : ""}${qty(i)}</small>` : ""}</div>${priceOf(i.price)}</div></div>`).join("")}</div>`;
+    body = `<div class="grid units">${s.items.map(i => `<div class="unit">${ph(i.image, i.name, i.tag ? `<span class="tag">${esc(i.tag)}</span>` : "")}<div class="body"><div><b>${esc(i.name)}</b>${i.desc || qty(i) ? `<small style="display:block">${esc(i.desc || "")}${i.desc && qty(i) ? " · " : ""}${qty(i)}</small>` : ""}${bullets(i.lines)}</div>${priceOf(i.price)}</div></div>`).join("")}</div>`;
   }
   const bar = sub > 0 && s.items.length > 1 ? `<div class="subbar"><span>${t.subtotal} ${esc(letter)}${totalQty ? ` — ${totalQty} ${esc(unit)}` : ""}</span><b>${idr(sub)}</b></div>` : "";
   return head + body + bar;
@@ -229,7 +241,8 @@ ${q.notes.length ? `<div class="sec-head"><div class="sec-num">${ic("send", "wid
 ${q.operational.length ? `<div class="sec-head"><div class="sec-num">${esc(opsLetter)}</div><div><h2>${t.ops}</h2><p>${t.opsSub}</p></div></div><div class="card ops">${q.operational.map(r => `<div class="row"><span>${esc(r.name)}${r.note ? `<small>${esc(r.note)}</small>` : ""}</span><span>${r.price === null ? `<span class="tbc">${t.tbc}</span>` : idr(r.price)}</span></div>`).join("")}</div>` : ""}
 <div class="total">${tot.sections.filter(s => !s.optional).map(s => `<div class="line"><span>${esc(s.title)} (${letterOf.get(s.id)})</span><span>${idr(s.subtotal)}</span></div>`).join("")}
 ${q.operational.length ? `<div class="line"><span><b>${t.services}</b></span><span><b>${idr(tot.services)}</b></span></div><div class="line"><span>${t.opsLine} (${opsLetter})</span><span>${idr(tot.operational)}</span></div>` : ""}
-<div class="grand"><div class="lbl">${t.grand}</div><div><b>${idr(tot.grand)}</b>${q.terms.dpPercent > 0 && q.terms.dpPercent < 100 ? `<small>${t.dpOf} ${q.terms.dpPercent}% · ${idr(tot.dp)}</small>` : ""}</div></div></div>
+<div class="grand"><div class="lbl">${t.grand}</div><div><b>${idr(tot.grand)}</b>${q.terms.dpPercent > 0 && q.terms.dpPercent < 100 ? `<small>${t.dpOf} ${q.terms.dpPercent}% · ${idr(tot.dp)}</small>` : ""}</div></div>
+${tot.sections.some(s => s.optional && s.subtotal > 0) ? `<div class="opts"><div class="lbl">${t.addons}</div>${tot.sections.filter(s => s.optional && s.subtotal > 0).map(s => `<div class="line"><span>+ ${esc(s.title)}</span><span>${idr(s.subtotal)}</span></div>`).join("")}</div>` : ""}</div>
 <footer class="footer"><div class="brand">FORIOR<small>Property Photography &amp; Video Services</small></div><div class="contacts"><a href="https://${FORIOR_CONTACT.website}" target="_blank" rel="noopener">${ic("globe")}${FORIOR_CONTACT.website}</a><a href="https://wa.me/${FORIOR_CONTACT.wa}" target="_blank" rel="noopener">${ic("phone")}${FORIOR_CONTACT.phone}</a></div></footer>
 ${q.footnote ? `<p class="fine">${esc(q.footnote)}</p>` : ""}
 </div></main>
