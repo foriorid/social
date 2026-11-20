@@ -2,13 +2,14 @@
 
 // Photo Delivery (admin): client galleries fed from Google Drive folders. Copied from the FORIOR Workspace
 // module with the same workflow and data shape; stored in Supabase `galleries` (owner-only via RLS).
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUpDown, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Download, ExternalLink, FileText, FolderOpen, Heart, History, Images, LayoutGrid, Link2, List, Mail, MessageCircle, MessageSquare, MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, User, X } from "lucide-react";
 import { listDriveFolder } from "./assets";
 import { driveFolderId } from "./lib/flow";
+import { useDetail } from "./lib/hashnav";
 import { activeWorkspace, callServer, readCloud, supabase, switchWorkspace } from "./lib/cloud";
-import { notify, useCloud } from "./modules";
+import { BackButton, notify, useCloud } from "./modules";
 import { PHASES, PHASE_LABEL, PHASE_SHORT, fromWorkspace, mergeImport, newGallery, setPhase, slugify, uniqueSlug, withFolder, type FolderType, type Gallery, type Phase, type Photo } from "../supabase/functions/gallery/delivery";
 
 type Row = { id: string; slug: string; data: Gallery; updated_at: string };
@@ -26,17 +27,22 @@ export function galleryLink(slug: string) {
   return window.location.hostname.endsWith("github.io") ? `${window.location.origin}${root}/gallery/?g=${slug}` : `${window.location.origin}${root}/gallery/${slug}`;
 }
 
-/** Lists a Drive folder like the Workspace did: one level of sub-folders becomes photo sections. */
+type Listed = { id: string; name: string; section: string | null };
+/**
+ * Lists a Drive folder with its sub-folders (up to 3 levels): photos at the top come first without a section,
+ * then each sub-folder becomes a section named by its path, e.g. "Kamar / Deluxe".
+ */
 async function listSectioned(folderUrl: string) {
   const id = driveFolderId(folderUrl);
   if (!id) throw new Error("Link bukan folder Google Drive. Tempel link folder lengkap.");
-  const files = await listDriveFolder(id);
-  const subs = files.filter(f => f.mimeType === FOLDER_MIME).sort(byName);
-  const images = (list: typeof files) => list.filter(f => f.mimeType.startsWith("image/")).sort(byName);
-  if (!subs.length) return images(files).map(f => ({ id: f.id, name: f.name, section: null }));
-  const out: { id: string; name: string; section: string }[] = [];
-  for (const s of subs) for (const f of images(await listDriveFolder(s.id))) out.push({ id: f.id, name: f.name, section: s.name });
-  return out;
+  const walk = async (folderId: string, path: string, depth: number): Promise<Listed[]> => {
+    const files = await listDriveFolder(folderId);
+    const here = files.filter(f => f.mimeType.startsWith("image/")).sort(byName).map(f => ({ id: f.id, name: f.name, section: path || null }));
+    const subs = depth < 3 ? files.filter(f => f.mimeType === FOLDER_MIME).sort(byName) : [];
+    const nested = await Promise.all(subs.map(s => walk(s.id, path ? `${path} / ${s.name}` : s.name, depth + 1)));
+    return [...here, ...nested.flat()];
+  };
+  return walk(id, "", 0);
 }
 
 /** Workflow steps. With onPick (admin), each step is a button that moves the gallery to that phase. */
@@ -59,11 +65,6 @@ function useGalleries() {
   useEffect(() => { load(); }, [load]);
   return { rows, setRows, state, error, load };
 }
-
-/** Lets another page (the FORIOR dashboard) open a gallery's detail when Photo Delivery mounts. */
-let pendingOpen: string | null = null;
-export const openGallerySoon = (id: string) => { pendingOpen = id; };
-const takePendingOpen = () => { const id = pendingOpen; pendingOpen = null; return id; };
 
 /** The one thing the team should do next for a gallery, and how urgent it is (lower = sooner). */
 export function nextActionOf(g: Gallery): { text: string; rank: number } {
@@ -93,7 +94,7 @@ export function DeliveryPage() {
 
 function DeliveryInner() {
   const { rows, setRows, state, error, load } = useGalleries();
-  const [openId, setOpenId] = useState<string | null>(() => takePendingOpen());
+  const [openId, setOpenId] = useDetail("Photo Delivery");
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [query, setQuery] = useState(""), [phase, setPhaseFilter] = useState<"" | Phase>("");
@@ -254,10 +255,10 @@ function NewGalleryModal({ taken, onClose, onCreated }: { taken: string[]; onClo
 
 
 const FOLDERS: Record<FolderType, { label: string; hint: string; key: "previewFolderUrl" | "draftFolderUrl" | "revisionFolderUrl" | "finalFolderUrl" }> = {
-  preview: { label: "Foto preview", key: "previewFolderUrl", hint: "Foto yang dipilih klien. Sub-folder tampil sebagai bagian. Memuat ulang tidak menghapus pilihan dan catatan klien." },
-  draft: { label: "Draft (hasil edit)", key: "draftFolderUrl", hint: "Hasil edit foto pilihan, untuk di-review klien." },
-  revision: { label: "Hasil revisi", key: "revisionFolderUrl", hint: "Foto setelah revisi, agar klien bisa me-review lagi." },
-  final: { label: "Foto final (resolusi tinggi)", key: "finalFolderUrl", hint: "Foto final yang ditampilkan dan diunduh klien di tahap Selesai." }
+  preview: { label: "Foto preview", key: "previewFolderUrl", hint: "Foto yang dipilih klien. Sub-folder (sampai 3 tingkat) tampil sebagai bagian. Memuat ulang tidak menghapus pilihan dan catatan klien." },
+  draft: { label: "Draft (hasil edit)", key: "draftFolderUrl", hint: "Hasil edit foto pilihan, untuk di-review klien. Sub-folder tampil sebagai bagian." },
+  revision: { label: "Hasil revisi", key: "revisionFolderUrl", hint: "Foto setelah revisi, agar klien bisa me-review lagi. Sub-folder tampil sebagai bagian." },
+  final: { label: "Foto final (resolusi tinggi)", key: "finalFolderUrl", hint: "Foto final yang ditampilkan dan diunduh klien di tahap Selesai. Sub-folder tampil sebagai bagian." }
 };
 const SET_LABEL: Record<FolderType, string> = { preview: "Preview", draft: "Draft", revision: "Revisi", final: "Final" };
 const photosOf = (g: Gallery, t: FolderType) => (t === "preview" ? g.previewPhotos : t === "draft" ? g.draftPhotos : t === "revision" ? g.revisionPhotos : g.finalPhotos);
@@ -382,9 +383,13 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
   const all = photosOf(g, set);
   const shown = useMemo(() => {
     const list = all.filter(p => filter === "all" ? true : filter === "edit" ? p.selected : filter === "raw" ? p.rawSelected : filter === "none" ? !p.selected && !p.rawSelected : !!p.note);
-    return [...list].sort((a, b) => (sort === "az" ? byName(a, b) : byName(b, a)));
+    // Sort by name inside each Drive sub-folder, keeping the folders in their loaded order.
+    const sec = new Map<string | null, number>(); list.forEach(p => { if (!sec.has(p.section)) sec.set(p.section, sec.size); });
+    return [...list].sort((a, b) => sec.get(a.section)! - sec.get(b.section)! || (sort === "az" ? byName(a, b) : byName(b, a)));
   }, [all, filter, sort]);
   const visible = shown.slice(0, limit);
+  // A heading wherever a new Drive sub-folder starts (only when the set has sub-folders).
+  const secHead = (k: number) => { const p = visible[k]; return p.section && p.section !== visible[k - 1]?.section ? <h4 className="dl-psec">{p.section}<small>{shown.filter(x => x.section === p.section).length} foto</small></h4> : null; };
   const more = shown.length > limit;
   // Infinite scroll: load the next batch when the end of the grid comes near the viewport.
   useEffect(() => {
@@ -426,7 +431,7 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
 
   const header = <div className="dl-top">
     <div className="dl-top-main">
-      <nav className="dl-crumb" aria-label="Breadcrumb"><span>Workspace</span><ChevronRight size={13} /><button onClick={onBack}>Photo Delivery</button><ChevronRight size={13} /><b>{g.title}</b></nav>
+      <BackButton label="Photo Delivery" onClick={onBack} />
       <h1>{g.title}</h1>
       <div className="dl-top-chips">{g.client?.company && <span className="dl-chip"><Building2 size={13} /> {g.client.company}</span>}<span className={`dl-phase ${PHASE_CLASS[g.phase]}`}><Check size={12} /> {PHASE_SHORT[g.phase]}</span>{due.date && <span className="dl-due"><Clock size={13} /> {due.label}: {due.label === "Shoot" ? fmtShoot(due.date) : fmtDate(due.date)}</span>}</div>
     </div>
@@ -435,7 +440,6 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
         {menu === "more" && <div className="floating-menu dl-menu" onMouseLeave={() => setMenu("")}>
           <button onClick={() => { setModal("edit"); setMenu(""); }}><Pencil size={14} /> Edit detail</button>
           {g.previewSubmittedAt && <button onClick={() => { changePhase("Preview"); setMenu(""); }}><RotateCcw size={14} /> Buka kembali pemilihan</button>}
-          <button onClick={() => { onBack(); setMenu(""); }}><ChevronLeft size={14} /> Kembali ke daftar</button>
           {canDelete && <button className="x-danger" onClick={() => { setMenu(""); onDelete(); }}><Trash2 size={14} /> Hapus galeri</button>}
         </div>}
       </div>
@@ -481,11 +485,11 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
 
           {!all.length ? <div className="dl-empty dl-empty-tab"><FolderOpen size={26} /><h3>Belum ada foto {SET_LABEL[set].toLowerCase()}</h3><p>{FOLDERS[set].hint}</p><button className="primary-button" onClick={() => setModal(set)}><FolderOpen size={15} /> Muat folder {SET_LABEL[set].toLowerCase()}</button></div>
           : !shown.length ? <p className="x-empty">Tidak ada foto dengan filter ini.</p>
-          : view === "grid" ? <div className="dl-pgrid">{visible.map(p => { const i = shown.indexOf(p); return <button key={p.id} className={`dl-pcard ${p.selected ? "on" : ""} ${p.rawSelected ? "raw" : ""}`} onClick={() => setLb(i)} title={p.note || p.name}>
+          : view === "grid" ? <div className="dl-pgrid">{visible.map((p, k) => { const i = shown.indexOf(p); return <Fragment key={p.id}>{secHead(k)}<button className={`dl-pcard ${p.selected ? "on" : ""} ${p.rawSelected ? "raw" : ""}`} onClick={() => setLb(i)} title={p.note || p.name}>
               <span className="dl-pimg"><img src={p.thumbnailUrl} alt={p.name} loading="lazy" referrerPolicy="no-referrer" />{set === "preview" && <i className={`dl-check ${p.selected ? "on" : ""}`}>{p.selected && <Check size={13} />}</i>}{p.note && <i className="dl-note-dot"><MessageSquare size={12} /></i>}</span>
               <span className="dl-pmeta"><span>{p.name}</span>{p.selected ? <em className="dl-tag edit">Edit</em> : p.rawSelected ? <em className="dl-tag raw">Raw</em> : p.note ? <em className="dl-tag note">Catatan</em> : null}</span>
-            </button>; })}</div>
-          : <div className="dl-plist">{visible.map(p => { const i = shown.indexOf(p); return <button key={p.id} className="dl-prow" onClick={() => setLb(i)}><img src={p.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /><span className="dl-prow-name"><b>{p.name}</b>{p.section && <small>{p.section}</small>}</span><span className="dl-prow-note">{p.note || <span className="dl-muted">—</span>}</span>{p.selected ? <em className="dl-tag edit">Edit</em> : p.rawSelected ? <em className="dl-tag raw">Raw</em> : <em className="dl-tag none">—</em>}</button>; })}</div>}
+            </button></Fragment>; })}</div>
+          : <div className="dl-plist">{visible.map((p, k) => { const i = shown.indexOf(p); return <Fragment key={p.id}>{secHead(k)}<button className="dl-prow" onClick={() => setLb(i)}><img src={p.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /><span className="dl-prow-name"><b>{p.name}</b>{p.section && <small>{p.section}</small>}</span><span className="dl-prow-note">{p.note || <span className="dl-muted">—</span>}</span>{p.selected ? <em className="dl-tag edit">Edit</em> : p.rawSelected ? <em className="dl-tag raw">Raw</em> : <em className="dl-tag none">—</em>}</button></Fragment>; })}</div>}
 
           {shown.length > 0 && <div className="dl-loadmore" ref={sentinel}>{more ? <button className="outline-button" onClick={() => setLimit(n => n + BATCH)}>Muat {Math.min(BATCH, shown.length - limit)} foto lagi</button> : null}<small>Menampilkan {visible.length} dari {shown.length} foto</small></div>}
         </>}

@@ -28,7 +28,8 @@ import { AssetLibraryPage } from "./assets";
 import { ContentPlanPage } from "./plan";
 import { AutoDmPage } from "./autodm";
 import { StudioPage } from "./studio";
-import { DeliveryPage, openGallerySoon } from "./delivery";
+import { DeliveryPage } from "./delivery";
+import { navigate, slugOf, useRoute } from "./lib/hashnav";
 import { BusinessDashboard, PhotoPlannerPage } from "./business";
 import { CalendarPage } from "./schedule";
 import { SettingsPage } from "./settings";
@@ -270,7 +271,7 @@ function AnalyticsPage({ onAddToPlan }: {onAddToPlan:(idea:string)=>void}) {
 }
 
 function AppShell() {
-  const [activeNav, setActiveNav] = useState("Dashboard");
+  const route = useRoute();
   const [platform, setPlatform] = useState<Platform>("All channels");
   const [range, setRange] = useState<Range>("Last 30 Days");
   const [showRange, setShowRange] = useState(false);
@@ -282,7 +283,12 @@ function AppShell() {
   const ws = activeWorkspace(cloud);
   const wsLabel = (w: { kind: string }) => (w.kind === "personal" ? "Personal Brand" : "Business");
   const isBiz = ws?.kind === "business";
-  const currentItem = navGroupsFor(ws?.kind, ws?.role).flatMap(g => g.items).find(i => i.name === activeNav);
+  const navItems = navGroupsFor(ws?.kind, ws?.role).flatMap(g => g.items);
+  // The page comes from the URL hash, so refresh and the back gesture keep the user where they were.
+  const activeNav = [...navItems.map(i => i.name), "Automation", "Settings"].find(n => slugOf(n) === route.slug) ?? "Dashboard";
+  const setActiveNav = (nav: string) => navigate(nav);
+  const openGallery = (id: string) => navigate("Photo Delivery", id);
+  const currentItem = navItems.find(i => i.name === activeNav);
   // One group open at a time; all closed by default. Opening Project closes Sosmed and vice versa.
   const [navOpen, setNavOpen] = useStored<string>("navOpen", "");
   const toggleGroup = (label: string) => setNavOpen(o => (o === label ? "" : label));
@@ -447,7 +453,7 @@ function AppShell() {
           </div>
         )}
 
-        {activeNav === "Research & Insight" ? <ResearchPage /> : activeNav === "Auto DM" ? <AutoDmPage /> : activeNav === "Content Plan" ? <ContentPlanPage target={planTarget} onTargetDone={()=>setPlanTarget(null)} onOpenStudio={(campaignId,day)=>{setStudioTarget({campaignId,day});setActiveNav("Production Studio");}} onShare={(data)=>{const token=btoa(unescape(encodeURIComponent(JSON.stringify(data))));const link=window.location.origin+window.location.pathname+"#share="+token;navigator.clipboard?.writeText(link);window.open(link,"_blank","noopener,noreferrer");}} /> : activeNav === "AI Agent Team" ? <AgentsPage /> : activeNav === "Asset Library" ? <AssetLibraryPage /> : activeNav === "Analytics" ? <AnalyticsPage onAddToPlan={(idea)=>{addIdea(idea);notify("Ide masuk ke inbox ide di Content Plan.");setActiveNav("Content Plan");}} /> : activeNav === "Inbox & Leads" ? <InboxLeadsPage /> : activeNav === "Automation" ? <div className="module-page automation-simple"><section className="panel automation-simple-card"><span className="automation-simple-icon"><Zap size={24}/></span><div><h2>Automation</h2><p>Atur pengingat dan workflow sederhana. Trigger otomatis akan diaktifkan setelah backend tersedia.</p></div><button className="primary-button" onClick={()=>setQuickAction("Create automation")}><Plus size={14}/> New automation</button></section><div className="automation-simple-grid"><article><Clock3 size={18}/><b>Content reminder</b><p>Pengingat jadwal konten yang akan tayang.</p><span>Coming soon</span></article><article><MessageCircle size={18}/><b>Approval reminder</b><p>Pengingat untuk brief yang menunggu review.</p><span>Coming soon</span></article></div></div> : activeNav === "Penawaran" ? <QuotePage /> : activeNav === "Settings" ? <SettingsPage /> : activeNav === "Photo Delivery" ? <DeliveryPage /> : activeNav === "Photo Planner" ? <PhotoPlannerPage openGallery={id => { openGallerySoon(id); setActiveNav("Photo Delivery"); }} /> : activeNav === "Calendar" ? <CalendarPage go={setActiveNav} openGallery={id => { openGallerySoon(id); setActiveNav("Photo Delivery"); }} /> : activeNav === "Dashboard" && isBiz ? <BusinessDashboard go={setActiveNav} openGallery={id => { openGallerySoon(id); setActiveNav("Photo Delivery"); }} /> : activeNav === "Production Studio" ? <StudioPage target={studioTarget} onOpenPlan={(ref)=>{setPlanTarget(ref ?? null);setActiveNav("Content Plan");}} /> : <div className="dashboard-content">
+        {activeNav === "Research & Insight" ? <ResearchPage /> : activeNav === "Auto DM" ? <AutoDmPage /> : activeNav === "Content Plan" ? <ContentPlanPage target={planTarget} onTargetDone={()=>setPlanTarget(null)} onOpenStudio={(campaignId,day)=>{setStudioTarget({campaignId,day});setActiveNav("Production Studio");}} onShare={(data)=>{const token=btoa(unescape(encodeURIComponent(JSON.stringify(data))));const link=window.location.origin+window.location.pathname+"#share="+token;navigator.clipboard?.writeText(link);window.open(link,"_blank","noopener,noreferrer");}} /> : activeNav === "AI Agent Team" ? <AgentsPage /> : activeNav === "Asset Library" ? <AssetLibraryPage /> : activeNav === "Analytics" ? <AnalyticsPage onAddToPlan={(idea)=>{addIdea(idea);notify("Ide masuk ke inbox ide di Content Plan.");setActiveNav("Content Plan");}} /> : activeNav === "Inbox & Leads" ? <InboxLeadsPage /> : activeNav === "Automation" ? <div className="module-page automation-simple"><section className="panel automation-simple-card"><span className="automation-simple-icon"><Zap size={24}/></span><div><h2>Automation</h2><p>Atur pengingat dan workflow sederhana. Trigger otomatis akan diaktifkan setelah backend tersedia.</p></div><button className="primary-button" onClick={()=>setQuickAction("Create automation")}><Plus size={14}/> New automation</button></section><div className="automation-simple-grid"><article><Clock3 size={18}/><b>Content reminder</b><p>Pengingat jadwal konten yang akan tayang.</p><span>Coming soon</span></article><article><MessageCircle size={18}/><b>Approval reminder</b><p>Pengingat untuk brief yang menunggu review.</p><span>Coming soon</span></article></div></div> : activeNav === "Penawaran" ? <QuotePage /> : activeNav === "Settings" ? <SettingsPage /> : activeNav === "Photo Delivery" ? <DeliveryPage /> : activeNav === "Photo Planner" ? <PhotoPlannerPage openGallery={openGallery} /> : activeNav === "Calendar" ? <CalendarPage go={setActiveNav} openGallery={openGallery} /> : activeNav === "Dashboard" && isBiz ? <BusinessDashboard go={setActiveNav} openGallery={openGallery} /> : activeNav === "Production Studio" ? <StudioPage target={studioTarget} onOpenPlan={(ref)=>{setPlanTarget(ref ?? null);setActiveNav("Content Plan");}} /> : <div className="dashboard-content">
           <section className="metrics-row">
             {metrics.map((metric) => {
               const Icon = metric.icon;
