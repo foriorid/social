@@ -4,19 +4,39 @@
 // Drafts live in the workspace store ("quotes"); publishing writes a client-safe <slug>.json to the public
 // Storage bucket `quotes`, with photos under img/<quote id>/. The page itself is rendered by app/lib/quote.ts.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Copy, Eye, FileText, Image as ImageIcon, Link2, Loader2, MessageCircle, Plus, RefreshCw, Sparkles, Trash2, Upload, X, ChevronDown, ChevronUp, CopyPlus, ExternalLink, Send, Undo2 } from "lucide-react";
+import { ArrowLeft, Check, Copy, Eye, MoreHorizontal, Pencil, Search, FileText, Image as ImageIcon, Link2, Loader2, MessageCircle, Plus, RefreshCw, Sparkles, Trash2, Upload, X, ChevronDown, ChevronUp, CopyPlus, ExternalLink, Send, Undo2 } from "lucide-react";
 import { supabase } from "./lib/cloud";
 import { useStored } from "./lib/store";
 import { notify } from "./modules";
 import { askAIDocs, AiSetupError, CHEAP_MODEL, type AiDoc } from "./lib/ai";
 import { docxText } from "./lib/docx";
-import { isSlug, newQuote, parseBrief, publicSnapshot, renderQuoteHtml, rid, shortIdr, slugify, idr, totals, type QItem, type QLayout, type QRow, type QSection, type Quote } from "./lib/quote";
+import { isSlug, newQuote, parseBrief, publicSnapshot, renderQuoteHtml, rid, shortIdr, slugify, idr, totals, type PortfolioItem, type QItem, type QLayout, type QRow, type QSection, type Quote, type QuoteAnswer } from "./lib/quote";
 
 const BUCKET = "quotes";
 const SONNET = "claude-sonnet-5-5";
 const when = (iso?: string) => (iso ? new Date(iso).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
 const ago = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? "baru saja" : m < 60 ? `${m} mnt lalu` : m < 1440 ? `${Math.round(m / 60)} jam lalu` : `${Math.round(m / 1440)} hari lalu`; };
 type Opens = Record<string, { n: number; last: string }>;
+type Answers = Record<string, { name: string | null; answers: QuoteAnswer[]; at: string }[]>;
+
+/** Writes the client-safe copy to <slug>.json (replacing an older link name) and returns the updated quotation. */
+async function publishQuote(q: Quote, slug: string): Promise<Quote> {
+  if (!isSlug(slug)) throw new Error("Nama link hanya huruf kecil, angka, dan tanda minus (3–63 karakter).");
+  if (slug !== q.slug) {
+    const { data } = await supabase.storage.from(BUCKET).list("", { limit: 1000, search: slug });
+    if ((data ?? []).some(f => f.name === `${slug}.json` || f.name === `${slug}.html`)) throw new Error("Nama link ini sudah dipakai penawaran lain. Pakai nama lain.");
+  }
+  const now = new Date().toISOString();
+  const next: Quote = { ...q, slug, status: "sent", publishedAt: now, updatedAt: now };
+  const body = new Blob([JSON.stringify(publicSnapshot(next))], { type: "application/json" });
+  const { error } = await supabase.storage.from(BUCKET).upload(`${slug}.json`, body, { contentType: "application/json", cacheControl: "0", upsert: true });
+  if (error) throw new Error(`Gagal mengirim: ${error.message}`);
+  if (q.slug && q.slug !== slug && q.publishedAt) await supabase.storage.from(BUCKET).remove([`${q.slug}.json`]);
+  return next;
+}
+const isDirty = (q: Quote) => !!q.publishedAt && Date.parse(q.updatedAt) > Date.parse(q.publishedAt) + 1500;
+const linkOf = (slug: string) => `${typeof window === "undefined" ? "" : window.location.origin}/quote/${slug}/`;
+async function copyLink(slug: string) { try { await navigator.clipboard.writeText(linkOf(slug)); notify("Link disalin."); } catch { window.prompt("Salin link ini:", linkOf(slug)); } }
 
 // ---------- files ----------
 const readB64 = (blob: Blob) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] ?? ""); r.onerror = () => rej(new Error("File tidak bisa dibaca.")); r.readAsDataURL(blob); });
@@ -77,6 +97,8 @@ export function QuoteBuilder() {
   const [quotes, setQuotes] = useStored<Quote[]>("quotes", []);
   const [openId, setOpenId] = useState<string | null>(null);
   const [opens, setOpens] = useState<Opens>({});
+  const [answers, setAnswers] = useState<Answers>({});
+  const [menu, setMenu] = useState<string | null>(null);
   const published = quotes.filter(q => q.publishedAt).map(q => q.slug);
   const key = published.join(",");
   useEffect(() => {
@@ -86,56 +108,80 @@ export function QuoteBuilder() {
       for (const r of data ?? []) { const x = o[r.slug] ?? { n: 0, last: r.at }; x.n++; o[r.slug] = x; }
       setOpens(o);
     });
+    supabase.from("quote_answers").select("slug, name, answers, at").in("slug", published).order("at", { ascending: false }).limit(500).then(({ data }) => {
+      const a: Answers = {};
+      for (const r of data ?? []) (a[r.slug] ??= []).push({ name: r.name, answers: r.answers as QuoteAnswer[], at: r.at });
+      setAnswers(a);
+    });
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = (q: Quote) => setQuotes(list => list.map(x => (x.id === q.id ? { ...q, updatedAt: new Date().toISOString() } : x)));
   const create = () => { const q = newQuote(); setQuotes(list => [q, ...list]); setOpenId(q.id); };
+  const duplicate = (src: Quote) => { const now = new Date().toISOString(); const copy: Quote = { ...structuredClone(src), id: rid() + rid(), slug: "", status: "draft", publishedAt: undefined, eyebrow: src.eyebrow.replace(/\d+/, d => String(Number(d) + 1)), createdAt: now, updatedAt: now }; setQuotes(list => [copy, ...list]); setOpenId(copy.id); notify("Penawaran diduplikat. Edit sebagai opsi berikutnya."); };
+  const remove = async (src: Quote) => {
+    if (!window.confirm(`Hapus penawaran "${src.title || "tanpa judul"}"?${src.publishedAt ? " Link-nya juga akan berhenti." : ""}`)) return;
+    if (src.publishedAt && src.slug) { const { error } = await supabase.storage.from(BUCKET).remove([`${src.slug}.json`]); if (error) return notify(`Gagal menghapus link: ${error.message}`); }
+    setQuotes(list => list.filter(x => x.id !== src.id)); setOpenId(null); notify("Penawaran dihapus.");
+  };
+  const update = async (src: Quote) => { try { save(await publishQuote(src, src.slug)); notify("Link diperbarui. Klien melihat versi terbaru."); } catch (e) { notify(e instanceof Error ? e.message : String(e)); } };
   const current = quotes.find(q => q.id === openId);
-  if (current) return <QuoteEditor key={current.id} quote={current} opens={opens[current.slug]} onChange={save} onBack={() => setOpenId(null)}
-    onDuplicate={() => { const now = new Date().toISOString(); const copy: Quote = { ...structuredClone(current), id: rid() + rid(), slug: "", status: "draft", publishedAt: undefined, eyebrow: current.eyebrow.replace(/\d+/, d => String(Number(d) + 1)), createdAt: now, updatedAt: now }; setQuotes(list => [copy, ...list]); setOpenId(copy.id); notify("Penawaran diduplikat. Edit sebagai opsi berikutnya."); }}
-    onDelete={async () => {
-      if (!window.confirm("Hapus penawaran ini? Link-nya juga akan berhenti.")) return;
-      if (current.publishedAt && current.slug) await supabase.storage.from(BUCKET).remove([`${current.slug}.json`]);
-      setQuotes(list => list.filter(x => x.id !== current.id)); setOpenId(null);
-    }} />;
+  if (current) return <QuoteEditor key={current.id} quote={current} opens={opens[current.slug]} answers={answers[current.slug]} onChange={save} onBack={() => setOpenId(null)}
+    onDuplicate={() => duplicate(current)} onDelete={() => remove(current)} onUpdate={() => update(current)} />;
 
   return <section className="qb-list">
     {!quotes.length ? <div className="panel qb-empty"><FileText size={26} /><h3>Belum ada penawaran</h3><p>Buat penawaran dari brief klien. Upload shotlist atau dokumen klien, Claude merangkum kebutuhannya, Anda tinggal isi harga dan foto.</p><button className="primary-button" onClick={create}><Plus size={15} /> Penawaran baru</button></div>
       : <div className="qb-cards">{quotes.map(q => {
         const t = totals(q), o = opens[q.slug], cover = q.cover || q.sections.flatMap(s => s.items).find(i => i.image)?.image;
-        return <button key={q.id} className="qb-card" onClick={() => setOpenId(q.id)}>
+        const ans = answers[q.slug]?.length ?? 0;
+        return <div key={q.id} className="qb-card-wrap"><button className="qb-card" onClick={() => setOpenId(q.id)}>
           <span className="qb-thumb">{cover ? <img src={cover} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <FileText size={20} />}</span>
           <span className="qb-info"><b>{[q.client.name, q.title].filter(Boolean).join(" — ") || "Penawaran tanpa judul"}{q.eyebrow ? ` · ${q.eyebrow}` : ""}</b>
             <small>{q.client.location || "—"} · {when(q.updatedAt)}</small>
-            {!q.publishedAt ? <em className="qb-st d">● Draft</em> : o ? <em className="qb-st o">● Dibuka {o.n}× · {ago(o.last)}</em> : <em className="qb-st s">● Terkirim · belum dibuka</em>}</span>
+            <span className="qb-sts">{!q.publishedAt ? <em className="qb-st d">● Draft</em> : o ? <em className="qb-st o">● Dibuka {o.n}× · {ago(o.last)}</em> : <em className="qb-st s">● Terkirim · belum dibuka</em>}{ans > 0 && <em className="qb-st a">● {ans} jawaban</em>}{isDirty(q) && <em className="qb-st w">● Belum diperbarui</em>}</span></span>
           <span className="qb-price">{t.grand ? shortIdr(t.grand) : "—"}</span>
-        </button>;
+        </button>
+        <button className="qb-icon qb-more" aria-label="Opsi penawaran" aria-expanded={menu === q.id} onClick={() => setMenu(menu === q.id ? null : q.id)}><MoreHorizontal size={17} /></button>
+        {menu === q.id && <div className="qb-menu qb-menu-r" role="menu" onClick={() => setMenu(null)}>
+          <button role="menuitem" onClick={() => setOpenId(q.id)}><Pencil size={15} /> Edit</button>
+          {isDirty(q) && <button role="menuitem" onClick={() => update(q)}><RefreshCw size={15} /> Perbarui link</button>}
+          {q.publishedAt && <button role="menuitem" onClick={() => copyLink(q.slug)}><Copy size={15} /> Salin link</button>}
+          <button role="menuitem" onClick={() => duplicate(q)}><CopyPlus size={15} /> Duplikat</button>
+          <button role="menuitem" className="x-danger" onClick={() => remove(q)}><Trash2 size={15} /> Hapus</button>
+        </div>}</div>;
       })}</div>}
     {quotes.length > 0 && <button className="qb-fab primary-button" onClick={create}><Plus size={16} /> Penawaran baru</button>}
   </section>;
 }
 
 // ---------- editor ----------
-function QuoteEditor({ quote: q, opens, onChange, onBack, onDuplicate, onDelete }: { quote: Quote; opens?: { n: number; last: string }; onChange: (q: Quote) => void; onBack: () => void; onDuplicate: () => void; onDelete: () => void }) {
+function QuoteEditor({ quote: q, opens, answers, onChange, onBack, onDuplicate, onDelete, onUpdate }: { quote: Quote; opens?: { n: number; last: string }; answers?: Answers[string]; onChange: (q: Quote) => void; onBack: () => void; onDuplicate: () => void; onDelete: () => void; onUpdate: () => Promise<void> }) {
   const [tab, setTab] = useState<"brief" | "isi" | "kirim">(q.sections.some(s => s.items.some(i => i.name)) ? "isi" : "brief");
   const [preview, setPreview] = useState(false);
+  const [menu, setMenu] = useState(false), [updating, setUpdating] = useState(false);
   const set = (patch: Partial<Quote>) => onChange({ ...q, ...patch });
   const t = useMemo(() => totals(q), [q]);
   const html = useMemo(() => renderQuoteHtml(publicSnapshot(q), { preview: true }), [q]);
-  const dirty = !!q.publishedAt && Date.parse(q.updatedAt) > Date.parse(q.publishedAt) + 1500;
+  const dirty = isDirty(q);
 
   return <div className="qb-editor">
     <div className="qb-head">
       <button className="qb-icon" onClick={onBack} aria-label="Kembali ke daftar"><ArrowLeft size={18} /></button>
       <div className="qb-title"><b>{q.title || "Penawaran baru"}</b><small>{q.client.name || "Klien belum diisi"}{q.publishedAt ? (dirty ? " · ada perubahan belum dikirim" : " · terkirim") : " · draft"}</small></div>
+      {dirty && <button className="primary-button qb-upd" disabled={updating} onClick={async () => { setUpdating(true); await onUpdate(); setUpdating(false); }}>{updating ? <Loader2 size={15} className="lg-spin" /> : <RefreshCw size={15} />}<span>Perbarui link</span></button>}
       <button className="qb-icon qb-only-mobile" onClick={() => setPreview(true)} aria-label="Pratinjau"><Eye size={18} /></button>
+      <span className="qb-more-wrap"><button className="qb-icon" aria-label="Opsi penawaran" aria-expanded={menu} onClick={() => setMenu(m => !m)}><MoreHorizontal size={18} /></button>
+        {menu && <div className="qb-menu qb-menu-r" role="menu" onClick={() => setMenu(false)}>
+          {q.publishedAt && <button role="menuitem" onClick={() => copyLink(q.slug)}><Copy size={15} /> Salin link</button>}
+          <button role="menuitem" onClick={onDuplicate}><CopyPlus size={15} /> Duplikat jadi opsi baru</button>
+          <button role="menuitem" className="x-danger" onClick={onDelete}><Trash2 size={15} /> Hapus penawaran</button>
+        </div>}</span>
     </div>
     <div className="qb-tabs" role="tablist">{([["brief", "1 · Brief"], ["isi", "2 · Isi"], ["kirim", "3 · Kirim"]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
     <div className="qb-split">
       <div className="qb-form">
         {tab === "brief" && <BriefTab q={q} set={set} onDone={() => setTab("isi")} />}
         {tab === "isi" && <ContentTab q={q} set={set} />}
-        {tab === "kirim" && <SendTab q={q} set={set} opens={opens} dirty={dirty} onDuplicate={onDuplicate} onDelete={onDelete} />}
+        {tab === "kirim" && <SendTab q={q} set={set} opens={opens} answers={answers} dirty={dirty} onDuplicate={onDuplicate} onDelete={onDelete} />}
       </div>
       <aside className="qb-preview"><div className="qb-preview-bar"><span>Pratinjau klien</span><b>{shortIdr(t.grand)}</b></div><iframe title="Pratinjau penawaran" srcDoc={html} sandbox="allow-popups" /></aside>
     </div>
@@ -173,7 +219,7 @@ function BriefTab({ q, set, onDone }: { q: Quote; set: (p: Partial<Quote>) => vo
     const untouchedNotes = q.notes.every(n => newQuote().notes.some(d0 => d0.title === n.title));
     set({ sections: d.sections.length ? d.sections : q.sections, title: q.title || d.title || "", subtitle: q.subtitle || d.subtitle || "", eyebrow: q.eyebrow || d.eyebrow || "",
       client: { ...q.client, name: q.client.name || d.client || "", location: q.client.location || d.location || "" },
-      notice: q.notice || d.notice, notes: d.notes.length && untouchedNotes ? d.notes : q.notes, operational: q.operational.length ? q.operational : d.operational, terms: { ...q.terms, ...d.terms },
+      notice: q.notice || d.notice, questions: q.questions?.length ? q.questions : d.questions.map(text => ({ id: rid(), text })), notes: d.notes.length && untouchedNotes ? d.notes : q.notes, operational: q.operational.length ? q.operational : d.operational, terms: { ...q.terms, ...d.terms },
       brief: { chat: chatText, files: files.map(f => ({ name: f.name, size: f.size, type: f.type })), summary: { points: d.points, questions: d.questions, requests: d.requests, at: new Date().toISOString(), model } } });
     notify("Penawaran terisi dari brief. Tinggal isi harga dan foto."); onDone();
   };
@@ -279,6 +325,21 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
     <button className="outline-button qb-wide" onClick={() => { const s: QSection = { id: rid(), title: "", layout: "cards", items: [{ id: rid(), name: "", qty: 8, unit: "foto", price: 0 }] }; set({ sections: [...q.sections, s] }); setOpen(s.id); }}><Plus size={15} /> Tambah seksi</button>
 
     <div className="panel qb-card-p">
+      <h4 className="qb-h">Pertanyaan untuk klien</h4>
+      <p className="qb-hint">Tampil di halaman penawaran dengan kolom jawaban. Jawaban klien masuk ke tab Kirim.</p>
+      {(q.questions ?? []).map(x => <div className="qb-note" key={x.id}>
+        <textarea aria-label="Pertanyaan" rows={2} value={x.text} onChange={e => set({ questions: (q.questions ?? []).map(y => (y.id === x.id ? { ...y, text: e.target.value } : y)) })} placeholder="Tanggal pemotretan yang diinginkan?" />
+        <button className="qb-icon qb-del" aria-label="Hapus pertanyaan" onClick={() => set({ questions: (q.questions ?? []).filter(y => y.id !== x.id) })}><Trash2 size={15} /></button>
+      </div>)}
+      <div className="qb-btns">
+        <button className="outline-button" onClick={() => set({ questions: [...(q.questions ?? []), { id: rid(), text: "" }].slice(0, 10) })}><Plus size={14} /> Pertanyaan</button>
+        {!!q.brief?.summary?.questions.length && <button className="outline-button" onClick={() => { const have = new Set((q.questions ?? []).map(x => x.text)); set({ questions: [...(q.questions ?? []), ...q.brief!.summary!.questions.filter(t0 => !have.has(t0)).map(text => ({ id: rid(), text }))].slice(0, 10) }); }}><Sparkles size={14} /> Ambil dari analisis</button>}
+      </div>
+    </div>
+
+    <PortfolioPanel quoteId={q.id} value={q.portfolio ?? []} onChange={portfolio => set({ portfolio })} />
+
+    <div className="panel qb-card-p">
       <h4 className="qb-h">Biaya operasional</h4>
       {q.operational.map(r => <div className="qb-op" key={r.id}>
         <input aria-label="Nama biaya" value={r.name} onChange={e => set({ operational: q.operational.map(x => (x.id === r.id ? { ...x, name: e.target.value } : x)) })} placeholder="Crew, alat, transport (3 hari)" />
@@ -318,6 +379,69 @@ function Price({ value, onChange }: { value: number | null; onChange: (v: number
   return <span className="qb-price-in"><span>Rp</span><input aria-label="Harga" inputMode="numeric" value={text} placeholder="TBC" onChange={e => { const digits = e.target.value.replace(/\D/g, ""); setText(digits ? Number(digits).toLocaleString("id-ID") : ""); onChange(digits ? Number(digits) : null); }} /></span>;
 }
 
+// ---------- portfolio (showcase.forior.id) ----------
+// The showcase keeps its projects in Firestore (public read); Hub copies the picked ones into the quotation.
+const SHOWCASE = "https://firestore.googleapis.com/v1/projects/forior-showcase/databases/(default)/documents/showcase_projects?pageSize=300&key=AIzaSyCJR4mH6VE3ci81zF3NzH9CtRtscZP_SqY";
+type FsValue = { stringValue?: string; arrayValue?: { values?: FsValue[] }; integerValue?: string };
+const fsStr = (v?: FsValue) => v?.stringValue ?? "";
+const showcaseSlug = (s: string) => s.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+async function loadShowcase(): Promise<(PortfolioItem & { type: string; at: number; dataImage?: string })[]> {
+  const r = await fetch(SHOWCASE);
+  if (!r.ok) throw new Error(`Showcase tidak bisa dibaca (${r.status}).`);
+  const data = await r.json() as { documents?: { name: string; fields: Record<string, FsValue> }[] };
+  return (data.documents ?? []).map(d => {
+    const f = d.fields, title = fsStr(f.title), type = fsStr(f.type) || "foto", link = fsStr(f.link);
+    const all = [fsStr(f.image), ...(f.gallery?.arrayValue?.values ?? []).map(fsStr)];
+    const imgs = all.filter(u => /^https:\/\//.test(u)), dataImage = imgs.length ? undefined : all.find(u => u.startsWith("data:image/"));
+    return { id: d.name.split("/").pop() ?? title, title, type, at: Number(f.timestamp?.integerValue ?? 0), location: fsStr(f.location), category: fsStr(f.category) || (type === "drone" ? "Drone" : ""),
+      image: imgs[0] ?? dataImage, dataImage, url: type === "foto" ? `https://showcase.forior.id/p/${showcaseSlug(title)}` : /^https:\/\//.test(link) ? link : "https://showcase.forior.id" };
+  }).filter(p => p.title).sort((a, b) => b.at - a.at);
+}
+
+function PortfolioPanel({ quoteId, value, onChange }: { quoteId: string; value: PortfolioItem[]; onChange: (v: PortfolioItem[]) => void }) {
+  const [open, setOpen] = useState(false);
+  return <div className="panel qb-card-p">
+    <h4 className="qb-h">Portofolio</h4>
+    <p className="qb-hint">Pilih project dari showcase.forior.id untuk ditampilkan di penawaran.</p>
+    {value.length > 0 && <div className="qb-pf">{value.map(p => <div key={p.id} className="qb-pf-item">{p.image ? <img src={p.image} alt="" referrerPolicy="no-referrer" /> : <span className="qb-pf-ph"><ImageIcon size={16} /></span>}<span><b>{p.title}</b><small>{[p.category, p.location].filter(Boolean).join(" · ")}</small></span><button className="qb-icon qb-del" aria-label={`Hapus ${p.title}`} onClick={() => onChange(value.filter(x => x.id !== p.id))}><X size={15} /></button></div>)}</div>}
+    <button className="outline-button" onClick={() => setOpen(true)}><Plus size={14} /> Pilih dari showcase</button>
+    {open && <ShowcasePicker quoteId={quoteId} picked={value} onClose={() => setOpen(false)} onDone={v => { onChange(v); setOpen(false); }} />}
+  </div>;
+}
+
+function ShowcasePicker({ quoteId, picked, onDone, onClose }: { quoteId: string; picked: PortfolioItem[]; onDone: (v: PortfolioItem[]) => void; onClose: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const [items, setItems] = useState<Awaited<ReturnType<typeof loadShowcase>> | null>(null);
+  const [error, setError] = useState(""), [q, setQ] = useState("");
+  const [sel, setSel] = useState<Map<string, PortfolioItem>>(new Map(picked.map(p => [p.id, p])));
+  useEffect(() => { loadShowcase().then(setItems, e => setError(e instanceof Error ? e.message : String(e))); }, []);
+  const shown = (items ?? []).filter(p => !q || `${p.title} ${p.location} ${p.category}`.toLowerCase().includes(q.toLowerCase()));
+  const toggle = (p: PortfolioItem) => setSel(m => { const n = new Map(m); if (n.has(p.id)) n.delete(p.id); else n.set(p.id, { id: p.id, title: p.title, location: p.location, category: p.category, image: p.image, url: p.url }); return n; });
+  // Showcase photo projects keep their pictures inline (data:); store a small copy so the client page can show it.
+  const done = async () => {
+    setSaving(true);
+    try {
+      const out = await Promise.all([...sel.values()].map(async p => {
+        if (!p.image?.startsWith("data:")) return p;
+        const blob = await shrink(await (await fetch(p.image)).blob(), 1200, 0.82);
+        const path = `img/${quoteId}/${rid()}${rid()}.jpg`;
+        const { error: e } = await supabase.storage.from(BUCKET).upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000" });
+        return { ...p, image: e ? undefined : supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl };
+      }));
+      onDone(out);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setSaving(false); }
+  };
+  return <div className="cp-modal-backdrop" role="dialog" aria-label="Pilih portofolio" onClick={onClose}><div className="cp-modal qb-pick" onClick={e => e.stopPropagation()}>
+    <div className="qb-pick-head"><b>Portofolio showcase</b><button className="qb-icon" onClick={onClose} aria-label="Tutup"><X size={17} /></button></div>
+    <label className="qb-search"><Search size={15} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Cari villa, apartemen, kota…" /></label>
+    {error ? <p className="x-error">{error}</p> : !items ? <p className="x-empty"><Loader2 size={16} className="lg-spin" /> Memuat showcase…</p> :
+      <div className="qb-sc-grid">{shown.map(p => <button key={p.id} className={`qb-sc${sel.has(p.id) ? " on" : ""}`} onClick={() => toggle(p)} aria-pressed={sel.has(p.id)}>
+        <span className="qb-sc-img">{p.image ? <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <ImageIcon size={18} />}{sel.has(p.id) && <i><Check size={14} /></i>}<em>{p.type === "drone" ? "Drone" : "Foto"}</em></span>
+        <b>{p.title}</b><small>{[p.category, p.location].filter(Boolean).join(" · ")}</small></button>)}{!shown.length && <p className="x-empty">Tidak ada yang cocok.</p>}</div>}
+    <div className="cp-modal-actions"><button className="outline-button" onClick={onClose}>Batal</button><button className="primary-button" disabled={saving} onClick={done}>{saving ? <Loader2 size={15} className="lg-spin" /> : null}Pakai {sel.size} project</button></div>
+  </div></div>;
+}
+
 // ---------- photo slot ----------
 function Slot({ quoteId, value, onChange, wide }: { quoteId: string; value?: string; onChange: (v?: string) => void; wide?: boolean }) {
   const [menu, setMenu] = useState(false), [busy, setBusy] = useState(false), [gallery, setGallery] = useState(false);
@@ -351,7 +475,7 @@ function GalleryPicker({ onPick, onClose }: { onPick: (url: string) => void; onC
 }
 
 // ---------- 3 · Kirim ----------
-function SendTab({ q, set, opens, dirty, onDuplicate, onDelete }: { q: Quote; set: (p: Partial<Quote>) => void; opens?: { n: number; last: string }; dirty: boolean; onDuplicate: () => void; onDelete: () => void }) {
+function SendTab({ q, set, opens, answers, dirty, onDuplicate, onDelete }: { q: Quote; set: (p: Partial<Quote>) => void; opens?: { n: number; last: string }; answers?: Answers[string]; dirty: boolean; onDuplicate: () => void; onDelete: () => void }) {
   const suggestion = slugify([q.client.name.split(/[—-]/).pop() ?? "", q.title.split(/\s+/).slice(0, 3).join(" "), (q.eyebrow.match(/\d+/) ?? [""])[0]].filter(Boolean).join(" ")) || "penawaran-" + q.id.slice(0, 6);
   const [slug, setSlug] = useState(q.slug || suggestion);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -361,22 +485,11 @@ function SendTab({ q, set, opens, dirty, onDuplicate, onDelete }: { q: Quote; se
   const missing = [!q.title && "judul", !q.client.name && "nama klien", t.grand <= 0 && "harga"].filter(Boolean) as string[];
 
   const publish = async () => {
-    setError("");
-    if (!isSlug(slug)) return setError("Nama link hanya huruf kecil, angka, dan tanda minus (3–63 karakter).");
-    setBusy(true);
+    setError(""); setBusy(true);
     try {
-      if (slug !== q.slug) {
-        const { data } = await supabase.storage.from(BUCKET).list("", { limit: 1000, search: slug });
-        if ((data ?? []).some(f => f.name === `${slug}.json` || f.name === `${slug}.html`)) throw new Error("Nama link ini sudah dipakai penawaran lain. Pakai nama lain.");
-      }
-      const now = new Date().toISOString();
-      const next: Quote = { ...q, slug, status: "sent", publishedAt: now, updatedAt: now };
-      const body = new Blob([JSON.stringify(publicSnapshot(next))], { type: "application/json" });
-      const { error: e } = await supabase.storage.from(BUCKET).upload(`${slug}.json`, body, { contentType: "application/json", cacheControl: "0", upsert: true });
-      if (e) throw new Error(`Gagal mengirim: ${e.message}`);
-      if (q.slug && q.slug !== slug && q.publishedAt) await supabase.storage.from(BUCKET).remove([`${q.slug}.json`]);
+      const next = await publishQuote(q, slug);
       set(next);
-      try { await navigator.clipboard.writeText(`${origin}/quote/${slug}/`); notify("Penawaran terkirim. Link disalin."); } catch { notify("Penawaran terkirim."); }
+      try { await navigator.clipboard.writeText(linkOf(slug)); notify("Penawaran terkirim. Link disalin."); } catch { notify("Penawaran terkirim."); }
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
   const unpublish = async () => {
@@ -403,6 +516,10 @@ function SendTab({ q, set, opens, dirty, onDuplicate, onDelete }: { q: Quote; se
         </div>
       </div>}
     </div>
+    {!!answers?.length && <div className="panel qb-card-p">
+      <h4 className="qb-h">Jawaban klien ({answers.length})</h4>
+      {answers.map((r, k) => <div className="qb-answer" key={k}><small>{r.name || "Tanpa nama"} · {when(r.at)}</small>{r.answers.map((x, n) => <p key={n}><b>{x.q}</b>{x.a}</p>)}</div>)}
+    </div>}
     <div className="panel qb-card-p">
       <h4 className="qb-h">Lainnya</h4>
       <div className="qb-btns">

@@ -7,6 +7,8 @@ export type QLayout = "cards" | "list" | "media";
 export type QSection = { id: string; title: string; subtitle?: string; layout: QLayout; optional?: boolean; image?: string; items: QItem[] };
 export type QRow = { id: string; name: string; note?: string; price: number | null };
 export type QNote = { id: string; title: string; text: string };
+export type PortfolioItem = { id: string; title: string; location?: string; category?: string; image?: string; url: string };
+export type QuoteAnswer = { q: string; a: string };
 export type BriefFile = { name: string; size: number; type: string };
 export type BriefSummary = { points: string[]; questions: string[]; requests?: string[]; at: string; model: string };
 export type Quote = {
@@ -18,6 +20,10 @@ export type Quote = {
   sections: QSection[]; operational: QRow[]; notes: QNote[];
   terms: { dpPercent: number; production: string; delivery: string; revisions: string };
   footnote?: string;
+  /** Picked from showcase.forior.id; a copy is kept so the client page never depends on the showcase. */
+  portfolio?: PortfolioItem[];
+  /** Questions shown on the client page with a form to answer them. */
+  questions?: { id: string; text: string }[];
   brief?: { chat?: string; files: BriefFile[]; summary?: BriefSummary };
   publishedAt?: string; updatedAt: string; createdAt: string;
 };
@@ -113,8 +119,8 @@ export function parseBrief(text: string): BriefDraft {
 
 // ---------- Client page ----------
 const T = {
-  id: { prepared: "Disiapkan untuk", location: "Lokasi project", quoteNo: "No.", valid: "Berlaku", days: "hari", subtotal: "Subtotal", optional: "Opsional", tbc: "Dikonfirmasi kemudian", notes: "Deliverables & Catatan", notesSub: "Yang Anda terima dan yang perlu diperhatikan", terms: "Ketentuan", termsSub: "Jadwal, revisi, dan pembayaran", confirm: "Konfirmasi", production: "Produksi", editing: "Editing & Revisi", delivery: "Pengiriman Final", dp: "DP saat konfirmasi", rest: "Sebelum file final dikirim", payment: "Pembayaran", validity: "Masa berlaku", ops: "Biaya Operasional", opsSub: "Estimasi biaya produksi", grand: "Grand total", services: "Subtotal jasa", opsLine: "Biaya operasional", ask: "Tanya via WhatsApp", pdf: "PDF", hello: "Halo FORIOR, saya ingin bertanya tentang penawaran", dpOf: "DP", photos: "foto", addons: "Opsi tambahan · belum termasuk total" },
-  en: { prepared: "Prepared for", location: "Project location", quoteNo: "Quote No.", valid: "Valid", days: "days", subtotal: "Subtotal", optional: "Optional", tbc: "To be confirmed", notes: "Deliverables & Notes", notesSub: "What to expect and what may affect coverage", terms: "Commercial Terms", termsSub: "Timeline, revisions and payment", confirm: "Confirmation", production: "Production", editing: "Editing & Revisions", delivery: "Final Delivery", dp: "Down payment upon confirmation", rest: "Before final delivery", payment: "Payment terms", validity: "Quotation validity", ops: "Production & Operational Costs", opsSub: "Operational budget estimate", grand: "Grand total", services: "Service subtotal", opsLine: "Operational costs", ask: "Ask on WhatsApp", pdf: "PDF", hello: "Hello FORIOR, I have a question about quotation", dpOf: "DP", photos: "photos", addons: "Optional add-ons · not included" }
+  id: { prepared: "Disiapkan untuk", location: "Lokasi project", quoteNo: "No.", valid: "Berlaku", days: "hari", subtotal: "Subtotal", optional: "Opsional", tbc: "Dikonfirmasi kemudian", notes: "Deliverables & Catatan", notesSub: "Yang Anda terima dan yang perlu diperhatikan", terms: "Ketentuan", termsSub: "Jadwal, revisi, dan pembayaran", confirm: "Konfirmasi", production: "Produksi", editing: "Editing & Revisi", delivery: "Pengiriman Final", dp: "DP saat konfirmasi", rest: "Sebelum file final dikirim", payment: "Pembayaran", validity: "Masa berlaku", ops: "Biaya Operasional", opsSub: "Estimasi biaya produksi", grand: "Grand total", services: "Subtotal jasa", opsLine: "Biaya operasional", ask: "Tanya via WhatsApp", pdf: "PDF", hello: "Halo FORIOR, saya ingin bertanya tentang penawaran", dpOf: "DP", photos: "foto", portfolio: "Portofolio", portfolioSub: "Contoh project FORIOR yang serupa", viewProject: "Lihat project", allWork: "Lihat semua portofolio", askTitle: "Pertanyaan untuk Anda", askSub: "Jawaban Anda membantu kami menyesuaikan penawaran", yourName: "Nama Anda", send: "Kirim jawaban", sent: "Terima kasih, jawaban Anda sudah terkirim ke FORIOR.", addons: "Opsi tambahan · belum termasuk total" },
+  en: { prepared: "Prepared for", location: "Project location", quoteNo: "Quote No.", valid: "Valid", days: "days", subtotal: "Subtotal", optional: "Optional", tbc: "To be confirmed", notes: "Deliverables & Notes", notesSub: "What to expect and what may affect coverage", terms: "Commercial Terms", termsSub: "Timeline, revisions and payment", confirm: "Confirmation", production: "Production", editing: "Editing & Revisions", delivery: "Final Delivery", dp: "Down payment upon confirmation", rest: "Before final delivery", payment: "Payment terms", validity: "Quotation validity", ops: "Production & Operational Costs", opsSub: "Operational budget estimate", grand: "Grand total", services: "Service subtotal", opsLine: "Operational costs", ask: "Ask on WhatsApp", pdf: "PDF", hello: "Hello FORIOR, I have a question about quotation", dpOf: "DP", photos: "photos", portfolio: "Portfolio", portfolioSub: "Similar FORIOR projects", viewProject: "View project", allWork: "See full portfolio", askTitle: "Questions for you", askSub: "Your answers help us tailor this quotation", yourName: "Your name", send: "Send answers", sent: "Thank you, your answers have been sent to FORIOR.", addons: "Optional add-ons · not included" }
 };
 export const FORIOR_CONTACT = { website: "www.forior.id", wa: "6281542048268", phone: "0815 4204 8268" };
 /** The one inline script on the client page; its hash goes into the page's CSP. */
@@ -178,12 +184,14 @@ img{display:block;max-width:100%}svg.i{width:20px;height:20px;stroke:currentColo
 .total{background:linear-gradient(135deg,var(--navy),var(--navy-2) 60%,#4a3f7a);color:#fff;border-radius:22px;padding:20px;box-shadow:var(--sh);margin-top:26px;position:relative;overflow:hidden}.total::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;border-radius:50%;border:30px solid rgba(255,255,255,.05)}
 .total .line{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.14);font-size:13.5px;position:relative;z-index:1}.total .line span:first-child{opacity:.8}.total .grand{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-top:14px;flex-wrap:wrap;position:relative;z-index:1}.total .grand .lbl{color:#d9cff0}.total .grand b{font-size:clamp(24px,7vw,34px);line-height:1.1;display:block;text-align:right}.total .grand small{display:block;font-size:12.5px;color:var(--gold);font-weight:700;margin-top:4px;text-align:right}
 .total .opts{position:relative;z-index:1;margin-top:14px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.25)}.total .opts .lbl{color:#d9cff0;margin-bottom:2px}.total .opts .line{border-bottom:0;padding:5px 0;opacity:.9}
+.pf{grid-template-columns:1fr 1fr}.pfc{display:flex;flex-direction:column;background:var(--card);border-radius:16px;overflow:hidden;box-shadow:var(--sh);text-decoration:none;color:inherit}.pfc>.ph{aspect-ratio:4/3}.pfc .body{padding:10px 12px;display:grid;gap:2px}.pfc b{font-size:13px;color:var(--navy);line-height:1.3}.pfc small{font-size:11px;color:var(--muted)}.pfc span{font-size:11.5px;font-weight:700;color:var(--pi);margin-top:4px}.pf-all{margin:10px 2px 0;font-size:13px}.pf-all a{color:var(--pi);font-weight:700;text-decoration:none}
+.ask{display:grid;gap:12px}.ask label{display:grid;gap:6px}.ask span{font-size:13.5px;font-weight:700;color:var(--navy)}.ask textarea,.ask input{width:100%;font:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fafbfc;color:var(--ink)}.ask button{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:13px;padding:13px;background:var(--navy);color:#fff;font:inherit;font-weight:800;font-size:14px;cursor:pointer}.ask button svg.i{width:17px;height:17px}.sent{display:flex;gap:10px;align-items:center;color:#16884a}
 .footer{margin-top:26px;background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:18px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}.footer .brand{color:var(--navy);font-size:19px}.footer .brand small{color:var(--muted)}.contacts{display:flex;gap:8px;flex-wrap:wrap}.contacts a{display:inline-flex;align-items:center;gap:7px;text-decoration:none;font-size:13px;font-weight:700;color:var(--navy);background:#f3f4f8;padding:9px 12px;border-radius:11px}.contacts svg.i{width:16px;height:16px}
 .fine{font-size:11.5px;color:var(--muted);text-align:center;margin-top:14px}
 .cta{position:fixed;left:0;right:0;bottom:0;z-index:20;padding:10px 14px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(238,240,244,0),#eef0f4 35%);display:flex;gap:8px;justify-content:center}.cta a{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;text-decoration:none;font-weight:800;font-size:13.5px;padding:13px 16px;border-radius:14px;background:#fff;color:var(--navy);box-shadow:0 6px 16px -8px rgba(0,0,0,.3);flex:1;max-width:200px}.cta a.wa{background:#1f9d55;color:#fff;flex:2;max-width:320px}.cta svg.i{width:17px;height:17px}
 @media(min-width:640px){.doc{padding:20px 16px 110px}.pad{padding:0}.hero{border-radius:24px;min-height:400px}.hero-top,.hero-body{padding:24px 26px}.hero-body{padding-bottom:64px}.client{grid-template-columns:1fr 1fr}.stats{grid-template-columns:repeat(4,1fr)}.units{grid-template-columns:repeat(2,1fr)}.unit{flex-direction:column}.unit .ph{width:auto;aspect-ratio:4/3;min-height:0}.unit .body{flex-direction:row;justify-content:space-between;align-items:center;flex-wrap:wrap}.media{grid-template-columns:1fr 1fr}.deliv{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}.surr{grid-template-columns:1.05fr 1fr}.surr>.ph{min-height:260px}.terms{grid-template-columns:1fr 1fr}
 .tl{grid-template-columns:repeat(4,1fr);gap:0}.tl::before{left:12.5%;right:12.5%;top:23px;bottom:auto;width:auto;height:2px;background:repeating-linear-gradient(90deg,var(--purple) 0 6px,transparent 6px 12px)}.step{flex-direction:column;text-align:center;padding:0 6px}}
-@media(min-width:900px){.units{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:900px){.units{grid-template-columns:repeat(3,1fr)}.pf{grid-template-columns:repeat(4,1fr)}}
 @media print{body{background:#fff}.doc{max-width:none;padding:0}.cta{display:none}.card,.unit,.mcard,.stat,.dl,.footer{box-shadow:none;border:1px solid var(--line)}.hero,.total,.subbar,.pay div,.sec-num,.step .ico{-webkit-print-color-adjust:exact;print-color-adjust:exact}.unit,.mcard,.card,.total{break-inside:avoid}}`;
 
 const bullets = (all?: string[]) => { const lines = all?.filter(l => l.trim()); return lines?.length ? `<ul class="pts">${lines.map(l => `<li>${esc(l)}</li>`).join("")}</ul>` : ""; };
@@ -206,8 +214,23 @@ function sectionHtml(s: QSection, letter: string, t: typeof T.id): string {
   return head + body + bar;
 }
 
+function portfolioHtml(items: PortfolioItem[], t: typeof T.id): string {
+  if (!items.length) return "";
+  return `<div class="sec-head"><div class="sec-num">${ic("camera", "width:18px;height:18px")}</div><div><h2>${t.portfolio}</h2><p>${t.portfolioSub}</p></div></div>
+<div class="grid pf">${items.map(p => `<a class="pfc" href="${esc(url(p.url) || "https://showcase.forior.id")}" target="_blank" rel="noopener">${ph(p.image, p.title)}<div class="body"><b>${esc(p.title)}</b><small>${esc([p.category, p.location].filter(Boolean).join(" · "))}</small><span>${t.viewProject} →</span></div></a>`).join("")}</div>
+<p class="pf-all"><a href="https://showcase.forior.id" target="_blank" rel="noopener">${t.allWork} →</a></p>`;
+}
+function questionsHtml(qs: { id: string; text: string }[], t: typeof T.id, opts: { preview?: boolean; sent?: boolean }): string {
+  const list = qs.filter(x => x.text.trim()).slice(0, 10);
+  if (!list.length) return "";
+  const head = `<div class="sec-head"><div class="sec-num">${ic("info", "width:18px;height:18px")}</div><div><h2>${t.askTitle}</h2><p>${t.askSub}</p></div></div>`;
+  if (opts.sent) return `${head}<div class="card sent" id="tanya">${ic("check")}<b>${t.sent}</b></div>`;
+  return `${head}<form class="card ask" id="tanya" method="post" action="#tanya">${list.map((x, i) => `<label><span>${i + 1}. ${esc(x.text)}</span><textarea name="a${i}" rows="2" maxlength="1000"></textarea></label>`).join("")}
+<label><span>${t.yourName}</span><input name="name" maxlength="80" autocomplete="name"></label><input type="hidden" name="n" value="${list.length}"><button type="submit"${opts.preview ? " disabled" : ""}>${ic("send")}${t.send}</button></form>`;
+}
+
 /** The full client page. preview=true: no tracking hints and no script (used inside Hub's sandboxed iframe). */
-export function renderQuoteHtml(q: Omit<Quote, "brief">, opts: { pageUrl?: string; preview?: boolean } = {}): string {
+export function renderQuoteHtml(q: Omit<Quote, "brief">, opts: { pageUrl?: string; preview?: boolean; sent?: boolean } = {}): string {
   const t = T[q.lang] ?? T.id;
   const tot = totals(q), st = stats(q);
   const letters = "ABCDEFGHIJ";
@@ -239,6 +262,8 @@ ${q.notes.length ? `<div class="sec-head"><div class="sec-num">${ic("send", "wid
 <div class="grid terms" style="margin-top:12px"><div class="card"><div class="lbl" style="margin-bottom:8px">${t.payment}</div><div class="pay"><div><b>${q.terms.dpPercent}%</b><span>${t.dp}</span></div><div><b>${100 - q.terms.dpPercent}%</b><span>${t.rest}</span></div></div></div>
 <div class="card"><div class="row"><span>${t.production}</span><span>${esc(q.terms.production)}</span></div><div class="row"><span>${t.delivery}</span><span>${esc(q.terms.delivery)}</span></div><div class="row"><span>${t.editing}</span><span>${esc(q.terms.revisions)}</span></div><div class="row"><span>${t.validity}</span><span>${q.validDays} ${t.days}</span></div></div></div>
 ${q.operational.length ? `<div class="sec-head"><div class="sec-num">${esc(opsLetter)}</div><div><h2>${t.ops}</h2><p>${t.opsSub}</p></div></div><div class="card ops">${q.operational.map(r => `<div class="row"><span>${esc(r.name)}${r.note ? `<small>${esc(r.note)}</small>` : ""}</span><span>${r.price === null ? `<span class="tbc">${t.tbc}</span>` : idr(r.price)}</span></div>`).join("")}</div>` : ""}
+${portfolioHtml(q.portfolio ?? [], t)}
+${questionsHtml(q.questions ?? [], t, opts)}
 <div class="total">${tot.sections.filter(s => !s.optional).map(s => `<div class="line"><span>${esc(s.title)} (${letterOf.get(s.id)})</span><span>${idr(s.subtotal)}</span></div>`).join("")}
 ${q.operational.length ? `<div class="line"><span><b>${t.services}</b></span><span><b>${idr(tot.services)}</b></span></div><div class="line"><span>${t.opsLine} (${opsLetter})</span><span>${idr(tot.operational)}</span></div>` : ""}
 <div class="grand"><div class="lbl">${t.grand}</div><div><b>${idr(tot.grand)}</b>${q.terms.dpPercent > 0 && q.terms.dpPercent < 100 ? `<small>${t.dpOf} ${q.terms.dpPercent}% · ${idr(tot.dp)}</small>` : ""}</div></div>

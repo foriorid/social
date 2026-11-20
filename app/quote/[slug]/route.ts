@@ -17,7 +17,7 @@ const BASE = { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-
 // Uploaded HTML shares this domain with the logged-in Hub, so it must not run any code here.
 const UPLOADED = { ...BASE, "Content-Security-Policy": "default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; form-action 'none'; frame-ancestors 'none'; base-uri 'none'" };
 // Builder pages: Hub's own template; the only script allowed is the PDF button, pinned by its hash.
-const BUILT = { ...BASE, "Content-Security-Policy": `default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'sha256-${createHash("sha256").update(PRINT_SCRIPT).digest("base64")}'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'` };
+const BUILT = { ...BASE, "Content-Security-Policy": `default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'sha256-${createHash("sha256").update(PRINT_SCRIPT).digest("base64")}'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'` };
 
 const page = (status: number, title: string, line: string) => new Response(
   `<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>`
@@ -57,5 +57,31 @@ export async function GET(req: Request, ctx: { params: Promise<{ slug: string }>
   const ua = req.headers.get("user-agent") ?? "";
   if (!url.searchParams.has("preview") && !BOT.test(ua)) await logOpen(slug, ua);
   const pageUrl = `https://${req.headers.get("x-forwarded-host") ?? url.host}/quote/${slug}/`;
-  return new Response(renderQuoteHtml(q, { pageUrl }), { status: 200, headers: BUILT });
+  return new Response(renderQuoteHtml(q, { pageUrl, sent: url.searchParams.has("terkirim") }), { status: 200, headers: BUILT });
+}
+
+/** The client answers the questions on the page (a plain form, no script). Saved for Hub; then back to the page. */
+export async function POST(req: Request, ctx: { params: Promise<{ slug: string }> }) {
+  const { slug } = await ctx.params;
+  if (!SLUG.test(slug) || slug.includes("--")) return notFound();
+  let q: Omit<Quote, "brief">, form: FormData;
+  try {
+    const json = await file(slug, "json");
+    if (!json.ok) return notFound();
+    q = await json.json();
+    form = await req.formData();
+  } catch { return unavailable(); }
+  // Question texts come from the published quotation, not from the form, so only real questions are stored.
+  const answers = (q.questions ?? []).filter(x => x.text.trim()).slice(0, 10)
+    .map((x, i) => ({ q: x.text.slice(0, 300), a: String(form.get(`a${i}`) ?? "").trim().slice(0, 1000) })).filter(x => x.a);
+  const back = `/quote/${slug}/`;
+  if (!answers.length) return new Response(null, { status: 303, headers: { Location: `${back}#tanya` } });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/submit_quote_answers`, {
+      method: "POST", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_slug: slug, p_name: String(form.get("name") ?? "").trim().slice(0, 80), p_answers: answers }), signal: AbortSignal.timeout(4000)
+    });
+    if (!r.ok) return unavailable();
+  } catch { return unavailable(); }
+  return new Response(null, { status: 303, headers: { Location: `${back}?terkirim=1#tanya` } });
 }
