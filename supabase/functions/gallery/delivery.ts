@@ -174,3 +174,31 @@ export function fromWorkspace(doc: Record<string, unknown>, slug: string, now = 
     finalPhotos: arr<Photo>(merged.finalPhotos), revisions: arr<Revision>(merged.revisions), quotaAddons: arr<Addon>(merged.quotaAddons)
   };
 }
+
+/**
+ * Re-import from Workspace without losing work done in Hub. Photos are matched by Drive id:
+ * a photo keeps Hub's note and picks when Hub has them, otherwise takes Workspace's; photos only
+ * one side has are kept. Gallery fields (phase, client, deadlines…) stay as in Hub when Hub was
+ * edited after the last import, else follow Workspace. Revisions are joined by id.
+ */
+export function mergeImport(hub: Gallery, ws: Gallery, hubEdited: boolean): Gallery {
+  const photos = (h: Photo[], w: Photo[]): Photo[] => {
+    const byId = new Map(h.map(p => [p.id, p]));
+    const merged = w.map(p => {
+      const o = byId.get(p.id);
+      if (!o) return p;
+      const picks = o.selected || o.rawSelected ? { selected: !!o.selected, rawSelected: !!o.rawSelected } : { selected: !!p.selected, rawSelected: !!p.rawSelected };
+      return { ...p, ...picks, note: o.note || p.note || "" };
+    });
+    const seen = new Set(w.map(p => p.id));
+    return [...merged, ...h.filter(p => !seen.has(p.id))];
+  };
+  const revIds = new Set(hub.revisions.map(r => r.id));
+  return {
+    ...(hubEdited ? { ...ws, ...hub } : { ...hub, ...ws }),
+    id: hub.id, slug: hub.slug,
+    previewPhotos: photos(hub.previewPhotos, ws.previewPhotos), draftPhotos: photos(hub.draftPhotos, ws.draftPhotos),
+    revisionPhotos: photos(hub.revisionPhotos, ws.revisionPhotos), finalPhotos: photos(hub.finalPhotos, ws.finalPhotos),
+    revisions: [...hub.revisions, ...ws.revisions.filter(r => !revIds.has(r.id))]
+  };
+}

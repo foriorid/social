@@ -9,7 +9,7 @@ import { listDriveFolder } from "./assets";
 import { driveFolderId } from "./lib/flow";
 import { activeWorkspace, callServer, readCloud, supabase, switchWorkspace } from "./lib/cloud";
 import { notify, useCloud } from "./modules";
-import { PHASES, PHASE_LABEL, PHASE_SHORT, fromWorkspace, newGallery, setPhase, slugify, uniqueSlug, withFolder, type FolderType, type Gallery, type Phase, type Photo } from "../supabase/functions/gallery/delivery";
+import { PHASES, PHASE_LABEL, PHASE_SHORT, fromWorkspace, mergeImport, newGallery, setPhase, slugify, uniqueSlug, withFolder, type FolderType, type Gallery, type Phase, type Photo } from "../supabase/functions/gallery/delivery";
 
 type Row = { id: string; slug: string; data: Gallery; updated_at: string };
 const FOLDER_MIME = "application/vnd.google-apps.folder";
@@ -179,7 +179,10 @@ function ImportModal({ rows, onClose, onDone }: { rows: Row[]; onClose: () => vo
         const id = old?.id ?? (UUID.test(String(doc.id)) ? String(doc.id) : crypto.randomUUID());
         const slug = old?.slug ?? uniqueSlug(slugify(String(doc.slug || doc.projectName || doc.title || "galeri")), taken);
         taken.add(slug);
-        const data = { ...fromWorkspace({ ...doc, id }, slug), importedFrom: "app.forior.id", importedAt: new Date().toISOString() };
+        const fresh = fromWorkspace({ ...doc, id }, slug);
+        // Re-import merges, so notes and picks made in Hub survive. "Edited" = changed over a minute after the last import.
+        const edited = !!old && Date.parse(old.updated_at) - Date.parse(old.data.importedAt ?? old.data.createdAt) > 60_000;
+        const data = { ...(old ? mergeImport(old.data, fresh, edited) : fresh), importedFrom: "app.forior.id", importedAt: new Date().toISOString() };
         const { error } = old ? await supabase.from("galleries").update({ data, updated_at: new Date().toISOString() }).eq("id", id) : await supabase.from("galleries").insert({ id, slug, data, workspace_id: readCloud().workspaceId });
         if (error) throw new Error(`${doc.title}: ${error.message}`);
         if (old) updated++; else added++;
@@ -199,12 +202,12 @@ function ImportModal({ rows, onClose, onDone }: { rows: Row[]; onClose: () => vo
       {error && <p className="x-error">{error}</p>}
       <div className="cp-modal-actions"><button className="outline-button" onClick={onClose}>Batal</button><button className="primary-button" disabled={busy || !email || !password} onClick={fetchList}>{busy ? "Membaca…" : "Lihat galeri Workspace"}</button></div>
     </> : <>
-      <p className="dl-hint">{list.length} galeri di Workspace, terbaru di atas. 5 terbaru yang belum ada di sini sudah dicentang.</p>
+      <p className="dl-hint">{list.length} galeri di Workspace, terbaru di atas. 5 terbaru yang belum ada di sini sudah dicentang. Galeri yang sudah ada akan digabung: catatan dan pilihan klien yang baru di Workspace ikut masuk, yang sudah ada di Hub tetap.{list.some(g => existing.has(String(g.id))) && <> <button type="button" className="link-button" onClick={() => setChosen(old => new Set([...old, ...list.filter(g => existing.has(String(g.id))).map(g => String(g.id))]))}>Centang semua yang sudah ada</button></>}</p>
       <div className="dl-import-list">{list.map(g => { const id = String(g.id), have = existing.has(id), photos = Array.isArray(g.previewPhotos) ? g.previewPhotos.length : 0;
         return <label key={id} className={`dl-import-row ${chosen.has(id) ? "on" : ""}`}><input type="checkbox" checked={chosen.has(id)} onChange={() => toggle(id)} />
           <span><b>{g.title || "Tanpa judul"}</b><small>{[g.client?.company, g.client?.contact].filter(Boolean).join(" · ") || "Tanpa klien"} · {photos} foto · {fmtDate(g.createdAt)}</small></span>
           <em className={`dl-phase ${PHASE_CLASS[(PHASES as readonly string[]).includes(String(g.phase)) ? (g.phase as Phase) : "Preview"]}`}>{PHASE_SHORT[(PHASES as readonly string[]).includes(String(g.phase)) ? (g.phase as Phase) : "Preview"]}</em>
-          {have && <i className="dl-badge green">{chosen.has(id) ? "Sudah ada · akan diperbarui" : "Sudah ada di sini"}</i>}</label>; })}</div>
+          {have && <i className="dl-badge green">{chosen.has(id) ? "Sudah ada · akan digabung" : "Sudah ada di sini"}</i>}</label>; })}</div>
       {error && <p className="x-error">{error}</p>}
       <div className="cp-modal-actions"><button className="outline-button" onClick={() => setList(null)} disabled={busy}>Kembali</button><button className="primary-button" disabled={busy || !chosen.size} onClick={run}>{busy ? "Menyalin…" : `Salin ${chosen.size} galeri`}</button></div>
     </>}
