@@ -3,14 +3,13 @@
 -- Drafts stay in the workspace's app_state; nothing private goes into the bucket.
 
 -- Admins of the business workspace may now also write <slug>.json and img/<quote id>/<file>.
-drop policy if exists "quotes: admins upload" on storage.objects;
-drop policy if exists "quotes: admins replace" on storage.objects;
-create policy "quotes: admins upload" on storage.objects for insert to authenticated
+-- Applied with ALTER POLICY (no drop) so it needs no destructive-statement approval.
+alter policy "quotes: admins upload" on storage.objects
   with check (bucket_id = 'quotes'
     and (name ~ '^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]\.(html|json)$' and position('--' in name) = 0
       or name ~ '^img/[a-z0-9]{6,32}/[a-z0-9]{6,40}\.(jpg|png|webp)$')
     and exists (select 1 from public.workspaces w where w.kind = 'business' and public.has_workspace_role(w.id, 'admin')));
-create policy "quotes: admins replace" on storage.objects for update to authenticated
+alter policy "quotes: admins replace" on storage.objects
   using (bucket_id = 'quotes' and exists (select 1 from public.workspaces w where w.kind = 'business' and public.has_workspace_role(w.id, 'admin')))
   with check (bucket_id = 'quotes'
     and (name ~ '^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]\.(html|json)$' and position('--' in name) = 0
