@@ -53,7 +53,7 @@ export function uniqueSlug(base: string, taken: Iterable<string>): string {
 
 export function newGallery(input: { id: string; slug: string; title: string; projectName?: string; client?: Gallery["client"]; selectionLimit?: number; rawSelectionLimit?: number; previewFolderUrl?: string; notes?: string }, now = new Date()): Gallery {
   return {
-    id: input.id, slug: input.slug, title: input.title || "Photo Delivery", projectName: input.projectName ?? "",
+    id: input.id, slug: input.slug, title: input.title || "Project", projectName: input.projectName ?? "",
     client: input.client ?? {}, phase: "Preview",
     selectionLimit: Math.max(0, Number(input.selectionLimit) || 0), rawSelectionLimit: Math.max(0, Number(input.rawSelectionLimit) || 0),
     previewFolderUrl: input.previewFolderUrl ?? "", previewPhotos: [], previewSubmittedAt: null, rawSubmittedAt: null,
@@ -161,7 +161,7 @@ export function applyClientAction(g: Gallery, a: ClientAction, makeId: () => str
 
 /** Turns a gallery document from the Workspace app (MongoDB) into this app's shape; missing fields get defaults. */
 export function fromWorkspace(doc: Record<string, unknown>, slug: string, now = new Date()): Gallery {
-  const base = newGallery({ id: String(doc.id ?? ""), slug, title: String(doc.title ?? "Photo Delivery") }, now);
+  const base = newGallery({ id: String(doc.id ?? ""), slug, title: String(doc.title ?? "Project") }, now);
   const { _id: _ignored, ...rest } = doc as Record<string, unknown> & { _id?: unknown };
   const merged = { ...base, ...(rest as Partial<Gallery>), slug };
   const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);

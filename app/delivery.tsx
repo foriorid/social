@@ -427,7 +427,7 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
     : g.phase === "Client Review" ? { title: "Menunggu review klien", text: `Klien me-review ${g.draftPhotos.length} foto draft. Jika klien minta revisi, tahap otomatis pindah ke Revisi; jika disetujui, otomatis Selesai.`, icon: <MessageSquare size={18} />, tone: "blue", actions: <button className="outline-button dl-wa" onClick={sendWA}><MessageCircle size={15} /> Kirim WA</button> }
     : g.phase === "Revision" ? { title: g.revisionPhotos.length ? "Hasil revisi sudah dimuat" : `Kerjakan revisi${openRev ? ` (${openRev} permintaan terbuka)` : ""}`, text: g.revisionPhotos.length ? "Klien bisa me-review hasil revisi. Jika disetujui, tahap otomatis Selesai." : "Lihat catatan revisi klien, unggah hasil revisi ke folder Drive, lalu muat di sini.", icon: <RefreshCw size={18} />, tone: "orange", actions: <><button className="outline-button" onClick={() => setTab("revisi")}><MessageSquare size={15} /> Lihat catatan revisi</button><button className="primary-button" onClick={() => setModal("revision")}><FolderOpen size={15} /> {g.revisionPhotos.length ? "Muat ulang revisi" : "Muat hasil revisi"}</button></> }
     : !g.finalPhotos.length ? { title: "Muat foto final", text: "Klien sudah menyetujui. Unggah foto final resolusi tinggi ke Drive dan muat di sini agar klien bisa mengunduh.", icon: <Download size={18} />, tone: "green", actions: <button className="primary-button" onClick={() => setModal("final")}><FolderOpen size={15} /> Muat folder final</button> }
-    : { title: "Delivery selesai", text: `${g.finalPhotos.length} foto final tersedia untuk diunduh klien sampai ${fmtDate(g.downloadExpiry)}.`, icon: <Check size={18} />, tone: "green", actions: <button className="outline-button dl-wa" onClick={sendWA}><MessageCircle size={15} /> Kirim link unduhan</button> };
+    : { title: "Project selesai", text: `${g.finalPhotos.length} foto final tersedia untuk diunduh klien sampai ${fmtDate(g.downloadExpiry)}.`, icon: <Check size={18} />, tone: "green", actions: <button className="outline-button dl-wa" onClick={sendWA}><MessageCircle size={15} /> Kirim link unduhan</button> };
 
   const header = <div className="dl-top">
     <div className="dl-top-main">
@@ -455,7 +455,7 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
     <section className="panel dl-phase-panel">
       <PhaseTracker phase={g.phase} onPick={changePhase} />
       <div className="dl-flags">
-        <label className="dl-phase-select"><span>Tahap delivery</span><span className="dl-select"><select value={g.phase} onChange={e => changePhase(e.target.value)} aria-label="Tahap delivery">{PHASES.map(p => <option key={p} value={p}>{PHASE_LABEL[p]}</option>)}</select><ChevronDown size={15} /></span></label>
+        <label className="dl-phase-select"><span>Tahap project</span><span className="dl-select"><select value={g.phase} onChange={e => changePhase(e.target.value)} aria-label="Tahap delivery">{PHASES.map(p => <option key={p} value={p}>{PHASE_LABEL[p]}</option>)}</select><ChevronDown size={15} /></span></label>
         {g.previewSubmittedAt && <span className="dl-badge blue">Pilihan Edit terkirim · {fmtDate(g.previewSubmittedAt)}</span>}{g.rawSubmittedAt && <span className="dl-badge red">Pilihan RAW terkirim</span>}{g.draftApprovedAt && <span className="dl-badge green">Disetujui klien · {fmtDate(g.draftApprovedAt)}</span>}
       </div>
       {next && <div className={`dl-next ${next.tone ?? ""}`}><span className="dl-next-icon">{next.icon}</span><div><b>{next.title}</b><p>{next.text}</p></div><div className="dl-next-actions">{next.actions}</div></div>}
@@ -538,7 +538,7 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
           {!!g.plan?.areas?.length && <div className="dl-areas">{g.plan.areas.map(a => <span key={a}>{a}</span>)}</div>}
         </section>}
         <section className="panel dl-card-side">
-          <div className="dl-side-head"><h3>Statistik Delivery</h3></div>
+          <div className="dl-side-head"><h3>Statistik Project</h3></div>
           <div className="dl-stat4">
             <button onClick={() => { setTab("galeri"); setSet("preview"); setFilter("all"); }}><Images size={18} /><b>{g.previewPhotos.length}</b><small>Total foto</small></button>
             <button className="green" onClick={() => { setTab("galeri"); setSet("preview"); setFilter("edit"); }}><Check size={18} /><b>{picked.length}{g.selectionLimit ? <i>/{g.selectionLimit}</i> : null}</b><small>Dipilih klien</small></button>

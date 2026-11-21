@@ -13,7 +13,7 @@ const ROLE_LABEL: Record<Role, string> = { owner: "Owner", admin: "Admin", edito
 const ROLE_HELP: Record<Role, string> = {
   owner: "Semua akses, kelola anggota, API key dan biaya.",
   admin: "Semua modul kerja, undang & kelola Editor.",
-  editor: "Kerjakan konten & delivery. Tanpa API key, biaya, hapus galeri, atau kelola anggota."
+  editor: "Kerjakan konten & project. Tanpa API key, biaya, hapus galeri, atau kelola anggota."
 };
 const appUrl = () => window.location.origin + window.location.pathname;
 

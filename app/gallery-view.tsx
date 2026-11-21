@@ -44,7 +44,7 @@ export function PublicGalleryPage() {
   useEffect(() => {
     const s = slugFromLocation(); setSlug(s);
     if (!s) { setState("missing"); return; }
-    call(s, { action: "get" }).then(g => { setGallery(g); setState("ready"); document.title = `${g.title} — FORIOR Photo Delivery`; }).catch(() => setState("missing"));
+    call(s, { action: "get" }).then(g => { setGallery(g); setState("ready"); document.title = `${g.title} — FORIOR Project`; }).catch(() => setState("missing"));
   }, []);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(""), 3200); return () => clearTimeout(t); }, [toast]);
   const act = useCallback(async (body: ClientAction) => {
@@ -87,7 +87,7 @@ export function PublicGallery({ g, act, notify }: { g: Gallery; act: (a: ClientA
   return <main className="gv-page">
     <header className="gv-header"><div className="gv-brand"><span className="gv-logo" /><div><b>FORIOR</b><small>{FORIOR.tagline}</small></div></div><em className={`dl-phase ${PHASE_CLASS[phase]}`}>{PHASE_SHORT[phase]}</em></header>
     <div className="gv-wrap">
-      <section className="gv-hero"><small>PHOTO DELIVERY</small><h1>{g.title}</h1><p>{[g.client?.company, g.client?.contact].filter(Boolean).join(" · ")}</p></section>
+      <section className="gv-hero"><small>PROJECT</small><h1>{g.title}</h1><p>{[g.client?.company, g.client?.contact].filter(Boolean).join(" · ")}</p></section>
       <section className="gv-card"><PhaseTracker phase={phase} /></section>
 
       {phase === "Preview" && step === "edit" && <>
