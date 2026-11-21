@@ -1916,9 +1916,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .main-area { padding-bottom:calc(108px + env(safe-area-inset-bottom)); }
   /* Floating pill bar, kept off the screen edges and above the home indicator */
   .f-bottomnav { position:fixed; left:16px; right:16px; bottom:calc(12px + env(safe-area-inset-bottom)); z-index:90; display:flex; gap:2px; padding:8px; background:rgba(255,255,255,.92); border:1px solid rgba(234,228,245,.9); border-radius:36px; box-shadow:0 12px 32px rgba(76,45,150,.16), 0 2px 6px rgba(42,27,71,.06); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
-  .f-bottomnav button { flex:1 1 auto; position:relative; min-width:0; min-height:56px; padding:6px 4px; border:0; background:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; color:#3f3a52; font-size:12px; font-weight:600; border-radius:28px; transition:background .2s, color .2s, box-shadow .2s; }
+  .f-bottomnav button { flex:1 1 auto; position:relative; min-width:0; min-height:56px; padding:6px 4px; border:0; background:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; color:#3f3a52; font-size:12px; font-weight:500; border-radius:28px; transition:background .2s, color .2s, box-shadow .2s; }
   .f-bottomnav button span { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .f-bottomnav button.active { padding:6px 16px; color:#fff; background:linear-gradient(180deg,#8a5cf6,#5b34d6); box-shadow:0 8px 18px rgba(103,58,220,.35); }
+  .f-bottomnav button.active { padding:6px 16px; font-weight:600; color:#fff; background:linear-gradient(180deg,#8a5cf6,#5b34d6); box-shadow:0 8px 18px rgba(103,58,220,.35); }
   .f-bottomnav i { position:absolute; top:4px; right:calc(50% - 22px); min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:#c2410c; color:#fff; font-size:12px; font-style:normal; line-height:18px; }
   .x-toast { bottom:calc(100px + env(safe-area-inset-bottom)); }
   .f-sheet, .f-sheet.wide { width:100%; }
