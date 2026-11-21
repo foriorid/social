@@ -531,7 +531,7 @@ function Slot({ quoteId, value, onChange, wide }: { quoteId: string; value?: str
     {menu && <div className="qb-menu" role="menu">
       <button role="menuitem" onClick={() => { setMenu(false); input.current?.click(); }}><Upload size={15} /> Upload foto</button>
       <button role="menuitem" onClick={() => { setMenu(false); const link = window.prompt("Tempel link Google Drive foto (akses: siapa saja yang punya link)"); if (link) { const u = driveImage(link.trim()); if (u) onChange(u); else notify("Link Drive tidak dikenali."); } }}><Link2 size={15} /> Link Google Drive</button>
-      <button role="menuitem" onClick={() => { setMenu(false); setGallery(true); }}><ImageIcon size={15} /> Dari galeri Photo Delivery</button>
+      <button role="menuitem" onClick={() => { setMenu(false); setGallery(true); }}><ImageIcon size={15} /> Dari galeri Projects</button>
       {value && <button role="menuitem" className="x-danger" onClick={() => { setMenu(false); onChange(undefined); }}><Trash2 size={15} /> Hapus foto</button>}
     </div>}
     {gallery && <GalleryPicker onClose={() => setGallery(false)} onPick={u => { onChange(u); setGallery(false); }} />}
@@ -632,7 +632,7 @@ function ApprovedCard({ q, approval, onMake }: { q: Quote; approval: Approval; o
 /** Turns an approved quotation into a Photo Delivery gallery (and its shoot date), with the client filled in. */
 function MakeProjectModal({ q, approval, onClose, onDone }: { q: Quote; approval: Approval; onClose: () => void; onDone: (galleryId: string) => void }) {
   const photos = q.sections.filter(s => !s.optional).flatMap(s => s.items).reduce((n, i) => n + (/foto|photo/i.test(`${i.unit ?? ""} ${i.name}`) ? Number(i.qty) || 0 : 0), 0);
-  const [form, setForm] = useState({ title: [q.client.name, q.title].filter(Boolean).join(" — ") || "Photo Delivery", limit: photos ? String(photos) : "", shootDate: "" });
+  const [form, setForm] = useState({ title: [q.client.name, q.title].filter(Boolean).join(" — ") || "Project", limit: photos ? String(photos) : "", shootDate: "" });
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const create = async () => {
     if (!form.title.trim()) return setError("Isi judul galeri.");
@@ -653,7 +653,7 @@ function MakeProjectModal({ q, approval, onClose, onDone }: { q: Quote; approval
   };
   return createPortal(<div className="modal-backdrop" role="dialog" aria-label="Jadikan proyek" onClick={onClose}><div className="quick-modal cp-modal qb-make" onClick={e => e.stopPropagation()}>
     <div className="qb-pick-head"><b>Jadikan proyek</b><button className="qb-icon" onClick={onClose} aria-label="Tutup"><X size={17} /></button></div>
-    <p className="qb-muted">Membuat galeri Photo Delivery dari penawaran ini. Klien: {q.client.name || "—"} · PIC {approval.name}{approval.phone ? ` (${approval.phone})` : ""}.</p>
+    <p className="qb-muted">Membuat project baru (galeri foto) dari penawaran ini. Klien: {q.client.name || "—"} · PIC {approval.name}{approval.phone ? ` (${approval.phone})` : ""}.</p>
     <label className="qb-f wide"><span>Judul galeri</span><input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></label>
     <div className="qb-row2">
       <label className="qb-f"><span>Kuota foto edit</span><input inputMode="numeric" value={form.limit} onChange={e => setForm(f => ({ ...f, limit: e.target.value.replace(/\D/g, "") }))} placeholder="mis. 24" /></label>

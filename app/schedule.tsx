@@ -135,7 +135,7 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
       if (form.crew.length) setCrewBook(b => [...new Set([...form.crew, ...b])].slice(0, 20));
       if (form.account && data) { try { await pushToCalendar(data as Row, form.account, { hours: form.hours, location: form.location.trim(), ...(form.invite && guests.length ? { guests } : {}) }); } catch (e) { notify(`Project dibuat, tapi gagal masuk Calendar: ${e instanceof Error ? e.message : e}`); } }
       else setSync(o => ({ ...o, [id]: { accountId: "", email: "", eventId: "", start: `${form.date}T${form.time}`, hours: form.hours, location: form.location.trim(), link: "" } }));
-      setForm(null); notify("Shoot dijadwalkan dan project dibuat di Photo Delivery."); loadBase(); loadEvents();
+      setForm(null); notify("Shoot dijadwalkan dan project dibuat di Projects."); loadBase(); loadEvents();
     } catch (e) { notify(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(""); }
   };
@@ -206,7 +206,7 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
     </div></div>}
     {form && <div className="modal-backdrop" onClick={() => setForm(null)}><div className="quick-modal cp-modal" role="dialog" aria-label="Shoot baru" onClick={e => e.stopPropagation()}>
       <button className="modal-close" onClick={() => setForm(null)} aria-label="Tutup"><X size={18} /></button>
-      <div className="cp-modal-head"><span className="modal-icon"><CalendarDays size={21} /></span><div><h2>Shoot baru</h2><p>Langsung jadi project di Photo Delivery{accounts.length ? " dan, bila dipilih, event di Google Calendar" : ""}. Tidak perlu lewat Photo Planner.</p></div></div>
+      <div className="cp-modal-head"><span className="modal-icon"><CalendarDays size={21} /></span><div><h2>Shoot baru</h2><p>Langsung jadi project di Projects{accounts.length ? " dan, bila dipilih, event di Google Calendar" : ""}. Tidak perlu lewat Photo Planner.</p></div></div>
       <div className="cx-form">
         <label className="cx-f"><span>Nama klien <b>*</b></span><input autoFocus value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} placeholder="Bu Rina / PT Mosaic" /></label>
         <label className="cx-f"><span>WhatsApp</span><input value={form.wa} inputMode="tel" onChange={e => setForm({ ...form, wa: e.target.value })} placeholder="0812…" /></label>
