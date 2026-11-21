@@ -3333,3 +3333,9 @@ body:has(.qb-pick) .qb-bottom, body:has(.qb-pick) .qb-fab { display:none; } .qb-
 .insight-tabs button { display:inline-flex; align-items:center; gap:8px; border:0; background:none; padding:9px 16px; border-radius:11px; font:inherit; font-size:14px; font-weight:600; color:#5d5770; cursor:pointer; }
 .insight-tabs button.on { background:#fff; color:#1f1933; box-shadow:0 1px 3px rgba(42,27,71,.12); }
 .insight-tabs .nav-soon { background:#fdf0e1; color:#b45309; }
+/* Mobile drawer sits above the floating bottom bar (which hides while it is open) and scrolls to Settings */
+@media (max-width:800px) {
+  .sidebar { z-index:110; height:100dvh; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding-bottom:calc(18px + env(safe-area-inset-bottom)); }
+  .mobile-backdrop { z-index:105; }
+  body:has(.sidebar.sidebar-open) .f-bottomnav { display:none; }
+}
