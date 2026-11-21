@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CalendarDays, Users, Check, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, Link2, Loader2, MapPin, Plus, RefreshCw, Star, Trash2, X } from "lucide-react";
 import { SUPABASE_URL, readCloud, supabase } from "./lib/cloud";
 import { useStored } from "./lib/store";
+import { navigate, useDetail } from "./lib/hashnav";
 import { monthGrid } from "./lib/flow";
 import { notify, useCloud } from "./modules";
 import { PHASE_CLASS, fmtShoot } from "./delivery";
@@ -35,11 +36,12 @@ const jkt = (iso: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFor
 /** "Kam, 19 Nov 2026 · 10:00–11:00" or "Sab, 21 Nov 2026 · Sepanjang hari" (Google's all-day end date is exclusive). */
 function whenOf(e: CalEvent): string {
   if (e.allDay) {
-    const last = new Date(new Date(`${e.end}T00:00:00Z`).getTime() - 864e5).toISOString().slice(0, 10);
+    const last = e.end ? new Date(new Date(`${e.end}T00:00:00Z`).getTime() - 864e5).toISOString().slice(0, 10) : e.start;
     const f = (d: string) => new Intl.DateTimeFormat("id-ID", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(new Date(`${d}T00:00:00Z`));
     return `${f(e.start)}${last > e.start ? ` – ${f(last)}` : ""} · Sepanjang hari`;
   }
-  return `${jkt(e.start, { weekday: "short", day: "numeric", month: "short", year: "numeric" })} · ${jkt(e.start, { hour: "2-digit", minute: "2-digit", hour12: false })}–${jkt(e.end, { hour: "2-digit", minute: "2-digit", hour12: false })}`;
+  const hm = (iso: string) => jkt(iso, { hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${jkt(e.start, { weekday: "short", day: "numeric", month: "short", year: "numeric" })} · ${hm(e.start)}${e.end ? `–${hm(e.end)}` : ""}`;
 }
 
 export function CalendarPage({ openGallery }: { openGallery: (id: string) => void; go?: (nav: string) => void }) {
@@ -140,6 +142,9 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
     finally { setBusy(""); }
   };
 
+  // "+ Shoot / project baru" from the bottom bar links to #/calendar/new.
+  const [routeId] = useDetail("Calendar");
+  useEffect(() => { if (routeId === "new") { openNew(); navigate("Calendar", null, true); } }, [routeId]); // eslint-disable-line react-hooks/exhaustive-deps
   const shoots = (rows ?? []).filter(r => r.data.shootDate);
   const ourEvents = new Set(Object.values(sync).map(s => s.eventId).filter(Boolean));
   const visible = events.filter(e => !hidden.includes(e.accountId) && !ourEvents.has(e.id));
@@ -150,6 +155,13 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
   for (const list of byDay.values()) list.sort((a, b) => a.time.localeCompare(b.time));
   const today = todayIso();
   const upcoming = shoots.filter(r => r.data.shootDate!.slice(0, 10) >= today).sort((a, b) => a.data.shootDate!.localeCompare(b.data.shootDate!));
+  // Google Calendar events from today on (in the loaded range), shown in the same list as project shoots.
+  // An event that is clearly the same shoot as a project (same day, title contains the project name) is listed once.
+  const sameShoot = (e: CalEvent) => upcoming.some(r => r.data.shootDate!.slice(0, 10) === (e.allDay ? e.start : dayOf(e.start)) && e.summary.toLowerCase().includes(r.data.title.toLowerCase()));
+  const upcomingEvents = visible.filter(e => (e.allDay ? e.start : dayOf(e.start)) >= today && !sameShoot(e));
+  const upcomingCount = upcoming.length + upcomingEvents.length;
+  const sortKeyOf = (iso: string) => (iso.length > 10 ? new Date(iso).toLocaleString("sv-SE", { timeZone: "Asia/Jakarta" }).replace(" ", "T") : iso);
+  const upcomingList = [...upcoming.map(r => ({ key: r.data.shootDate!, row: r as Row | null, ev: null as CalEvent | null })), ...upcomingEvents.map(e => ({ key: e.allDay ? e.start : sortKeyOf(e.start), row: null as Row | null, ev: e as CalEvent | null }))].sort((a, b) => a.key.localeCompare(b.key));
   const shift = (d: number) => setMonth(({ y, m }) => { const t = new Date(y, m + d, 1); return { y: t.getFullYear(), m: t.getMonth() }; });
 
   return <div className="module-page sc">
@@ -157,6 +169,14 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
       <div className="cx-monthnav"><button className="cx-icon" onClick={() => shift(-1)} aria-label="Bulan sebelumnya"><ChevronLeft size={18} /></button><h3>{MONTHS[month.m]} {month.y}</h3><button className="cx-icon" onClick={() => shift(1)} aria-label="Bulan berikutnya"><ChevronRight size={18} /></button><button className="outline-button" onClick={() => setMonth({ y: now.getFullYear(), m: now.getMonth() })}>Hari ini</button>{loadingCal && <Loader2 size={16} className="lg-spin" />}</div>
       <button className="primary-button" onClick={() => openNew()}><Plus size={16} /> Shoot baru</button>
     </div>
+    <section className="panel sc-upcoming sc-upcoming-top">
+          <h3>Jadwal mendatang <span className="muted-chip">{upcomingCount}</span></h3>
+          {!rows ? <p className="x-empty">Memuat…</p> : !upcomingList.length ? <p className="x-empty">Belum ada jadwal mendatang.</p> : upcomingList.map(({ row: r, ev }) => { if (ev) return <div key={ev.accountId + ev.id} className="sc-row"><button className="sc-row-main" onClick={() => setPicked(ev)}><b>{whenOf(ev)}</b><span><i className="sc-dot" style={{ background: ev.color }} />{ev.summary}</span>{ev.location ? <small><MapPin size={11} /> {ev.location}</small> : <small>{ev.email}</small>}</button><div className="sc-row-side"><em className="sc-gcal">Google</em></div></div>; if (!r) return null; const s = sync[r.id]; const stale = s?.eventId && s.start !== r.data.shootDate; return <div key={r.id} className="sc-row">
+            <button className="sc-row-main" onClick={() => openGallery(r.id)}><b>{fmtShoot(r.data.shootDate)}</b><span>{r.data.title}</span><small>{r.data.client?.contact ?? r.data.client?.company ?? ""}{s?.location ? <> · <MapPin size={11} /> {s.location}</> : null}</small></button>
+            <div className="sc-row-side"><em className={`dl-phase ${PHASE_CLASS[r.data.phase]}`}>{PHASE_SHORT[r.data.phase]}</em>
+              {accounts.length > 0 && (s?.eventId && !stale ? <a className="sc-synced" href={s.link} target="_blank" rel="noreferrer" title={s.email}><Check size={12} /> Calendar</a> : <button className="cx-link" disabled={busy === r.id} onClick={() => sendRow(r)}>{busy === r.id ? <Loader2 size={12} className="lg-spin" /> : stale ? <RefreshCw size={12} /> : <Plus size={12} />} {stale ? "Perbarui" : "Ke Calendar"}</button>)}</div>
+          </div>; })}
+    </section>
     <div className="sc-layout">
       <section className="panel sc-cal">
         <div className="cx-grid">{DAYS.map(d => <b key={d} className="cx-dow">{d}</b>)}
@@ -177,14 +197,6 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
           {!accounts.length && <p className="cx-hint">Belum ada akun. Hubungkan satu atau beberapa akun Google (mis. akun project dan akun pribadi); event-nya tampil di kalender ini dan shoot baru bisa langsung masuk ke kalender akun pilihan.</p>}
           {isAdmin && (hasClient ? <button className="outline-button cx-wide" disabled={busy === "connect"} onClick={connect}><Link2 size={15} /> {accounts.length ? "Tambah akun Google" : "Hubungkan Google Calendar"}</button>
             : <div className="sc-setup"><b>Sekali saja: siapkan OAuth Google</b><ol><li>Google Cloud Console → aktifkan <i>Google Calendar API</i>.</li><li>OAuth consent screen → External → tambahkan email Anda sebagai Test user (atau Publish).</li><li>Credentials → OAuth client ID → Web application. Authorized redirect URI:</li></ol><div className="ad-copy"><code>{REDIRECT}</code><button className="cx-link" onClick={() => navigator.clipboard?.writeText(REDIRECT).then(() => notify("Redirect URI disalin."))}><Copy size={13} /> Salin</button></div><p className="cx-hint">Simpan Client ID &amp; Secret di Settings → AI &amp; Models.</p></div>)}
-        </section>
-        <section className="panel sc-upcoming">
-          <h3>Shoot mendatang <span className="muted-chip">{upcoming.length}</span></h3>
-          {!rows ? <p className="x-empty">Memuat…</p> : !upcoming.length ? <p className="x-empty">Belum ada shoot terjadwal.</p> : upcoming.map(r => { const s = sync[r.id]; const stale = s?.eventId && s.start !== r.data.shootDate; return <div key={r.id} className="sc-row">
-            <button className="sc-row-main" onClick={() => openGallery(r.id)}><b>{fmtShoot(r.data.shootDate)}</b><span>{r.data.title}</span><small>{r.data.client?.contact ?? r.data.client?.company ?? ""}{s?.location ? <> · <MapPin size={11} /> {s.location}</> : null}</small></button>
-            <div className="sc-row-side"><em className={`dl-phase ${PHASE_CLASS[r.data.phase]}`}>{PHASE_SHORT[r.data.phase]}</em>
-              {accounts.length > 0 && (s?.eventId && !stale ? <a className="sc-synced" href={s.link} target="_blank" rel="noreferrer" title={s.email}><Check size={12} /> Calendar</a> : <button className="cx-link" disabled={busy === r.id} onClick={() => sendRow(r)}>{busy === r.id ? <Loader2 size={12} className="lg-spin" /> : stale ? <RefreshCw size={12} /> : <Plus size={12} />} {stale ? "Perbarui" : "Ke Calendar"}</button>)}</div>
-          </div>; })}
         </section>
       </aside>
     </div>

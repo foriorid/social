@@ -1,6 +1,7 @@
 "use client";
 
 // FORIOR (business) workspace pages: the project-first dashboard, the Photo Planner slot and Calendar.
+import { navigate } from "./lib/hashnav";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Copy, ExternalLink, FileText, Images, Link2, Plus, RefreshCw } from "lucide-react";
 import { activeWorkspace, readCloud, supabase } from "./lib/cloud";
@@ -85,7 +86,7 @@ export function BusinessDashboard({ go, openGallery }: { go: (nav: string) => vo
         <h2>{focus.length ? <>{focus.length} hal butuh <span>perhatian</span></> : <>Create, deliver, <span>grow.</span></>}</h2>
         <div className="bd-chips">{focus.length ? focus.map((f, k) => <button key={k} className={`bd-chip ${f.tone}`} onClick={() => (f.galleryId ? openGallery(f.galleryId) : go(f.nav))}>{f.tone === "warn" ? <Clock3 size={13} /> : f.tone === "info" ? <CalendarDays size={13} /> : <CheckCircle2 size={13} />}<span>{f.text}</span></button>)
           : <span className="bd-chip ok"><CheckCircle2 size={13} /><span>Tidak ada yang mendesak. Saatnya cari klien baru.</span></span>}</div>
-        <div className="bd-qa">{!isEditor && <button className="primary-button" onClick={() => go("Penawaran")}><Plus size={15} /> Penawaran baru</button>}<button className="outline-button" onClick={() => go("Calendar")}><Plus size={15} /> Project / shoot</button></div>
+        <div className="bd-qa">{!isEditor && <button className="primary-button" onClick={() => navigate("Penawaran", "new")}><Plus size={15} /> Penawaran baru</button>}<button className="outline-button" onClick={() => navigate("Calendar", "new")}><Plus size={15} /> Project / shoot</button></div>
       </div>
     </section>
 
