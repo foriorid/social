@@ -3,11 +3,11 @@
 // Settings: everything the old eight tabs held, grouped into four (Workspace, AI & Models, Integrasi, Akses)
 // with collapsible cards so a phone screen shows a short list instead of one long page.
 import { useState } from "react";
-import { Bell, Bot, BriefcaseBusiness, Calculator, Check, ChevronDown, Cloud as CloudIcon, Database, Info, Instagram, KeyRound, Layers, Music2, ShieldCheck, Sparkles, Trash2, Users, WandSparkles, Youtube, CalendarDays, Gauge, History } from "lucide-react";
+import { Bell, Bot, UserRound, BriefcaseBusiness, Calculator, Check, ChevronDown, Cloud as CloudIcon, Database, Info, Instagram, KeyRound, Layers, Music2, ShieldCheck, Sparkles, Trash2, Users, WandSparkles, Youtube, CalendarDays, Gauge, History } from "lucide-react";
 import { AccountPanel, AiButton, AiError, KeyField, MODELS, notify, TRIGGERS, useAI, useCloud, useMonthUsage } from "./modules";
 import { TeamSettings } from "./team";
 import { askAI, CHEAP_MODEL } from "./lib/ai";
-import { activeWorkspace } from "./lib/cloud";
+import { activeWorkspace, setDisplayName } from "./lib/cloud";
 import { costIdr, rupiah } from "./lib/logic";
 import { useCallLog, useSettings } from "./lib/store";
 
@@ -41,6 +41,17 @@ export function SettingsPage() {
   </div>;
 }
 
+/** Display name for the greeting and avatar; stored on the account, so it follows the user across workspaces. */
+function ProfileGroup() {
+  const [cloud] = useCloud();
+  const [name, setName] = useState(cloud.name ?? ""), [busy, setBusy] = useState(false);
+  const save = async () => { setBusy(true); try { await setDisplayName(name); notify("Nama tampilan disimpan."); } catch (e) { notify(`Gagal menyimpan: ${e instanceof Error ? e.message : e}`); } setBusy(false); };
+  return <Group icon={<UserRound size={17} />} title={cloud.name ?? "Nama tampilan"} sub={cloud.name ? `Nama tampilan · ${cloud.email ?? ""}` : "Belum diatur · dipakai di sapaan Dashboard"} open={!cloud.name}>
+    <div className="settings-field"><label htmlFor="sx-name">NAMA TAMPILAN</label><input id="sx-name" value={name} maxLength={60} placeholder="mis. Alvian" onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") save(); }} /><small>Tampil di sapaan Dashboard ("Selamat pagi, {name.trim() || "Alvian"}") dan avatar. Berlaku di semua workspace Anda.</small></div>
+    <button className="primary-button" disabled={busy || name.trim() === (cloud.name ?? "")} onClick={save}><Check size={14} /> Simpan</button>
+  </Group>;
+}
+
 // ---------- Workspace: info, brand identity, notifications, and a summary of the other tabs ----------
 function WorkspaceTab({ go }: { go: (t: Tab) => void }) {
   const [cloud] = useCloud();
@@ -53,6 +64,8 @@ function WorkspaceTab({ go }: { go: (t: Tab) => void }) {
   const keys = cloud.keys;
   return <>
     <div className="sx-hero"><div><b>Pengaturan Workspace</b><small>Identitas, brand, AI, integrasi, dan akses tim {ws?.name ?? ""}.</small></div><BriefcaseBusiness size={30} /></div>
+    <h3 className="sx-h">Profil</h3>
+    <ProfileGroup />
     <h3 className="sx-h">Informasi</h3>
     <Group icon={<BriefcaseBusiness size={17} />} title={`${ws?.name ?? "Workspace"} · ${ws?.kind === "business" ? "Business" : "Personal"}`} sub={`${role} · ${cloud.email ?? ""}`}>
       <div className="settings-field"><label>WORKSPACE NAME</label><input value={ws?.name ?? ""} readOnly /><small>Nama workspace tampil di pemilih workspace. Perubahan nama menyusul.</small></div>

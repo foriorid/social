@@ -39,6 +39,8 @@ export type Cloud = {
   /** False until the session (and, when signed in, the workspaces) are known. Nothing is shown before that. */
   ready: boolean;
   email: string | null;
+  /** The user's display name (auth user_metadata.display_name), shared by all their workspaces. */
+  name: string | null;
   workspaces: Workspace[];
   workspaceId: string | null;
   /** Arrived from an invite or reset link: the user must choose a password first. */
@@ -47,7 +49,7 @@ export type Cloud = {
   error?: string;
   keys: Record<string, string>;
 };
-export const CLOUD_OFF: Cloud = { ready: false, email: null, workspaces: [], workspaceId: null, mustSetPassword: false, sync: "off", keys: {} };
+export const CLOUD_OFF: Cloud = { ready: false, email: null, name: null, workspaces: [], workspaceId: null, mustSetPassword: false, sync: "off", keys: {} };
 const setCloud = (patch: Partial<Cloud>) => writeStored<Cloud>("cloud", old => ({ ...CLOUD_OFF, ...old, ...patch }), CLOUD_OFF);
 export const readCloud = () => ({ ...CLOUD_OFF, ...readStored<Cloud>("cloud", CLOUD_OFF) });
 export const activeWorkspace = (c: Cloud = readCloud()) => c.workspaces.find(w => w.id === c.workspaceId) ?? null;
@@ -143,7 +145,7 @@ async function onSession(next: Session | null) {
   const before = session?.user.id;
   session = next;
   if (!next) { setStoreSpace(""); setCloud({ ...CLOUD_OFF, ready: true, mustSetPassword: readCloud().mustSetPassword }); return; }
-  setCloud({ email: next.user.email ?? null });
+  setCloud({ email: next.user.email ?? null, name: (next.user.user_metadata?.display_name as string | undefined)?.trim() || null });
   if (before === next.user.id && (readCloud().workspaceId || loadingFor === next.user.id)) return; // token refresh, or already loading
   loadingFor = next.user.id;
   try {
@@ -165,6 +167,14 @@ export const aiReady = (cloud: Cloud, localKey: string) => (!!cloud.email && !!c
 const here = () => window.location.origin + window.location.pathname;
 
 /** Sends a sign-in link. Never creates an account: access is by invitation only. */
+/** Saves the display name on the user's account (all workspaces). Empty clears it. */
+export async function setDisplayName(name: string) {
+  const clean = name.trim().slice(0, 60);
+  const { error } = await supabase.auth.updateUser({ data: { display_name: clean } });
+  if (error) throw new Error(error.message);
+  setCloud({ name: clean || null });
+}
+
 export async function signInWithEmail(email: string) {
   const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: here(), shouldCreateUser: false } });
   if (error) throw new Error(/signups not allowed|not found|otp_disabled/i.test(error.message) ? "Email ini belum diundang ke FORIOR Hub. Minta undangan ke admin." : error.message);
