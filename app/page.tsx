@@ -289,8 +289,8 @@ function AppShell() {
   const setActiveNav = (nav: string) => navigate(nav);
   const openGallery = (id: string) => navigate("Photo Delivery", id);
   const currentItem = navItems.find(i => i.name === activeNav);
-  // One group open at a time; all closed by default. Opening Project closes Sosmed and vice versa.
-  const [navOpen, setNavOpen] = useStored<string>("navOpen", "");
+  // One group open at a time; Project open by default. Opening Project closes Sosmed and vice versa.
+  const [navOpen, setNavOpen] = useStored<string>("navOpenGroup", "PROJECT");
   const toggleGroup = (label: string) => setNavOpen(o => (o === label ? "" : label));
   const pickWorkspace = (id: string) => { setShowWorkspace(false); setShowProfile(false); if (id !== cloud.workspaceId) switchWorkspace(id); };
   const [mobileNav, setMobileNav] = useState(false);
