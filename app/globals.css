@@ -3312,3 +3312,16 @@ body:has(.qb-pick) .qb-bottom, body:has(.qb-pick) .qb-fab { display:none; } .qb-
 /* Drive sub-folder headings inside the admin photo grid */
 .dl-psec { grid-column:1/-1; margin:10px 0 0; font-size:13px; font-weight:700; color:#4a4060; display:flex; gap:8px; align-items:baseline; }
 .dl-psec small { font-weight:500; color:var(--muted); }
+/* Penawaran Tahap 2: client approval in Hub */
+.qb-st.ok { background:#16884a; color:#fff; }
+.qb-muted { color:#7a7590; font-size:13px; margin:0; }
+.qb-approved { border:1px solid #cdeed8; background:linear-gradient(135deg,#ecfbf1,#f8fffa); display:grid; gap:8px; }
+.qb-ap-head { display:flex; gap:12px; align-items:center; margin-bottom:4px; } .qb-ap-head b { display:block; color:#116b34; font-size:15px; } .qb-ap-head small { color:#3f5c49; font-size:12.5px; }
+.qb-ap-ic { width:38px; height:38px; border-radius:50%; background:#16884a; color:#fff; display:grid; place-items:center; flex:none; }
+.qb-ap-kv { display:flex; justify-content:space-between; font-size:13px; color:#3f5c49; } .qb-ap-kv b { color:#1f1933; }
+.qb-approved .qb-btns { margin-top:6px; }
+.qb-make { display:grid; gap:12px; max-width:520px; }
+.qb-row2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
+.qb-make input { width:100%; min-width:0; font:inherit; font-size:14px; padding:10px 11px; border:1px solid #e3def0; border-radius:11px; background:#fff; color:#1c2333; }
+.notice-at { display:block; font-size:11px; color:#8a83a0; margin-top:2px; font-weight:500; }
+.notice-ok .notice-dot { background:#16884a; }

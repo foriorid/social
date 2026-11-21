@@ -3,7 +3,7 @@
 //  - <slug>.json: a quotation made in the builder (Penawaran › Builder), rendered here by app/lib/quote.ts.
 // Hub serves both itself: Supabase sends HTML files as text/plain, so the browser would show source code.
 import { createHash } from "node:crypto";
-import { PRINT_SCRIPT, renderQuoteHtml, type Quote } from "../../lib/quote";
+import { PRINT_SCRIPT, renderQuoteHtml, totals, type Quote, type QuoteApproval } from "../../lib/quote";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +39,17 @@ async function logOpen(slug: string, ua: string) {
   } catch { /* tracking is best effort */ }
 }
 
+const rpc = (fn: string, body: unknown, ms: number) => fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+  method: "POST", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+  body: JSON.stringify(body), signal: AbortSignal.timeout(ms), cache: "no-store"
+});
+
+/** Who approved the quotation and when, or null. A failed lookup shows the form, which the database still guards. */
+async function approvalOf(slug: string): Promise<QuoteApproval | null> {
+  try { const r = await rpc("quote_approval", { p_slug: slug }, 2000); const rows = r.ok ? await r.json() : []; return Array.isArray(rows) && rows[0]?.name ? { name: rows[0].name, at: rows[0].at } : null; }
+  catch { return null; }
+}
+
 export async function GET(req: Request, ctx: { params: Promise<{ slug: string }> }) {
   const { slug } = await ctx.params;
   if (!SLUG.test(slug) || slug.includes("--")) return notFound();
@@ -57,7 +68,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ slug: string }>
   const ua = req.headers.get("user-agent") ?? "";
   if (!url.searchParams.has("preview") && !BOT.test(ua)) await logOpen(slug, ua);
   const pageUrl = `https://${req.headers.get("x-forwarded-host") ?? url.host}/quote/${slug}/`;
-  return new Response(renderQuoteHtml(q, { pageUrl, sent: url.searchParams.has("terkirim") }), { status: 200, headers: BUILT });
+  const approval = await approvalOf(slug);
+  return new Response(renderQuoteHtml(q, { pageUrl, sent: url.searchParams.has("terkirim"), approval }), { status: 200, headers: BUILT });
 }
 
 /** The client answers the questions on the page (a plain form, no script). Saved for Hub; then back to the page. */
@@ -71,10 +83,20 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
     q = await json.json();
     form = await req.formData();
   } catch { return unavailable(); }
+  const back = `/quote/${slug}/`;
+  if (form.get("act") === "approve") {
+    // Approval: the name and the terms checkbox are required; title and total come from the published quotation.
+    const name = String(form.get("name") ?? "").trim().slice(0, 80), phone = String(form.get("phone") ?? "").replace(/[^\d+ ()-]/g, "").trim().slice(0, 30);
+    if (!name || form.get("agree") !== "1") return new Response(null, { status: 303, headers: { Location: `${back}#setuju` } });
+    try {
+      const r = await rpc("approve_quote", { p_slug: slug, p_name: name, p_phone: phone, p_title: [q.eyebrow, q.title].filter(Boolean).join(" — ").slice(0, 300), p_total: Math.round(totals(q as Quote).grand) }, 4000);
+      if (!r.ok) return unavailable();
+    } catch { return unavailable(); }
+    return new Response(null, { status: 303, headers: { Location: `${back}?disetujui=1#setuju` } });
+  }
   // Question texts come from the published quotation, not from the form, so only real questions are stored.
   const answers = (q.questions ?? []).filter(x => x.text.trim()).slice(0, 10)
     .map((x, i) => ({ q: x.text.slice(0, 300), a: String(form.get(`a${i}`) ?? "").trim().slice(0, 1000) })).filter(x => x.a);
-  const back = `/quote/${slug}/`;
   if (!answers.length) return new Response(null, { status: 303, headers: { Location: `${back}#tanya` } });
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/submit_quote_answers`, {

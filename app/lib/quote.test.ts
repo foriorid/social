@@ -72,8 +72,8 @@ test("portfolio cards link out; questions become a form (disabled in preview, th
   assert.ok(html.includes('method="post"') && html.includes('name="a0"') && !html.includes('name="a1"'));
   assert.ok(renderQuoteHtml(q, { preview: true }).includes("disabled"));
   const sent = renderQuoteHtml(q, { sent: true });
-  assert.ok(sent.includes("jawaban Anda sudah terkirim") && !sent.includes('method="post"'));
-  assert.ok(!renderQuoteHtml(newQuote()).includes('method="post"'));
+  assert.ok(sent.includes("jawaban Anda sudah terkirim") && !sent.includes('name="a0"'));
+  assert.ok(!renderQuoteHtml(newQuote()).includes('id="tanya"'));
 });
 
 test("per-section pricing: one package price, item prices ignored and hidden", () => {
@@ -112,4 +112,22 @@ test("one deliverables block: with an info section the notes block is titled Cat
 test("a package left at Rp 0 counts as info: no letter, notes block titled Catatan", () => {
   const html = renderQuoteHtml({ ...newQuote(), operational: [], sections: [{ id: "d", title: "Deliverables", layout: "list" as const, pricing: "section" as const, price: 0, items: [{ id: "1", name: "File", price: 0 }] }] });
   assert.ok(html.includes("<h2>Catatan</h2>") && !html.includes("Deliverables (A)"));
+});
+
+test("client page: approval form until approved, then who approved and the DP", () => {
+  const q = { ...newQuote(new Date("2026-11-21T00:00:00Z")), title: "Villa", client: { name: "Phalosaa", location: "Sleman" } };
+  q.sections[0].items[0] = { ...q.sections[0].items[0], name: "Foto", price: 10_000_000, qty: 1 } as never;
+  const open = renderQuoteHtml(publicSnapshot(q));
+  assert.match(open, /name="act" value="approve"/);
+  assert.match(open, /name="agree" value="1" required/);
+  const done = renderQuoteHtml(publicSnapshot(q), { approval: { name: "Rina <b>", at: "2026-11-21T03:24:00Z" } });
+  assert.doesNotMatch(done, /value="approve"/);
+  assert.match(done, /Disetujui oleh Rina &lt;b&gt;/);
+  assert.match(done, /Transfer DP 50%/);
+  assert.equal(renderQuoteHtml(publicSnapshot(q), { preview: true }).includes('disabled>'), true);
+});
+
+test("publicSnapshot keeps the linked project private", () => {
+  const q = { ...newQuote(), project: { galleryId: "g1", at: "x" } };
+  assert.equal("project" in publicSnapshot(q), false);
 });
