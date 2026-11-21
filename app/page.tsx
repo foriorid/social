@@ -402,7 +402,7 @@ function AppShell() {
           <button className="mobile-menu" onClick={() => setMobileNav(true)} aria-label="Open navigation"><Menu size={21} /></button>
           <div className="page-heading" id="page-heading-slot">
             <span>{activeNav === "Dashboard" && !isBiz ? "Good Afternoon," : `WORKSPACE / ${(ws?.name ?? "").toUpperCase()}`}</span>
-            <h1>{activeNav === "Dashboard" ? (isBiz ? greeting(new Date().getHours()) : <>Alvian <span className="wave">👋</span></>) : (currentItem?.label ?? activeNav)}</h1>
+            <h1>{activeNav === "Dashboard" ? (isBiz ? `${greeting(new Date().getHours())}${cloud.name ? `, ${cloud.name}` : ""}` : <>{cloud.name ?? "Alvian"} <span className="wave">👋</span></>) : (currentItem?.label ?? activeNav)}</h1>
             <p>{isBiz ? (activeNav === "Dashboard" ? new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "FORIOR · Business Workspace") : (activeNav === "Dashboard" ? "Personal Brand Content Command Center" : "Personal Brand Content Workspace")}</p>
           </div>
 
@@ -435,9 +435,9 @@ function AppShell() {
               </div>}
             </div>
             <div className="dropdown-wrap">
-              <button className="avatar avatar-profile" aria-label="Menu profil" aria-expanded={showProfile} onClick={() => { setShowProfile(!showProfile); setShowNotifications(false); setShowRange(false); setShowPlatform(false); }}>A</button>
+              <button className="avatar avatar-profile" aria-label="Menu profil" aria-expanded={showProfile} onClick={() => { setShowProfile(!showProfile); setShowNotifications(false); setShowRange(false); setShowPlatform(false); }}>{(cloud.name ?? cloud.email ?? "?").charAt(0).toUpperCase()}</button>
               {showProfile && <div className="floating-menu profile-menu">
-                <div className="profile-head"><b>{cloud.email}</b><small>{ws ? `${ws.name} · ${ws.role === "owner" ? "Owner" : ws.role === "admin" ? "Admin" : "Editor"}` : ""}</small></div>
+                <div className="profile-head"><b>{cloud.name ?? cloud.email}</b>{cloud.name && <small>{cloud.email}</small>}<small>{ws ? `${ws.name} · ${ws.role === "owner" ? "Owner" : ws.role === "admin" ? "Admin" : "Editor"}` : ""}</small></div>
                 {cloud.workspaces.length > 1 && cloud.workspaces.map(w => <button key={w.id} onClick={() => pickWorkspace(w.id)}>{w.name} · {wsLabel(w)}{w.id === cloud.workspaceId && <Check size={14} />}</button>)}
                 <button onClick={() => { setActiveNav("Settings"); setShowProfile(false); }}>Settings<Settings size={14} /></button>
                 <button className="x-danger" onClick={() => { setShowProfile(false); signOut(); }}>Keluar<LogOut size={14} /></button>
