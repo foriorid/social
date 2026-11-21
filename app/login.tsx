@@ -18,11 +18,11 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div className="lg-pitch">
         <span className="lg-eyebrow">FORIOR HUB</span>
         <h1>Create better property visuals, <span>together.</span></h1>
-        <p>Workspace untuk mengelola project, konten, dan photo delivery dari FORIOR.</p>
+        <p>Workspace untuk mengelola project dan konten FORIOR.</p>
         <span className="lg-rule" aria-hidden="true" />
         <ul>
           <li><Layers size={18} aria-hidden="true" /> Project management</li>
-          <li><ImageIcon size={18} aria-hidden="true" /> Photo &amp; video delivery</li>
+          <li><ImageIcon size={18} aria-hidden="true" /> Project foto &amp; video</li>
           <li><Users size={18} aria-hidden="true" /> Team collaboration</li>
         </ul>
       </div>
@@ -51,7 +51,7 @@ export function LoginScreen() {
   return <Shell>
     <form className="lg-card" onSubmit={submit} noValidate>
       <Brand />
-      <div className="lg-head"><h2>{mode === "reset" ? "Lupa password" : "Welcome back"}</h2><p>{mode === "reset" ? "Kami kirim link untuk membuat kata sandi baru." : "Masuk ke FORIOR Hub untuk mengelola project, konten, dan photo delivery."}</p></div>
+      <div className="lg-head"><h2>{mode === "reset" ? "Lupa password" : "Welcome back"}</h2><p>{mode === "reset" ? "Kami kirim link untuk membuat kata sandi baru." : "Masuk ke FORIOR Hub untuk mengelola project dan konten."}</p></div>
       {mode !== "reset" && <div className="lg-seg" role="group" aria-label="Cara masuk">
         <button type="button" className={mode === "password" ? "active" : ""} aria-pressed={mode === "password"} onClick={() => switchMode("password")}>Kata sandi</button>
         <button type="button" className={mode === "link" ? "active" : ""} aria-pressed={mode === "link"} onClick={() => switchMode("link")}>Link via email</button>

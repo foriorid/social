@@ -90,7 +90,7 @@ export function BusinessDashboard({ go, openGallery }: { go: (nav: string) => vo
     </section>
 
     <section className="bd-kpis">
-      <button className="bd-kpi" onClick={() => go("Photo Delivery")}><span className="ic p"><Images size={18} /></span><span><b>{rows ? active.length : "…"}</b><small>Delivery berjalan</small><em>{selecting ? `${selecting} di tahap pemilihan` : openRev ? `${openRev} revisi terbuka` : "Semua lancar"}</em></span></button>
+      <button className="bd-kpi" onClick={() => go("Photo Delivery")}><span className="ic p"><Images size={18} /></span><span><b>{rows ? active.length : "…"}</b><small>Project berjalan</small><em>{selecting ? `${selecting} di tahap pemilihan` : openRev ? `${openRev} revisi terbuka` : "Semua lancar"}</em></span></button>
       <button className="bd-kpi" onClick={() => go("Photo Delivery")}><span className="ic w"><Clock3 size={18} /></span><span><b>{rows ? action.length : "…"}</b><small>Butuh tindakan</small><em className="w">{action[0] ? action[0].data.title : "Tidak ada"}</em></span></button>
       {isEditor ? <button className="bd-kpi" onClick={() => go("Photo Delivery")}><span className="ic b"><RefreshCw size={18} /></span><span><b>{rows ? openRev : "…"}</b><small>Revisi terbuka</small><em>{openRev ? "Perlu dikerjakan" : "Aman"}</em></span></button>
         : <button className="bd-kpi" onClick={() => go("Penawaran")}><span className="ic b"><FileText size={18} /></span><span><b>{sentQuotes.length}</b><small>Penawaran aktif</small><em className="g">{sentQuotes.length ? `${opened} dibuka · ${answered} dijawab` : "Belum ada yang dikirim"}</em></span></button>}
@@ -101,7 +101,7 @@ export function BusinessDashboard({ go, openGallery }: { go: (nav: string) => vo
       <section className="panel bd-card bd-delivery">
         <div className="bd-head"><span className="bd-hi"><Images size={18} /></span><div><h3>Projects</h3><small>Urut dari yang paling butuh tindakan</small></div><button className="bd-link" onClick={() => go("Photo Delivery")}>Semua project <ArrowRight size={14} /></button></div>
         {error && <p className="x-error">{error}</p>}
-        {!rows ? <p className="x-empty">Memuat galeri…</p> : !active.length ? <p className="x-empty">Belum ada delivery berjalan. Buat atau impor di Projects.</p> :
+        {!rows ? <p className="x-empty">Memuat galeri…</p> : !active.length ? <p className="x-empty">Belum ada project berjalan. Buat atau impor di Projects.</p> :
           <div className="bd-dl">{active.slice(0, 8).map(r => { const t = thumbOf(r.data); return <button key={r.id} className={`bd-dc${t ? "" : " empty"}`} onClick={() => openGallery(r.id)}>
             <i className="bd-dc-img">{t ? <img src={t} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = "none"; }} /> : null}</i>
             <span><b>{r.data.title}</b><small>{r.next.text}</small><em className={`dl-phase ${PHASE_CLASS[r.data.phase]}`}>{PHASE_SHORT[r.data.phase]}</em></span></button>; })}</div>}
