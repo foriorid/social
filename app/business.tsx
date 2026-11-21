@@ -76,7 +76,7 @@ export function BusinessDashboard({ go, openGallery }: { go: (nav: string) => vo
     quotes: isEditor ? [] : sentQuotes.map(q => ({ title: q.client.name || q.title, lastOpen: qstats[q.slug]?.last, answers: qstats[q.slug]?.answers ?? 0 })), now });
   const thumbOf = (g: Gallery, w = 640) => { const p = g.finalPhotos[0] ?? g.draftPhotos[0] ?? g.previewPhotos.find(x => x.selected) ?? g.previewPhotos[0]; return p ? driveThumb(p.id, w) : ""; };
   // A fixed FORIOR photo, not a project thumbnail (those changed with every gallery and were sometimes low quality).
-  const hero = stockUrl(STOCK[0].file);
+  const hero = stockUrl(STOCK[3].file); // japanese-restaurant.jpg
   const dayLabel = (iso: string, allDay?: boolean) => { const d = new Date(allDay ? `${iso}T00:00:00` : iso); return { dow: d.toLocaleDateString("id-ID", { weekday: "short" }), day: d.getDate(), time: allDay ? "Sepanjang hari" : d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) }; };
   const ago = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 6e4); return m < 60 ? `${Math.max(1, m)} mnt lalu` : m < 1440 ? `${Math.round(m / 60)} jam lalu` : `${Math.round(m / 1440)} hari lalu`; };
 
