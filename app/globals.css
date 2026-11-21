@@ -3325,3 +3325,11 @@ body:has(.qb-pick) .qb-bottom, body:has(.qb-pick) .qb-fab { display:none; } .qb-
 .qb-make input { width:100%; min-width:0; font:inherit; font-size:14px; padding:10px 11px; border:1px solid #e3def0; border-radius:11px; background:#fff; color:#1c2333; }
 .notice-at { display:block; font-size:11px; color:#8a83a0; margin-top:2px; font-weight:500; }
 .notice-ok .notice-dot { background:#16884a; }
+/* Sidebar: a sub-item (Photo Planner under Penawaran) and the "Segera" tag for menus not live yet */
+.nav-item.child { padding-left:34px; position:relative; }
+.nav-item.child::before { content:""; position:absolute; left:20px; top:-2px; bottom:50%; width:9px; border-left:1.5px solid rgba(255,255,255,.22); border-bottom:1.5px solid rgba(255,255,255,.22); border-bottom-left-radius:6px; }
+.nav-soon { flex:none; font-style:normal; font-size:10px; font-weight:700; letter-spacing:.02em; padding:2px 7px; border-radius:999px; background:rgba(255,255,255,.14); color:#e9e2f7; }
+.insight-tabs { display:inline-flex; gap:4px; padding:4px; margin:0 0 14px; border-radius:14px; background:#ece7f6; }
+.insight-tabs button { display:inline-flex; align-items:center; gap:8px; border:0; background:none; padding:9px 16px; border-radius:11px; font:inherit; font-size:14px; font-weight:600; color:#5d5770; cursor:pointer; }
+.insight-tabs button.on { background:#fff; color:#1f1933; box-shadow:0 1px 3px rgba(42,27,71,.12); }
+.insight-tabs .nav-soon { background:#fdf0e1; color:#b45309; }
