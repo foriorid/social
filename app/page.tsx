@@ -30,6 +30,8 @@ import { AutoDmPage } from "./autodm";
 import { StudioPage } from "./studio";
 import { DeliveryPage } from "./delivery";
 import { navigate, slugOf, useRoute } from "./lib/hashnav";
+import { useQuoteSignals } from "./quote-builder";
+import type { Quote } from "./lib/quote";
 import { BusinessDashboard, PhotoPlannerPage } from "./business";
 import { CalendarPage } from "./schedule";
 import { SettingsPage } from "./settings";
@@ -311,12 +313,27 @@ function AppShell() {
   const [tasks] = useTasks();
   const failedTasks = tasks.filter(t=>t.status==="failed").length, runningTasks = tasks.filter(t=>t.status==="queued"||t.status==="running").length;
   const newLeads = leads.filter(l=>l.status==="Baru").length;
+  const [quotes] = useStored<Quote[]>("quotes", []);
+  const canQuotes = isBiz && ws?.role !== "editor";
+  const signals = useQuoteSignals(canQuotes ? quotes.filter(q => q.publishedAt).map(q => q.slug) : []);
+  const [noticeSeen, setNoticeSeen] = useStored<string>("noticeSeen", "");
+  const quoteNotices = canQuotes ? quotes.flatMap(q => {
+    const label = [q.client.name, q.eyebrow].filter(Boolean).join(" · ") || q.title || "Penawaran";
+    const ap = signals.approvals[q.slug], ans = (signals.answers[q.slug] ?? [])[0];
+    return [
+      ap && Date.now() - Date.parse(ap.at) < 14 * 864e5 && { text: `✓ ${label} disetujui oleh ${ap.name}`, nav: "Penawaran", id: q.id, at: ap.at, tone: "ok" },
+      ans && Date.now() - Date.parse(ans.at) < 7 * 864e5 && { text: `${label}: ${ans.name ? `${ans.name} ` : "klien "}menjawab pertanyaan`, nav: "Penawaran", id: q.id, at: ans.at }
+    ].filter(Boolean) as { text: string; nav: string; id: string; at: string; tone?: string }[];
+  }).sort((a, b) => b.at.localeCompare(a.at)) : [];
   const notices = [
     pendingApprovals>0 && { text:`${pendingApprovals} hasil menunggu approval Anda.`, nav:"AI Agent Team" },
     failedTasks>0 && { text:`${failedTasks} tugas agen gagal — perlu dicoba lagi.`, nav:"AI Agent Team" },
     runningTasks>0 && { text:`${runningTasks} tugas agen sedang berjalan atau antre.`, nav:"AI Agent Team" },
-    newLeads>0 && { text:`${newLeads} lead baru belum dibalas.`, nav:"Inbox & Leads" }
-  ].filter(Boolean) as { text:string; nav:string }[];
+    newLeads>0 && { text:`${newLeads} lead baru belum dibalas.`, nav:"Inbox & Leads" },
+    // Client activity on quotations (business workspace, owner/admin): approvals in the last 14 days, answers in the last 7.
+    ...quoteNotices
+  ].filter(Boolean) as { text:string; nav:string; id?:string; at?:string; tone?:string }[];
+  const unseen = notices.filter(n => !n.at || n.at > noticeSeen).length;
 
   const metrics = useMemo(() => {
     if (platform === "TikTok") return [
@@ -427,11 +444,11 @@ function AppShell() {
           </div>}
           <div className="top-account">
             <div className="dropdown-wrap">
-              <button className={`icon-button ${showNotifications ? "selected" : ""}`} aria-label={`Notifikasi${notices.length ? `, ${notices.length} baru` : ""}`} aria-expanded={showNotifications} onClick={() => { setShowNotifications(!showNotifications); setShowProfile(false); setShowRange(false); setShowPlatform(false); }}><Bell size={19} />{notices.length > 0 && <i />}</button>
+              <button className={`icon-button ${showNotifications ? "selected" : ""}`} aria-label={`Notifikasi${unseen ? `, ${unseen} baru` : ""}`} aria-expanded={showNotifications} onClick={() => { if (!showNotifications) setNoticeSeen(new Date().toISOString()); setShowNotifications(!showNotifications); setShowProfile(false); setShowRange(false); setShowPlatform(false); }}><Bell size={19} />{unseen > 0 && <i />}</button>
               {showNotifications && <div className="floating-menu notification-menu">
                 <b>Notifikasi</b>
                 {!notices.length && <p>Tidak ada yang perlu ditindaklanjuti.</p>}
-                {notices.map(n => <button key={n.text} onClick={() => { setActiveNav(n.nav); setShowNotifications(false); }}><span className="notice-dot" /><span>{n.text}</span></button>)}
+                {notices.map(n => <button key={n.text} className={n.tone === "ok" ? "notice-ok" : ""} onClick={() => { navigate(n.nav, n.id ?? null); setShowNotifications(false); }}><span className="notice-dot" /><span>{n.text}{n.at && <small className="notice-at">{new Date(n.at).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</small>}</span></button>)}
               </div>}
             </div>
             <div className="dropdown-wrap">

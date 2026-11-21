@@ -5,10 +5,11 @@
 // Storage bucket `quotes`, with photos under img/<quote id>/. The page itself is rendered by app/lib/quote.ts.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Check, Copy, Eye, MoreHorizontal, Pencil, Search, FileText, Image as ImageIcon, Link2, Loader2, MessageCircle, Plus, RefreshCw, Sparkles, Trash2, Upload, X, ChevronDown, ChevronUp, CopyPlus, ExternalLink, Send, Undo2 } from "lucide-react";
-import { supabase } from "./lib/cloud";
+import { ArrowLeft, Check, Copy, Eye, MoreHorizontal, Pencil, Search, FileText, Image as ImageIcon, Link2, Loader2, MessageCircle, Plus, RefreshCw, Sparkles, Trash2, Upload, X, ChevronDown, ChevronUp, CopyPlus, ExternalLink, Send, Undo2, Images, FolderPlus } from "lucide-react";
+import { readCloud, supabase } from "./lib/cloud";
+import { newGallery, slugify as slugifyGallery, uniqueSlug } from "../supabase/functions/gallery/delivery";
 import { useStored } from "./lib/store";
-import { useDetail } from "./lib/hashnav";
+import { navigate, useDetail } from "./lib/hashnav";
 import { BackButton, notify } from "./modules";
 import { askAIDocs, AiSetupError, CHEAP_MODEL, type AiDoc } from "./lib/ai";
 import { docxText } from "./lib/docx";
@@ -20,6 +21,38 @@ const when = (iso?: string) => (iso ? new Date(iso).toLocaleString("id-ID", { da
 const ago = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? "baru saja" : m < 60 ? `${m} mnt lalu` : m < 1440 ? `${Math.round(m / 60)} jam lalu` : `${Math.round(m / 1440)} hari lalu`; };
 type Opens = Record<string, { n: number; last: string }>;
 type Answers = Record<string, { name: string | null; answers: QuoteAnswer[]; at: string }[]>;
+type Approval = { name: string; phone: string | null; at: string; total: number | null };
+type Approvals = Record<string, Approval>;
+const sameClient = (a: Quote, b: Quote) => !!a.client.name.trim() && a.client.name.trim().toLowerCase() === b.client.name.trim().toLowerCase();
+/** Another option for the same client was approved, so this one was not chosen. */
+const notChosen = (q: Quote, quotes: Quote[], approvals: Approvals) => !approvals[q.slug] && quotes.some(x => x.id !== q.id && approvals[x.slug] && sameClient(x, q));
+
+/** What clients did with the published quotations: opens, answers, approvals. Used by the list and the bell. */
+export function useQuoteSignals(slugs: string[]) {
+  const [opens, setOpens] = useState<Opens>({});
+  const [answers, setAnswers] = useState<Answers>({});
+  const [approvals, setApprovals] = useState<Approvals>({});
+  const key = slugs.join(",");
+  useEffect(() => {
+    if (!slugs.length) return;
+    supabase.from("quote_opens").select("slug, at").in("slug", slugs).order("at", { ascending: false }).limit(2000).then(({ data }) => {
+      const o: Opens = {};
+      for (const r of data ?? []) { const x = o[r.slug] ?? { n: 0, last: r.at }; x.n++; o[r.slug] = x; }
+      setOpens(o);
+    });
+    supabase.from("quote_answers").select("slug, name, answers, at").in("slug", slugs).order("at", { ascending: false }).limit(500).then(({ data }) => {
+      const a: Answers = {};
+      for (const r of data ?? []) (a[r.slug] ??= []).push({ name: r.name, answers: r.answers as QuoteAnswer[], at: r.at });
+      setAnswers(a);
+    });
+    supabase.from("quote_approvals").select("slug, name, phone, at, total").in("slug", slugs).then(({ data }) => {
+      const a: Approvals = {};
+      for (const r of data ?? []) a[r.slug] = { name: r.name, phone: r.phone, at: r.at, total: r.total };
+      setApprovals(a);
+    });
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { opens, answers, approvals };
+}
 
 /** Writes the client-safe copy to <slug>.json (replacing an older link name) and returns the updated quotation. */
 async function publishQuote(q: Quote, slug: string): Promise<Quote> {
@@ -98,26 +131,12 @@ Aturan:
 export function QuoteBuilder() {
   const [quotes, setQuotes] = useStored<Quote[]>("quotes", []);
   const [openId, setOpenId] = useDetail("Penawaran");
-  const [opens, setOpens] = useState<Opens>({});
-  const [answers, setAnswers] = useState<Answers>({});
   const [menu, setMenu] = useState<string | null>(null);
-  const published = quotes.filter(q => q.publishedAt).map(q => q.slug);
-  const key = published.join(",");
-  useEffect(() => {
-    if (!published.length) return;
-    supabase.from("quote_opens").select("slug, at").in("slug", published).order("at", { ascending: false }).limit(2000).then(({ data }) => {
-      const o: Opens = {};
-      for (const r of data ?? []) { const x = o[r.slug] ?? { n: 0, last: r.at }; x.n++; o[r.slug] = x; }
-      setOpens(o);
-    });
-    supabase.from("quote_answers").select("slug, name, answers, at").in("slug", published).order("at", { ascending: false }).limit(500).then(({ data }) => {
-      const a: Answers = {};
-      for (const r of data ?? []) (a[r.slug] ??= []).push({ name: r.name, answers: r.answers as QuoteAnswer[], at: r.at });
-      setAnswers(a);
-    });
-  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { opens, answers, approvals } = useQuoteSignals(quotes.filter(q => q.publishedAt).map(q => q.slug));
 
-  const save = (q: Quote) => setQuotes(list => list.map(x => (x.id === q.id ? { ...q, updatedAt: new Date().toISOString() } : x)));
+  // Linking a project is bookkeeping, not an edit the client should see, so it keeps the quotation "up to date".
+  const onlyProject = (a: Quote, b: Quote) => JSON.stringify({ ...a, project: 0, updatedAt: 0 }) === JSON.stringify({ ...b, project: 0, updatedAt: 0 });
+  const save = (q: Quote) => setQuotes(list => list.map(x => (x.id === q.id ? { ...q, updatedAt: onlyProject(x, q) ? x.updatedAt : new Date().toISOString() } : x)));
   const create = () => { const q = newQuote(); setQuotes(list => [q, ...list]); setOpenId(q.id); };
   const duplicate = (src: Quote) => { const now = new Date().toISOString(); const copy: Quote = { ...structuredClone(src), id: rid() + rid(), slug: "", status: "draft", publishedAt: undefined, eyebrow: src.eyebrow.replace(/\d+/, d => String(Number(d) + 1)), createdAt: now, updatedAt: now }; setQuotes(list => [copy, ...list]); setOpenId(copy.id); notify("Penawaran diduplikat. Edit sebagai opsi berikutnya."); };
   const remove = async (src: Quote) => {
@@ -127,7 +146,7 @@ export function QuoteBuilder() {
   };
   const update = async (src: Quote) => { try { save(await publishQuote(src, src.slug)); notify("Link diperbarui. Klien melihat versi terbaru."); } catch (e) { notify(e instanceof Error ? e.message : String(e)); } };
   const current = quotes.find(q => q.id === openId);
-  if (current) return <QuoteEditor key={current.id} quote={current} opens={opens[current.slug]} answers={answers[current.slug]} onChange={save} onBack={() => setOpenId(null)}
+  if (current) return <QuoteEditor key={current.id} quote={current} opens={opens[current.slug]} answers={answers[current.slug]} approval={current.publishedAt ? approvals[current.slug] : undefined} notChosen={notChosen(current, quotes, approvals)} onChange={save} onBack={() => setOpenId(null)}
     onDuplicate={() => duplicate(current)} onDelete={() => remove(current)} onUpdate={() => update(current)} />;
 
   return <section className="qb-list">
@@ -139,7 +158,7 @@ export function QuoteBuilder() {
           <span className="qb-thumb">{cover ? <img src={cover} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <FileText size={20} />}</span>
           <span className="qb-info"><b>{[q.client.name, q.title].filter(Boolean).join(" — ") || "Penawaran tanpa judul"}{q.eyebrow ? ` · ${q.eyebrow}` : ""}</b>
             <small>{q.client.location || "—"} · {when(q.updatedAt)}</small>
-            <span className="qb-sts">{!q.publishedAt ? <em className="qb-st d">● Draft</em> : o ? <em className="qb-st o">● Dibuka {o.n}× · {ago(o.last)}</em> : <em className="qb-st s">● Terkirim · belum dibuka</em>}{ans > 0 && <em className="qb-st a">● {ans} jawaban</em>}{isDirty(q) && <em className="qb-st w">● Belum diperbarui</em>}</span></span>
+            <span className="qb-sts">{approvals[q.slug] && <em className="qb-st ok">✓ Disetujui {ago(approvals[q.slug].at)}</em>}{notChosen(q, quotes, approvals) && <em className="qb-st d">Tidak dipilih</em>}{approvals[q.slug] ? null : !q.publishedAt ? <em className="qb-st d">● Draft</em> : o ? <em className="qb-st o">● Dibuka {o.n}× · {ago(o.last)}</em> : <em className="qb-st s">● Terkirim · belum dibuka</em>}{ans > 0 && <em className="qb-st a">● {ans} jawaban</em>}{isDirty(q) && <em className="qb-st w">● Belum diperbarui</em>}</span></span>
           <span className="qb-price">{t.grand ? shortIdr(t.grand) : "—"}</span>
         </button>
         <button className="qb-icon qb-more" aria-label="Opsi penawaran" aria-expanded={menu === q.id} onClick={() => setMenu(menu === q.id ? null : q.id)}><MoreHorizontal size={17} /></button>
@@ -156,7 +175,7 @@ export function QuoteBuilder() {
 }
 
 // ---------- editor ----------
-function QuoteEditor({ quote: q, opens, answers, onChange, onBack, onDuplicate, onDelete, onUpdate }: { quote: Quote; opens?: { n: number; last: string }; answers?: Answers[string]; onChange: (q: Quote) => void; onBack: () => void; onDuplicate: () => void; onDelete: () => void; onUpdate: () => Promise<void> }) {
+function QuoteEditor({ quote: q, opens, answers, approval, notChosen, onChange, onBack, onDuplicate, onDelete, onUpdate: update }: { quote: Quote; opens?: { n: number; last: string }; answers?: Answers[string]; approval?: Approval; notChosen?: boolean; onChange: (q: Quote) => void; onBack: () => void; onDuplicate: () => void; onDelete: () => void; onUpdate: () => Promise<void> }) {
   const [tab, setTab] = useState<"brief" | "isi" | "kirim">(q.sections.some(s => s.items.some(i => i.name)) ? "isi" : "brief");
   const [preview, setPreview] = useState(false);
   const [menu, setMenu] = useState(false), [updating, setUpdating] = useState(false);
@@ -164,6 +183,8 @@ function QuoteEditor({ quote: q, opens, answers, onChange, onBack, onDuplicate, 
   const t = useMemo(() => totals(q), [q]);
   const html = useMemo(() => renderQuoteHtml(publicSnapshot(q), { preview: true }), [q]);
   const dirty = isDirty(q);
+  // The client approved the version they saw; changing the link after that needs a deliberate yes.
+  const onUpdate = async () => { if (approval && !window.confirm(`${approval.name} sudah menyetujui versi sebelumnya. Tetap perbarui link?`)) return; await update(); };
 
   return <div className="qb-editor">
     <BackButton label="Penawaran" onClick={onBack} />
@@ -183,7 +204,7 @@ function QuoteEditor({ quote: q, opens, answers, onChange, onBack, onDuplicate, 
       <div className="qb-form">
         {tab === "brief" && <BriefTab q={q} set={set} onDone={() => setTab("isi")} />}
         {tab === "isi" && <ContentTab q={q} set={set} />}
-        {tab === "kirim" && <SendTab q={q} set={set} opens={opens} answers={answers} dirty={dirty} onDuplicate={onDuplicate} onDelete={onDelete} />}
+        {tab === "kirim" && <SendTab q={q} set={set} opens={opens} answers={answers} approval={approval} notChosen={notChosen} dirty={dirty} onDuplicate={onDuplicate} onDelete={onDelete} />}
       </div>
       <aside className="qb-preview"><div className="qb-preview-bar"><span>Pratinjau klien</span><b>{shortIdr(t.grand)}</b></div><iframe title="Pratinjau penawaran" srcDoc={html} sandbox="allow-popups" /></aside>
     </div>
@@ -530,7 +551,7 @@ function GalleryPicker({ onPick, onClose }: { onPick: (url: string) => void; onC
 }
 
 // ---------- 3 · Kirim ----------
-function SendTab({ q, set, opens, answers, dirty, onDuplicate, onDelete }: { q: Quote; set: (p: Partial<Quote>) => void; opens?: { n: number; last: string }; answers?: Answers[string]; dirty: boolean; onDuplicate: () => void; onDelete: () => void }) {
+function SendTab({ q, set, opens, answers, approval, notChosen, dirty, onDuplicate, onDelete }: { q: Quote; set: (p: Partial<Quote>) => void; opens?: { n: number; last: string }; answers?: Answers[string]; approval?: Approval; notChosen?: boolean; dirty: boolean; onDuplicate: () => void; onDelete: () => void }) {
   const suggestion = slugify([q.client.name.split(/[—-]/).pop() ?? "", q.title.split(/\s+/).slice(0, 3).join(" "), (q.eyebrow.match(/\d+/) ?? [""])[0]].filter(Boolean).join(" ")) || "penawaran-" + q.id.slice(0, 6);
   const [slug, setSlug] = useState(q.slug || suggestion);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -554,7 +575,11 @@ function SendTab({ q, set, opens, answers, dirty, onDuplicate, onDelete }: { q: 
     set({ status: "draft", publishedAt: undefined }); notify("Link ditarik.");
   };
   const wa = `https://wa.me/?text=${encodeURIComponent(`Halo ${q.client.name.split(/[—-]/)[0].trim() || ""}, berikut penawaran dari FORIOR: ${link}`)}`;
+  const [making, setMaking] = useState(false);
   return <>
+    {approval && <ApprovedCard q={q} approval={approval} onMake={() => setMaking(true)} />}
+    {!approval && notChosen && <p className="panel qb-card-p qb-muted">Klien menyetujui opsi lain untuk {q.client.name}. Penawaran ini tidak dipilih.</p>}
+    {making && approval && <MakeProjectModal q={q} approval={approval} onClose={() => setMaking(false)} onDone={galleryId => { set({ project: { galleryId, at: new Date().toISOString() } }); setMaking(false); }} />}
     <div className="panel qb-card-p">
       <h4 className="qb-h">Link penawaran</h4>
       <label className="qb-f wide"><span>Nama link</span><input value={slug} onChange={e => setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))} placeholder="sentul-mytepro-1" /></label>
@@ -585,4 +610,57 @@ function SendTab({ q, set, opens, answers, dirty, onDuplicate, onDelete }: { q: 
       <p className="qb-hint">Dokumen klien dan ringkasan AI tidak ikut ke halaman klien.</p>
     </div>
   </>;
+}
+
+// ---------- after the client approved ----------
+const waNumber = (phone: string | null) => { const d = (phone ?? "").replace(/\D/g, ""); return d.startsWith("0") ? "62" + d.slice(1) : d; };
+
+function ApprovedCard({ q, approval, onMake }: { q: Quote; approval: Approval; onMake: () => void }) {
+  const t = totals(q), wa = waNumber(approval.phone);
+  const msg = encodeURIComponent(`Halo ${approval.name}, terima kasih sudah menyetujui penawaran ${q.title || ""}${q.eyebrow ? ` (${q.eyebrow})` : ""}. Kami konfirmasi jadwal shoot dan DP ${q.terms.dpPercent}% (${idr(t.dp)}) ya.`);
+  return <div className="panel qb-card-p qb-approved">
+    <div className="qb-ap-head"><span className="qb-ap-ic"><Check size={18} /></span><div><b>Disetujui klien</b><small>{approval.name}{approval.phone ? ` · ${approval.phone}` : ""} · {when(approval.at)}</small></div></div>
+    <div className="qb-ap-kv"><span>Total</span><b>{idr(approval.total ?? t.grand)}</b></div>
+    {q.terms.dpPercent > 0 && q.terms.dpPercent < 100 && <div className="qb-ap-kv"><span>DP {q.terms.dpPercent}%</span><b>{idr(t.dp)}</b></div>}
+    <div className="qb-btns">
+      {q.project ? <button className="primary-button" onClick={() => navigate("Photo Delivery", q.project!.galleryId)}><Images size={15} /> Buka galeri proyek</button> : <button className="primary-button" onClick={onMake}><FolderPlus size={15} /> Jadikan proyek</button>}
+      <a className="outline-button dl-wa" href={`https://wa.me/${wa}?text=${msg}`} target="_blank" rel="noreferrer"><MessageCircle size={15} /> Konfirmasi via WA</a>
+    </div>
+  </div>;
+}
+
+/** Turns an approved quotation into a Photo Delivery gallery (and its shoot date), with the client filled in. */
+function MakeProjectModal({ q, approval, onClose, onDone }: { q: Quote; approval: Approval; onClose: () => void; onDone: (galleryId: string) => void }) {
+  const photos = q.sections.filter(s => !s.optional).flatMap(s => s.items).reduce((n, i) => n + (/foto|photo/i.test(`${i.unit ?? ""} ${i.name}`) ? Number(i.qty) || 0 : 0), 0);
+  const [form, setForm] = useState({ title: [q.client.name, q.title].filter(Boolean).join(" — ") || "Photo Delivery", limit: photos ? String(photos) : "", shootDate: "" });
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const create = async () => {
+    if (!form.title.trim()) return setError("Isi judul galeri.");
+    setBusy(true); setError("");
+    try {
+      const ws = readCloud().workspaceId;
+      const { data: taken } = await supabase.from("galleries").select("slug").eq("workspace_id", ws ?? "");
+      const id = crypto.randomUUID();
+      let g = newGallery({ id, slug: uniqueSlug(slugifyGallery(form.title), (taken ?? []).map(r => r.slug)), title: form.title.trim(), projectName: q.title,
+        client: { company: q.client.name, contact: approval.name, whatsapp: approval.phone ?? q.client.whatsapp ?? "" }, selectionLimit: Number(form.limit) || 0,
+        notes: `Dari penawaran ${[q.eyebrow, q.title].filter(Boolean).join(" — ")} (${q.number}) · disetujui ${approval.name}, ${when(approval.at)}.` });
+      if (form.shootDate) g = { ...g, shootDate: form.shootDate, plan: { source: "manual" } };
+      const { error: e } = await supabase.from("galleries").insert({ id, slug: g.slug, data: g, workspace_id: ws });
+      if (e) throw new Error(e.message);
+      onDone(id);
+      notify(form.shootDate ? "Proyek dibuat: galeri + jadwal shoot." : "Proyek dibuat. Atur tanggal shoot di galeri kapan saja.");
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  };
+  return createPortal(<div className="modal-backdrop" role="dialog" aria-label="Jadikan proyek" onClick={onClose}><div className="quick-modal cp-modal qb-make" onClick={e => e.stopPropagation()}>
+    <div className="qb-pick-head"><b>Jadikan proyek</b><button className="qb-icon" onClick={onClose} aria-label="Tutup"><X size={17} /></button></div>
+    <p className="qb-muted">Membuat galeri Photo Delivery dari penawaran ini. Klien: {q.client.name || "—"} · PIC {approval.name}{approval.phone ? ` (${approval.phone})` : ""}.</p>
+    <label className="qb-f wide"><span>Judul galeri</span><input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></label>
+    <div className="qb-row2">
+      <label className="qb-f"><span>Kuota foto edit</span><input inputMode="numeric" value={form.limit} onChange={e => setForm(f => ({ ...f, limit: e.target.value.replace(/\D/g, "") }))} placeholder="mis. 24" /></label>
+      <label className="qb-f"><span>Jadwal shoot (opsional)</span><input type="datetime-local" value={form.shootDate} onChange={e => setForm(f => ({ ...f, shootDate: e.target.value }))} /></label>
+    </div>
+    <small className="qb-muted">Jadwal shoot otomatis tampil di Dashboard dan Jadwal. Folder foto preview bisa dimuat nanti dari galeri.</small>
+    {error && <p className="x-error" role="alert">{error}</p>}
+    <div className="cp-modal-actions"><button className="outline-button" onClick={onClose}>Batal</button><button className="primary-button" disabled={busy} onClick={create}>{busy ? <Loader2 size={15} className="lg-spin" /> : <FolderPlus size={15} />} Buat proyek</button></div>
+  </div></div>, document.body);
 }
