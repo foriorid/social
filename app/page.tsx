@@ -574,12 +574,11 @@ function AppShell() {
         </div>}
       </section>
 
-      <nav className="f-bottomnav" aria-label="Navigasi cepat">
+      <nav className={`f-bottomnav${isBiz ? " has-plus" : ""}`} aria-label="Navigasi cepat">
         {(() => {
-          // Business: Owner/Admin get Planner (used for selling), Editors keep Jadwal (they go to the shoots). "+" sits in the middle.
-          const editor = ws?.role === "editor";
+          // Business: two items each side of "+" so it sits exactly in the middle; Penawaran and Planner are in the "+" sheet and Menu.
           const items: [string, string, typeof Home][] = isBiz
-            ? [["Dashboard", "Beranda", Home], ["Photo Delivery", "Projects", ImageIcon], editor ? ["Content Plan", "Plan", CalendarDays] : ["Penawaran", "Penawaran", FileText], editor ? ["Calendar", "Jadwal", CalendarDays] : ["Photo Planner", "Planner", ClipboardList]]
+            ? [["Dashboard", "Beranda", Home], ["Photo Delivery", "Projects", ImageIcon], ["Calendar", "Jadwal", CalendarDays]]
             : [["Dashboard", "Beranda", Home], ["Content Plan", "Plan", CalendarDays], ["Production Studio", "Studio", Clapperboard], ["AI Agent Team", "Agen", Sparkles]];
           const btn = ([nav, label, Icon]: [string, string, typeof Home]) => <button key={nav} className={activeNav === nav ? "active" : ""} onClick={() => setActiveNav(nav)}><Icon size={19} /><span>{label}</span>{nav === "AI Agent Team" && pendingApprovals > 0 && <i>{pendingApprovals}</i>}</button>;
           return <>{items.slice(0, 2).map(btn)}{isBiz && <button className="f-plus" aria-label="Buat baru" aria-expanded={createSheet} onClick={() => setCreateSheet(true)}><Plus size={22} /></button>}{items.slice(2).map(btn)}</>;
