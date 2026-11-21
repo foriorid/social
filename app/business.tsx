@@ -1,6 +1,7 @@
 "use client";
 
 // FORIOR (business) workspace pages: the project-first dashboard, the Photo Planner slot and Calendar.
+import { STOCK, stockUrl } from "./lib/photos";
 import { navigate } from "./lib/hashnav";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Copy, ExternalLink, FileText, Images, Link2, Plus, RefreshCw } from "lucide-react";
@@ -74,13 +75,14 @@ export function BusinessDashboard({ go, openGallery }: { go: (nav: string) => vo
   const focus = focusItems({ actions: list.map(r => ({ id: r.id, title: r.data.title, text: r.next.text, rank: r.next.rank })), agenda,
     quotes: isEditor ? [] : sentQuotes.map(q => ({ title: q.client.name || q.title, lastOpen: qstats[q.slug]?.last, answers: qstats[q.slug]?.answers ?? 0 })), now });
   const thumbOf = (g: Gallery, w = 640) => { const p = g.finalPhotos[0] ?? g.draftPhotos[0] ?? g.previewPhotos.find(x => x.selected) ?? g.previewPhotos[0]; return p ? driveThumb(p.id, w) : ""; };
-  const hero = list.filter(r => r.data.phase === "Done").map(r => thumbOf(r.data, 1400)).find(Boolean) ?? list.map(r => thumbOf(r.data, 1400)).find(Boolean);
+  // A fixed FORIOR photo, not a project thumbnail (those changed with every gallery and were sometimes low quality).
+  const hero = stockUrl(STOCK[0].file);
   const dayLabel = (iso: string, allDay?: boolean) => { const d = new Date(allDay ? `${iso}T00:00:00` : iso); return { dow: d.toLocaleDateString("id-ID", { weekday: "short" }), day: d.getDate(), time: allDay ? "Sepanjang hari" : d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) }; };
   const ago = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 6e4); return m < 60 ? `${Math.max(1, m)} mnt lalu` : m < 1440 ? `${Math.round(m / 60)} jam lalu` : `${Math.round(m / 1440)} hari lalu`; };
 
   return <div className="module-page bd-page">
     <section className={`bd-hero${hero ? " photo" : ""}`}>
-      {hero && <img src={hero} alt="" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = "none"; }} />}
+      {hero && <img src={hero} alt="" onError={e => { e.currentTarget.style.display = "none"; }} />}
       <div className="bd-hero-t">
         <small>FOKUS HARI INI</small>
         <h2>{focus.length ? <>{focus.length} hal butuh <span>perhatian</span></> : <>Create, deliver, <span>grow.</span></>}</h2>
