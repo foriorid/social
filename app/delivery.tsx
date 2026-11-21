@@ -87,7 +87,7 @@ export function DeliveryPage() {
   // Photo Delivery is client work, so it lives in the business workspace (FORIOR).
   if (ws?.kind !== "business") {
     const biz = cloud.workspaces.find(w => w.kind === "business");
-    return <div className="module-page"><section className="panel dl-empty"><Images size={28} /><h3>Photo Delivery ada di workspace {biz?.name ?? "bisnis"}</h3><p>Galeri klien dikelola di workspace bisnis, terpisah dari workspace pribadi.</p>{biz ? <button className="primary-button" onClick={() => switchWorkspace(biz.id)}>Pindah ke {biz.name}</button> : <p>Anda belum menjadi anggota workspace bisnis.</p>}</section></div>;
+    return <div className="module-page"><section className="panel dl-empty"><Images size={28} /><h3>Projects ada di workspace {biz?.name ?? "bisnis"}</h3><p>Galeri klien dikelola di workspace bisnis, terpisah dari workspace pribadi.</p>{biz ? <button className="primary-button" onClick={() => switchWorkspace(biz.id)}>Pindah ke {biz.name}</button> : <p>Anda belum menjadi anggota workspace bisnis.</p>}</section></div>;
   }
   return <DeliveryInner />;
 }
@@ -194,7 +194,7 @@ function ImportModal({ rows, onClose, onDone }: { rows: Row[]; onClose: () => vo
   };
   return <div className="modal-backdrop" onClick={() => !busy && onClose()}><div className="quick-modal cp-modal" role="dialog" aria-label="Impor dari Workspace" onClick={e => e.stopPropagation()}>
     <button className="modal-close" onClick={onClose} aria-label="Tutup"><X size={18} /></button>
-    <div className="cp-modal-head"><span className="modal-icon"><Download size={21} /></span><div><h2>Impor dari Workspace</h2><p>Salin galeri Photo Delivery dari app.forior.id ke sini. Galeri di Workspace tidak diubah atau dihapus.</p></div></div>
+    <div className="cp-modal-head"><span className="modal-icon"><Download size={21} /></span><div><h2>Impor dari Workspace</h2><p>Salin galeri project dari app.forior.id ke sini. Galeri di Workspace tidak diubah atau dihapus.</p></div></div>
     {!list ? <>
       <div className="cp-form">
         <div className="settings-field full"><label htmlFor="ws-email">Email Workspace</label><input id="ws-email" type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} /></div>
@@ -236,7 +236,7 @@ function NewGalleryModal({ taken, onClose, onCreated }: { taken: string[]; onClo
   };
   return <div className="modal-backdrop" onClick={onClose}><div className="quick-modal cp-modal" role="dialog" aria-label="Galeri baru" onClick={e => e.stopPropagation()}>
     <button className="modal-close" onClick={onClose} aria-label="Tutup"><X size={18} /></button>
-    <div className="cp-modal-head"><span className="modal-icon"><Images size={21} /></span><div><h2>Galeri Photo Delivery baru</h2><p>Klien membuka link galeri, memilih foto, lalu me-review hasil edit. Foto tetap di Google Drive.</p></div></div>
+    <div className="cp-modal-head"><span className="modal-icon"><Images size={21} /></span><div><h2>Project baru</h2><p>Klien membuka link galeri, memilih foto, lalu me-review hasil edit. Foto tetap di Google Drive.</p></div></div>
     <div className="cp-form">
       <div className="settings-field full"><label htmlFor="g-title">Judul galeri *</label><input id="g-title" value={form.title} onChange={set("title")} placeholder="mis. Villa Ubud" /></div>
       <div className="settings-field"><label htmlFor="g-company">Perusahaan klien</label><input id="g-company" value={form.company} onChange={set("company")} /></div>
@@ -431,7 +431,7 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
 
   const header = <div className="dl-top">
     <div className="dl-top-main">
-      <BackButton label="Photo Delivery" onClick={onBack} />
+      <BackButton label="Projects" onClick={onBack} />
       <h1>{g.title}</h1>
       <div className="dl-top-chips">{g.client?.company && <span className="dl-chip"><Building2 size={13} /> {g.client.company}</span>}<span className={`dl-phase ${PHASE_CLASS[g.phase]}`}><Check size={12} /> {PHASE_SHORT[g.phase]}</span>{due.date && <span className="dl-due"><Clock size={13} /> {due.label}: {due.label === "Shoot" ? fmtShoot(due.date) : fmtDate(due.date)}</span>}</div>
     </div>

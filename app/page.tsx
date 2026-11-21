@@ -43,7 +43,7 @@ type Range = "Last 7 Days" | "Last 30 Days" | "Last 90 Days";
 
 type NavItem = { name: string; icon: typeof Home; label?: string };
 /** Menu per workspace: the personal brand gets social tools; FORIOR adds a Project group above them. */
-function navGroupsFor(kind: "personal" | "business" | undefined, role?: string): { label: string; items: NavItem[] }[] {
+function navGroupsFor(kind: "personal" | "business" | undefined, role?: string): { label: string; items: NavItem[]; flat?: boolean }[] {
   const sosmed: NavItem[] = [
     { name: "Research & Insight", icon: Compass },
     { name: "Content Plan", icon: CalendarDays },
@@ -54,8 +54,8 @@ function navGroupsFor(kind: "personal" | "business" | undefined, role?: string):
     { name: "Auto DM", icon: Send }
   ];
   if (kind === "business") return [
-    { label: "WORKSPACE", items: [{ name: "Dashboard", icon: Home }] },
-    { label: "PROJECT", items: [{ name: "Photo Delivery", icon: Images }, { name: "Photo Planner", icon: ClipboardList }, ...(role === "editor" ? [] : [{ name: "Penawaran", icon: FileText }]), { name: "Calendar", icon: CalendarClock, label: "Jadwal Shoot" }, { name: "Inbox & Leads", icon: MessageCircle, label: "Leads & Klien" }] },
+    // Dashboard heads the client work directly; no separate Project group to open.
+    { label: "WORKSPACE", flat: true, items: [{ name: "Dashboard", icon: Home }, { name: "Photo Delivery", icon: Images, label: "Projects" }, { name: "Photo Planner", icon: ClipboardList }, ...(role === "editor" ? [] : [{ name: "Penawaran", icon: FileText }]), { name: "Calendar", icon: CalendarClock, label: "Jadwal Shoot" }, { name: "Inbox & Leads", icon: MessageCircle, label: "Leads & Klien" }] },
     { label: "SOSMED", items: sosmed }
   ];
   return [
@@ -291,8 +291,8 @@ function AppShell() {
   const setActiveNav = (nav: string) => navigate(nav);
   const openGallery = (id: string) => navigate("Photo Delivery", id);
   const currentItem = navItems.find(i => i.name === activeNav);
-  // One group open at a time; Project open by default. Opening Project closes Sosmed and vice versa.
-  const [navOpen, setNavOpen] = useStored<string>("navOpenGroup", "PROJECT");
+  // One group open at a time; all closed by default. Opening Project closes Sosmed and vice versa.
+  const [navOpen, setNavOpen] = useStored<string>("navOpenGroup", "");
   const toggleGroup = (label: string) => setNavOpen(o => (o === label ? "" : label));
   const pickWorkspace = (id: string) => { setShowWorkspace(false); setShowProfile(false); if (id !== cloud.workspaceId) switchWorkspace(id); };
   const [mobileNav, setMobileNav] = useState(false);
@@ -390,6 +390,7 @@ function AppShell() {
               </button>
             ); };
             // Single-item groups (Dashboard) stay as a plain item; multi-item groups collapse.
+            if (group.flat) return <div className="nav-group" key={group.label}>{group.items.map(renderItem)}</div>;
             if (group.items.length === 1) return <div className="nav-group" key={group.label}>{renderItem(group.items[0])}</div>;
             return (
               <div className={`nav-group collapsible ${open ? "open" : ""}`} key={group.label}>
@@ -566,7 +567,7 @@ function AppShell() {
       </section>
 
       <nav className="f-bottomnav" aria-label="Navigasi cepat">
-        {(isBiz ? [["Dashboard","Beranda",Home],["Photo Delivery","Delivery",ImageIcon],ws?.role === "editor" ? ["Content Plan","Plan",CalendarDays] : ["Penawaran","Penawaran",FileText],["Calendar","Jadwal",CalendarDays]] : [["Dashboard","Beranda",Home],["Content Plan","Plan",CalendarDays],["Production Studio","Studio",Clapperboard],["AI Agent Team","Agen",Sparkles]]).map(([nav,label,Icon]: any) => <button key={nav} className={activeNav===nav?"active":""} onClick={() => setActiveNav(nav)}><Icon size={22} /><span>{label}</span>{nav==="AI Agent Team" && pendingApprovals>0 && <i>{pendingApprovals}</i>}</button>)}
+        {(isBiz ? [["Dashboard","Beranda",Home],["Photo Delivery","Projects",ImageIcon],ws?.role === "editor" ? ["Content Plan","Plan",CalendarDays] : ["Penawaran","Penawaran",FileText],["Calendar","Jadwal",CalendarDays]] : [["Dashboard","Beranda",Home],["Content Plan","Plan",CalendarDays],["Production Studio","Studio",Clapperboard],["AI Agent Team","Agen",Sparkles]]).map(([nav,label,Icon]: any) => <button key={nav} className={activeNav===nav?"active":""} onClick={() => setActiveNav(nav)}><Icon size={22} /><span>{label}</span>{nav==="AI Agent Team" && pendingApprovals>0 && <i>{pendingApprovals}</i>}</button>)}
         <button onClick={() => setMobileNav(true)}><LayoutGrid size={22} /><span>Menu</span></button>
       </nav>
 

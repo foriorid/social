@@ -99,9 +99,9 @@ export function BusinessDashboard({ go, openGallery }: { go: (nav: string) => vo
 
     <div className="bd-grid">
       <section className="panel bd-card bd-delivery">
-        <div className="bd-head"><span className="bd-hi"><Images size={18} /></span><div><h3>Photo Delivery</h3><small>Urut dari yang paling butuh tindakan</small></div><button className="bd-link" onClick={() => go("Photo Delivery")}>Semua galeri <ArrowRight size={14} /></button></div>
+        <div className="bd-head"><span className="bd-hi"><Images size={18} /></span><div><h3>Projects</h3><small>Urut dari yang paling butuh tindakan</small></div><button className="bd-link" onClick={() => go("Photo Delivery")}>Semua project <ArrowRight size={14} /></button></div>
         {error && <p className="x-error">{error}</p>}
-        {!rows ? <p className="x-empty">Memuat galeri…</p> : !active.length ? <p className="x-empty">Belum ada delivery berjalan. Buat atau impor di Photo Delivery.</p> :
+        {!rows ? <p className="x-empty">Memuat galeri…</p> : !active.length ? <p className="x-empty">Belum ada delivery berjalan. Buat atau impor di Projects.</p> :
           <div className="bd-dl">{active.slice(0, 8).map(r => { const t = thumbOf(r.data); return <button key={r.id} className={`bd-dc${t ? "" : " empty"}`} onClick={() => openGallery(r.id)}>
             <i className="bd-dc-img">{t ? <img src={t} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = "none"; }} /> : null}</i>
             <span><b>{r.data.title}</b><small>{r.next.text}</small><em className={`dl-phase ${PHASE_CLASS[r.data.phase]}`}>{PHASE_SHORT[r.data.phase]}</em></span></button>; })}</div>}
@@ -172,7 +172,7 @@ export function PhotoPlannerPage({ openGallery }: { openGallery: (id: string) =>
       const reply = (ok: boolean, message: string) => frame.current?.contentWindow?.postMessage({ type: "forior-planner:saved", ok, message }, window.location.origin);
       try {
         const id = await createProjectFromPlan(e.data.plan as PlannerPlan);
-        reply(true, "Project dibuat di Photo Delivery."); setCreated(id); notify("Project dibuat dari Photo Planner.");
+        reply(true, "Project dibuat di Projects."); setCreated(id); notify("Project dibuat dari Photo Planner.");
       } catch (err) { reply(false, err instanceof Error ? err.message : String(err)); }
     };
     window.addEventListener("message", onMessage);
@@ -182,8 +182,8 @@ export function PhotoPlannerPage({ openGallery }: { openGallery: (id: string) =>
   return <div className="module-page planner-layout">
     <aside className="panel planner-side">
       <h2>Photo Planner</h2>
-      <p>Susun rencana shoot bersama klien: tipe properti, area, estimasi foto, paket, dan jadwal. Simpan sebagai project, dan brief serta jadwalnya langsung masuk ke Photo Delivery.</p>
-      <ol className="planner-steps"><li>Isi rencana di panel kanan</li><li>Di langkah Jadwal, tekan <b>Simpan sebagai project</b></li><li>Project muncul di Photo Delivery dan Jadwal Shoot</li></ol>
+      <p>Susun rencana shoot bersama klien: tipe properti, area, estimasi foto, paket, dan jadwal. Simpan sebagai project, dan brief serta jadwalnya langsung masuk ke Projects.</p>
+      <ol className="planner-steps"><li>Isi rencana di panel kanan</li><li>Di langkah Jadwal, tekan <b>Simpan sebagai project</b></li><li>Project muncul di Projects dan Jadwal Shoot</li></ol>
       {created && <div className="planner-created"><CheckCircle2 size={18} /><span>Project dibuat.</span><button className="primary-button" onClick={() => openGallery(created)}>Buka project <ArrowRight size={15} /></button></div>}
       <div className="planner-share">
         <b>Link untuk klien</b>
