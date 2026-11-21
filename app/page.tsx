@@ -303,6 +303,7 @@ function AppShell() {
   const toggleGroup = (label: string) => setNavOpen(o => (o === label ? "" : label));
   const pickWorkspace = (id: string) => { setShowWorkspace(false); setShowProfile(false); if (id !== cloud.workspaceId) switchWorkspace(id); };
   const [mobileNav, setMobileNav] = useState(false);
+  const [createSheet, setCreateSheet] = useState(false);
   const [quickAction, setQuickAction] = useState("");
   const [showAllAgents, setShowAllAgents] = useState(false);
   const [studioTarget,setStudioTarget] = useState<{campaignId:string;day:number}|null>(null);
@@ -574,9 +575,23 @@ function AppShell() {
       </section>
 
       <nav className="f-bottomnav" aria-label="Navigasi cepat">
-        {(isBiz ? [["Dashboard","Beranda",Home],["Photo Delivery","Projects",ImageIcon],ws?.role === "editor" ? ["Content Plan","Plan",CalendarDays] : ["Penawaran","Penawaran",FileText],["Calendar","Jadwal",CalendarDays]] : [["Dashboard","Beranda",Home],["Content Plan","Plan",CalendarDays],["Production Studio","Studio",Clapperboard],["AI Agent Team","Agen",Sparkles]]).map(([nav,label,Icon]: any) => <button key={nav} className={activeNav===nav?"active":""} onClick={() => setActiveNav(nav)}><Icon size={19} /><span>{label}</span>{nav==="AI Agent Team" && pendingApprovals>0 && <i>{pendingApprovals}</i>}</button>)}
+        {(() => {
+          // Business: Owner/Admin get Planner (used for selling), Editors keep Jadwal (they go to the shoots). "+" sits in the middle.
+          const editor = ws?.role === "editor";
+          const items: [string, string, typeof Home][] = isBiz
+            ? [["Dashboard", "Beranda", Home], ["Photo Delivery", "Projects", ImageIcon], editor ? ["Content Plan", "Plan", CalendarDays] : ["Penawaran", "Penawaran", FileText], editor ? ["Calendar", "Jadwal", CalendarDays] : ["Photo Planner", "Planner", ClipboardList]]
+            : [["Dashboard", "Beranda", Home], ["Content Plan", "Plan", CalendarDays], ["Production Studio", "Studio", Clapperboard], ["AI Agent Team", "Agen", Sparkles]];
+          const btn = ([nav, label, Icon]: [string, string, typeof Home]) => <button key={nav} className={activeNav === nav ? "active" : ""} onClick={() => setActiveNav(nav)}><Icon size={19} /><span>{label}</span>{nav === "AI Agent Team" && pendingApprovals > 0 && <i>{pendingApprovals}</i>}</button>;
+          return <>{items.slice(0, 2).map(btn)}{isBiz && <button className="f-plus" aria-label="Buat baru" aria-expanded={createSheet} onClick={() => setCreateSheet(true)}><Plus size={22} /></button>}{items.slice(2).map(btn)}</>;
+        })()}
         <button onClick={() => setMobileNav(true)}><LayoutGrid size={19} /><span>Menu</span></button>
       </nav>
+      {createSheet && <div className="modal-backdrop f-sheet-back" onClick={() => setCreateSheet(false)}><div className="f-sheet" role="dialog" aria-label="Buat baru" onClick={e => e.stopPropagation()}>
+        <div className="f-sheet-grip" /><b className="f-sheet-title">Buat baru</b>
+        {ws?.role !== "editor" && <button onClick={() => { setCreateSheet(false); navigate("Penawaran", "new"); }}><span className="ic p"><FileText size={18} /></span><span><b>Penawaran baru</b><small>Dari brief atau chat WhatsApp klien</small></span></button>}
+        <button onClick={() => { setCreateSheet(false); navigate("Calendar", "new"); }}><span className="ic b"><CalendarClock size={18} /></span><span><b>Shoot / project baru</b><small>Jadwal shoot + galeri project</small></span></button>
+        <button onClick={() => { setCreateSheet(false); navigate("Photo Planner"); }}><span className="ic g"><ClipboardList size={18} /></span><span><b>Photo Planner</b><small>Susun rencana shoot bersama klien</small></span></button>
+      </div></div>}
 
       {toast && <div className="x-toast" role="status"><span>{toast}</span><button onClick={() => setToast("")} aria-label="Tutup pesan"><X size={16} /></button></div>}
 

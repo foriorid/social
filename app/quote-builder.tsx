@@ -133,6 +133,8 @@ export function QuoteBuilder() {
   const [openId, setOpenId] = useDetail("Penawaran");
   const [menu, setMenu] = useState<string | null>(null);
   const { opens, answers, approvals } = useQuoteSignals(quotes.filter(q => q.publishedAt).map(q => q.slug));
+  // "+ Penawaran baru" from the bottom bar links to #/penawaran/new: make one and open it in place of "new".
+  useEffect(() => { if (openId === "new") { const q = newQuote(); setQuotes(list => [q, ...list]); navigate("Penawaran", q.id, true); } }, [openId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Linking a project is bookkeeping, not an edit the client should see, so it keeps the quotation "up to date".
   const onlyProject = (a: Quote, b: Quote) => JSON.stringify({ ...a, project: 0, updatedAt: 0 }) === JSON.stringify({ ...b, project: 0, updatedAt: 0 });
