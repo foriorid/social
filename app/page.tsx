@@ -567,8 +567,8 @@ function AppShell() {
       </section>
 
       <nav className="f-bottomnav" aria-label="Navigasi cepat">
-        {(isBiz ? [["Dashboard","Beranda",Home],["Photo Delivery","Projects",ImageIcon],ws?.role === "editor" ? ["Content Plan","Plan",CalendarDays] : ["Penawaran","Penawaran",FileText],["Calendar","Jadwal",CalendarDays]] : [["Dashboard","Beranda",Home],["Content Plan","Plan",CalendarDays],["Production Studio","Studio",Clapperboard],["AI Agent Team","Agen",Sparkles]]).map(([nav,label,Icon]: any) => <button key={nav} className={activeNav===nav?"active":""} onClick={() => setActiveNav(nav)}><Icon size={22} /><span>{label}</span>{nav==="AI Agent Team" && pendingApprovals>0 && <i>{pendingApprovals}</i>}</button>)}
-        <button onClick={() => setMobileNav(true)}><LayoutGrid size={22} /><span>Menu</span></button>
+        {(isBiz ? [["Dashboard","Beranda",Home],["Photo Delivery","Projects",ImageIcon],ws?.role === "editor" ? ["Content Plan","Plan",CalendarDays] : ["Penawaran","Penawaran",FileText],["Calendar","Jadwal",CalendarDays]] : [["Dashboard","Beranda",Home],["Content Plan","Plan",CalendarDays],["Production Studio","Studio",Clapperboard],["AI Agent Team","Agen",Sparkles]]).map(([nav,label,Icon]: any) => <button key={nav} className={activeNav===nav?"active":""} onClick={() => setActiveNav(nav)}><Icon size={19} /><span>{label}</span>{nav==="AI Agent Team" && pendingApprovals>0 && <i>{pendingApprovals}</i>}</button>)}
+        <button onClick={() => setMobileNav(true)}><LayoutGrid size={19} /><span>Menu</span></button>
       </nav>
 
       {toast && <div className="x-toast" role="status"><span>{toast}</span><button onClick={() => setToast("")} aria-label="Tutup pesan"><X size={16} /></button></div>}
