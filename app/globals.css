@@ -1913,14 +1913,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .pipeline-step-wrap .step-arrow { display:none; }
   .pipeline-step { height:auto; min-height:92px; padding:10px 2px; }
   .pipeline-step span { white-space:normal; text-align:center; font-size:12px; line-height:1.2; overflow-wrap:anywhere; }
-  .main-area { padding-bottom:calc(108px + env(safe-area-inset-bottom)); }
+  .main-area { padding-bottom:calc(92px + env(safe-area-inset-bottom)); }
   /* Floating pill bar, kept off the screen edges and above the home indicator */
-  .f-bottomnav { position:fixed; left:16px; right:16px; bottom:calc(12px + env(safe-area-inset-bottom)); z-index:90; display:flex; gap:2px; padding:8px; background:rgba(255,255,255,.92); border:1px solid rgba(234,228,245,.9); border-radius:36px; box-shadow:0 12px 32px rgba(76,45,150,.16), 0 2px 6px rgba(42,27,71,.06); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
-  .f-bottomnav button { flex:1 1 auto; position:relative; min-width:0; min-height:56px; padding:6px 4px; border:0; background:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; color:#3f3a52; font-size:12px; font-weight:500; border-radius:28px; transition:background .2s, color .2s, box-shadow .2s; }
+  .f-bottomnav { position:fixed; left:16px; right:16px; bottom:calc(12px + env(safe-area-inset-bottom)); z-index:90; display:flex; gap:2px; padding:5px; background:rgba(255,255,255,.92); border:1px solid rgba(234,228,245,.9); border-radius:30px; box-shadow:0 12px 32px rgba(76,45,150,.16), 0 2px 6px rgba(42,27,71,.06); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
+  .f-bottomnav button { flex:1 1 auto; position:relative; min-width:0; min-height:46px; padding:4px 4px; border:0; background:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; color:#3f3a52; font-size:11px; font-weight:500; border-radius:25px; transition:background .2s, color .2s, box-shadow .2s; }
   .f-bottomnav button span { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .f-bottomnav button.active { padding:6px 16px; font-weight:600; color:#fff; background:linear-gradient(180deg,#8a5cf6,#5b34d6); box-shadow:0 8px 18px rgba(103,58,220,.35); }
+  .f-bottomnav button.active { padding:4px 14px; font-weight:600; color:#fff; background:linear-gradient(180deg,#8a5cf6,#5b34d6); box-shadow:0 8px 18px rgba(103,58,220,.35); }
   .f-bottomnav i { position:absolute; top:4px; right:calc(50% - 22px); min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:#c2410c; color:#fff; font-size:12px; font-style:normal; line-height:18px; }
-  .x-toast { bottom:calc(100px + env(safe-area-inset-bottom)); }
+  .x-toast { bottom:calc(84px + env(safe-area-inset-bottom)); }
   .f-sheet, .f-sheet.wide { width:100%; }
   .f-kanban { grid-auto-columns:82%; }
   .f-col { max-height:none; }
@@ -3172,7 +3172,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .qb-bottom { position:sticky; bottom:12px; border:1px solid #ece8f4; border-radius:14px; box-shadow:0 10px 30px -14px rgba(40,20,90,.3); }
   .qb-editor { padding-bottom:0; }
 }
-@media (max-width:800px) { .qb-bottom { bottom:calc(92px + env(safe-area-inset-bottom)); left:16px; right:16px; border:1px solid #ece8f4; border-radius:20px; box-shadow:0 10px 30px -14px rgba(40,20,90,.3); } .qb-fab { bottom:calc(100px + env(safe-area-inset-bottom)); } body:has(.qb-bottom) .x-toast { bottom:calc(170px + env(safe-area-inset-bottom)); } }
+@media (max-width:800px) { .qb-bottom { bottom:calc(78px + env(safe-area-inset-bottom)); left:16px; right:16px; border:1px solid #ece8f4; border-radius:20px; box-shadow:0 10px 30px -14px rgba(40,20,90,.3); } .qb-fab { bottom:calc(84px + env(safe-area-inset-bottom)); } body:has(.qb-bottom) .x-toast { bottom:calc(156px + env(safe-area-inset-bottom)); } }
 @media (min-width:801px) { body:has(.qb-bottom) .x-toast { bottom:100px; } }
 .qb-editor textarea.qb-chat { min-height:150px; font-size:14px; line-height:1.5; }
 .qb-asknote { background:#fbf4e2; border-color:#efdfb4; } .qb-asknote ul { margin:0; padding-left:18px; display:grid; gap:4px; font-size:13px; color:#6d5214; }
