@@ -15,7 +15,7 @@ import {
 import { AiButton, AiCostBadge, AiError, ApiSettingsTab, ApprovalList, InboxLeadsPage, ModelRouterPanel, notify, runAgentTask, useAI, useCloud } from "./modules";
 import { AiSetupError, askAI, fetchInstagramPosts } from "./lib/ai";
 import { parseIdeas, parseLines, parseProfile } from "./lib/logic";
-import { addApproval, addIdea, useApprovals, useIdeas, useLeads, useSettings, useStored, useTasks } from "./lib/store";
+import { addApproval, addIdea, useApprovals, useIdeas, useLeads, useSettings, useStored, useTasks, writeStored } from "./lib/store";
 
 import { ImageTile } from "./ui";
 import { AuditView, LegacyAudit } from "./research";
@@ -329,9 +329,11 @@ function AppShell() {
     const label = [q.client.name, q.eyebrow].filter(Boolean).join(" · ") || q.title || "Penawaran";
     const ap = signals.approvals[q.slug], ans = (signals.answers[q.slug] ?? [])[0];
     return [
-      ap && Date.now() - Date.parse(ap.at) < 14 * 864e5 && { text: `✓ ${label} disetujui oleh ${ap.name}`, nav: "Penawaran", id: q.id, at: ap.at, tone: "ok" },
+      ap && Date.now() - Date.parse(ap.at) < 14 * 864e5 && (q.kind === "pricelist"
+        ? { text: `✓ ${q.client.name} memilih ${ap.title ?? "paket"} dari pricelist`, nav: "Penawaran", at: ap.at, tone: "ok", mode: "pricelist" }
+        : { text: `✓ ${label} disetujui oleh ${ap.name}`, nav: "Penawaran", id: q.id, at: ap.at, tone: "ok" }),
       ans && Date.now() - Date.parse(ans.at) < 7 * 864e5 && { text: `${label}: ${ans.name ? `${ans.name} ` : "klien "}menjawab pertanyaan`, nav: "Penawaran", id: q.id, at: ans.at }
-    ].filter(Boolean) as { text: string; nav: string; id: string; at: string; tone?: string }[];
+    ].filter(Boolean) as { text: string; nav: string; id?: string; at: string; tone?: string; mode?: string }[];
   }).sort((a, b) => b.at.localeCompare(a.at)) : [];
   const notices = [
     pendingApprovals>0 && { text:`${pendingApprovals} hasil menunggu approval Anda.`, nav:"AI Agent Team" },
@@ -340,7 +342,7 @@ function AppShell() {
     newLeads>0 && { text:`${newLeads} lead baru belum dibalas.`, nav:"Inbox & Leads" },
     // Client activity on quotations (business workspace, owner/admin): approvals in the last 14 days, answers in the last 7.
     ...quoteNotices
-  ].filter(Boolean) as { text:string; nav:string; id?:string; at?:string; tone?:string }[];
+  ].filter(Boolean) as { text:string; nav:string; id?:string; at?:string; tone?:string; mode?:string }[];
   const unseen = notices.filter(n => !n.at || n.at > noticeSeen).length;
 
   const metrics = useMemo(() => {
@@ -457,7 +459,7 @@ function AppShell() {
               {showNotifications && <div className="floating-menu notification-menu">
                 <b>Notifikasi</b>
                 {!notices.length && <p>Tidak ada yang perlu ditindaklanjuti.</p>}
-                {notices.map(n => <button key={n.text} className={n.tone === "ok" ? "notice-ok" : ""} onClick={() => { navigate(n.nav, n.id ?? null); setShowNotifications(false); }}><span className="notice-dot" /><span>{n.text}{n.at && <small className="notice-at">{new Date(n.at).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</small>}</span></button>)}
+                {notices.map(n => <button key={n.text} className={n.tone === "ok" ? "notice-ok" : ""} onClick={() => { if (n.mode) writeStored("quoteMode", n.mode, "builder"); navigate(n.nav, n.id ?? null); setShowNotifications(false); }}><span className="notice-dot" /><span>{n.text}{n.at && <small className="notice-at">{new Date(n.at).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</small>}</span></button>)}
               </div>}
             </div>
             <div className="dropdown-wrap">

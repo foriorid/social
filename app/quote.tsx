@@ -8,6 +8,7 @@ import { supabase } from "./lib/cloud";
 import { notify } from "./modules";
 import { QuoteBuilder } from "./quote-builder";
 import { PricelistPage } from "./pricelist";
+import { navigate } from "./lib/hashnav";
 import { useStored } from "./lib/store";
 
 const BUCKET = "quotes";
@@ -115,6 +116,6 @@ export function QuotePage() {
   const [mode, setMode] = useStored<"builder" | "pricelist" | "html">("quoteMode", "builder");
   return <div className="module-page qb-page">
     <div className="qb-seg qb-mode" role="tablist" aria-label="Jenis penawaran"><button role="tab" aria-selected={mode === "builder"} className={mode === "builder" ? "on" : ""} onClick={() => setMode("builder")}><b>Builder</b></button><button role="tab" aria-selected={mode === "pricelist"} className={mode === "pricelist" ? "on" : ""} onClick={() => setMode("pricelist")}><b>Pricelist</b></button><button role="tab" aria-selected={mode === "html"} className={mode === "html" ? "on" : ""} onClick={() => setMode("html")}><b>Upload HTML</b></button></div>
-    {mode === "builder" ? <QuoteBuilder /> : mode === "pricelist" ? <PricelistPage /> : <HtmlQuotes />}
+    {mode === "builder" ? <QuoteBuilder /> : mode === "pricelist" ? <PricelistPage openQuote={id => { setMode("builder"); navigate("Penawaran", id); }} /> : <HtmlQuotes />}
   </div>;
 }

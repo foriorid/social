@@ -3388,3 +3388,11 @@ body:has(.qb-pick) .qb-bottom, body:has(.qb-pick) .qb-fab { display:none; } .qb-
 .qb-disc { display:flex; gap:8px; align-items:center; } .qb-disc .qb-seg { flex:none; } .qb-disc input { flex:1; min-width:0; font:inherit; font-size:14px; padding:10px 11px; border:1px solid #e3def0; border-radius:11px; }
 .qb-pkgs { margin-top:12px; display:grid; gap:6px; } .qb-pkgs > b { font-size:13px; color:#5b34d6; }
 .qb-pkg { display:flex; justify-content:space-between; gap:10px; align-items:center; background:#fff; border:1px solid #ece7f5; border-radius:12px; padding:9px 11px; font-size:13px; } .qb-pkg b { display:block; } .qb-pkg small { color:#8a83a0; font-size:11.5px; } .qb-pkg em { font-style:normal; font-weight:800; white-space:nowrap; }
+/* Pricelist links */
+.pl-send { display:flex; gap:12px; align-items:center; width:100%; text-align:left; border:0; border-radius:16px; padding:14px; color:#fff; background:linear-gradient(135deg,#6d3fe0,#8a5cf6); font:inherit; cursor:pointer; box-shadow:0 10px 24px -12px rgba(103,58,220,.6); }
+.pl-send > span:first-child { width:40px; height:40px; border-radius:12px; background:rgba(255,255,255,.18); display:grid; place-items:center; flex:none; } .pl-send b { display:block; font-size:14.5px; } .pl-send small { font-size:12px; opacity:.9; }
+.pl-sent { display:flex; gap:12px; align-items:center; width:100%; text-align:left; border:1px solid #ece7f5; background:#fff; border-radius:16px; padding:12px 14px; font:inherit; color:var(--ink); cursor:pointer; margin-bottom:8px; }
+.pl-av { width:40px; height:40px; border-radius:50%; background:#efe8fc; color:#5b34d6; display:grid; place-items:center; font-weight:800; flex:none; }
+.pl-st { margin-left:auto; flex:none; max-width:46%; font-style:normal; font-size:11px; font-weight:800; border-radius:999px; padding:4px 9px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .pl-st.ok { background:#16884a; color:#fff; } .pl-st.op { background:#e6f7ee; color:#16884a; } .pl-st.nw { background:#e8f0ff; color:#2c5fd6; }
+.pl-dhead b { display:block; font-size:17px; } .pl-dhead small { color:#7a7590; font-size:12.5px; }
+.pl-cats { flex-wrap:wrap; }

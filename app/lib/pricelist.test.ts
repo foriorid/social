@@ -43,3 +43,27 @@ test("AI package picks keep only real packages and add-ons", () => {
     [{ id: "pro", qty: 3, addons: [], note: undefined }, { id: "cinematic", qty: 1, addons: ["drone-video"], note: "minta drone" }]);
   assert.deepEqual(parsePackages("nope", DEFAULT_PRICELIST), []);
 });
+
+test("a client's pricelist choice round-trips through the approval title, with its total", async () => {
+  const { choiceTitle, parseChoice, choiceTotal } = await import("./pricelist.ts");
+  const picks = [{ id: "pro", qty: 3, addons: [] }, { id: "cinematic", qty: 1, addons: ["drone-video"] }];
+  const title = choiceTitle(picks, DEFAULT_PRICELIST);
+  assert.equal(title, "Pro × 3; Cinematic Video + Drone Video");
+  assert.deepEqual(parseChoice(title, DEFAULT_PRICELIST), picks);
+  assert.equal(choiceTotal(picks, DEFAULT_PRICELIST), 13_000_000);
+  assert.deepEqual(parseChoice("Unknown × 2", DEFAULT_PRICELIST), []);
+});
+
+test("pricelist link page: package cards with ticks for the client; after choosing, the choice instead of the form", async () => {
+  const { newQuote, renderQuoteHtml } = await import("./quote.ts");
+  const q = { ...newQuote(), kind: "pricelist" as const, client: { name: "Rina — MytePro", location: "Sentul" }, intro: "Halo Bu Rina", packages: DEFAULT_PRICELIST.slice(0, 2), sections: [] };
+  const open = renderQuoteHtml(q);
+  assert.match(open, /Disiapkan khusus untuk/);
+  assert.match(open, /name="p_pro" value="1"/);
+  assert.match(open, /name="q_basic"/);
+  assert.match(open, /Halo Bu Rina/);
+  assert.doesNotMatch(open, /class="total"/);
+  const done = renderQuoteHtml(q, { approval: { name: "Rina", at: "2026-11-23T03:00:00Z", title: "Pro × 3", total: 7_500_000 } });
+  assert.match(done, /Pilihan Anda: Pro × 3/);
+  assert.doesNotMatch(done, /name="p_pro"/);
+});
