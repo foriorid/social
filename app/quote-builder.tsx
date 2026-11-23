@@ -10,10 +10,12 @@ import { readCloud, supabase } from "./lib/cloud";
 import { newGallery, slugify as slugifyGallery, uniqueSlug } from "../supabase/functions/gallery/delivery";
 import { useStored } from "./lib/store";
 import { navigate, useDetail } from "./lib/hashnav";
+import { PricelistPicker, usePricelist } from "./pricelist";
+import { packageSections, parsePackages, pricelistForPrompt, withTransport, type PickedPackage, type PricePackage } from "./lib/pricelist";
 import { BackButton, notify } from "./modules";
 import { askAIDocs, AiSetupError, CHEAP_MODEL, type AiDoc } from "./lib/ai";
 import { docxText } from "./lib/docx";
-import { isSlug, newQuote, parseBrief, publicSnapshot, renderQuoteHtml, rid, shortIdr, slugify, idr, totals, type PortfolioItem, type QItem, type QLayout, type QRow, type QSection, type Quote, type QuoteAnswer } from "./lib/quote";
+import { discountLabel, isSlug, newQuote, parseBrief, publicSnapshot, renderQuoteHtml, rid, shortIdr, slugify, idr, totals, type PortfolioItem, type QItem, type QLayout, type QRow, type QSection, type Quote, type QuoteAnswer } from "./lib/quote";
 
 const BUCKET = "quotes";
 const SONNET = "claude-sonnet-5-5";
@@ -107,7 +109,7 @@ async function toDoc(file: File): Promise<AiDoc> {
   throw new Error(`${file.name}: format belum didukung. Pakai PDF, gambar, Word (.docx), atau teks.`);
 }
 
-const BRIEF_PROMPT = `Baca pesan klien (biasanya chat WhatsApp) dan lampiran di atas (site plan/layout, foto properti/kawasan, shotlist, dll). Susun bahan penawaran jasa foto/video FORIOR untuk jenis properti apa pun (villa, apartemen, hotel, resort, kantor, restoran, rumah).
+const BRIEF_BASE = `Baca pesan klien (biasanya chat WhatsApp) dan lampiran di atas (site plan/layout, foto properti/kawasan, shotlist, dll). Susun bahan penawaran jasa foto/video FORIOR untuk jenis properti apa pun (villa, apartemen, hotel, resort, kantor, restoran, rumah).
 Balas HANYA dengan JSON valid, tanpa teks lain:
 {"points":["ringkasan kebutuhan, 4-8 poin, sebut jumlah"],
 "questions":["hal yang belum jelas dan perlu FORIOR tanyakan ke klien, 0-5"],
@@ -126,6 +128,15 @@ Aturan:
 - Format file, orientasi foto, waktu pemotretan (siang/golden hour/malam), hak penggunaan, dan batasan editing masuk "notes", bukan seksi. Kalau tetap perlu seksi berisi info tanpa harga, beri "pricing": "none".
 - Lokasi di luar Jakarta → tambahkan "operational" transportasi & akomodasi.
 - JANGAN menulis harga. Jangan mengarang kebutuhan yang tidak ada di pesan/lampiran.`;
+/** The brief prompt with FORIOR's pricelist, so packages and prices come from it instead of being made up. */
+const briefPrompt = (list: PricePackage[]) => `${BRIEF_BASE}
+
+PRICELIST FORIOR (harga sudah termasuk transport Jakarta Kota; di luar Jakarta ada biaya transport terpisah):
+${pricelistForPrompt(list)}
+Tambahkan ke JSON: "packages":[{"id":"id paket dari pricelist","qty":jumlah unit/video/lokasi,"addons":["id add-on"],"note":"alasan singkat, mis. 3 unit 2BR → Pro"}].
+- Pakai paket pricelist bila kebutuhan klien cocok (foto unit/kamar → paket foto sesuai jumlah kamar atau jumlah foto yang diminta; video → Cinematic Video; drone → Drone Photo & Video atau add-on Drone Video bila bersama Cinematic; 360 → Virtual Tour 360).
+- Kebutuhan yang sudah tertutup "packages" JANGAN dibuat lagi di "sections". "sections" hanya untuk kebutuhan di luar pricelist.
+- Bila lokasi di luar Jakarta, tambahkan "Transport luar kota" di "operational".`;
 
 // ---------- list ----------
 export function QuoteBuilder() {
@@ -217,6 +228,7 @@ function QuoteEditor({ quote: q, opens, answers, approval, notChosen, onChange, 
 
 // ---------- 1 · Brief ----------
 function BriefTab({ q, set, onDone }: { q: Quote; set: (p: Partial<Quote>) => void; onDone: () => void }) {
+  const [pricelist] = usePricelist();
   const [files, setFiles] = useState<File[]>([]);
   const [chat, setChat] = useState(q.brief?.chat ?? "");
   const [model, setModel] = useState(CHEAP_MODEL);
@@ -231,22 +243,28 @@ function BriefTab({ q, set, onDone }: { q: Quote; set: (p: Partial<Quote>) => vo
       const docs = await Promise.all(files.map(toDoc));
       if (chat.trim()) docs.unshift({ name: "Pesan klien (WhatsApp)", kind: "text", mediaType: "text/plain", data: chat.trim().slice(0, 100_000) });
       if (docs.reduce((a, d) => a + d.data.length, 0) > 13_500_000) throw new Error("Total dokumen terlalu besar. Kurangi jumlah atau ukuran file (maks ±10 MB).");
-      const text = await askAIDocs({ docs, prompt: BRIEF_PROMPT, model, label: "Penawaran · analisis brief", maxTokens: model === SONNET ? 4000 : 3000 });
+      const text = await askAIDocs({ docs, prompt: briefPrompt(pricelist), model, label: "Penawaran · analisis brief", maxTokens: model === SONNET ? 4000 : 3000 });
       const d = parseBrief(text);
       setDraft(d);
       const filled = q.sections.some(s => s.items.some(i => i.name || i.price));
-      if (!filled && d.sections.length) { applyDraft(d, chat.trim()); return; }
-      set({ brief: { chat: chat.trim(), files: files.map(f => ({ name: f.name, size: f.size, type: f.type })), summary: { points: d.points, questions: d.questions, requests: d.requests, at: new Date().toISOString(), model } } });
+      if (!filled && (d.sections.length || parsePackages(d.packagesRaw, pricelist).length)) { applyDraft(d, chat.trim()); return; }
+      set({ brief: { chat: chat.trim(), files: files.map(f => ({ name: f.name, size: f.size, type: f.type })), summary: summaryOf(d) } });
     } catch (e) { setError(e instanceof AiSetupError || e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
   /** Fills the quotation from the analysis; fields already typed in Hub are kept. */
+  const summaryOf = (d: NonNullable<typeof draft>) => ({ points: d.points, questions: d.questions, requests: d.requests, at: new Date().toISOString(), model,
+    packages: parsePackages(d.packagesRaw, pricelist).map(x => { const p = pricelist.find(y => y.id === x.id)!; return { name: `${x.qty > 1 ? `${x.qty} × ` : ""}${p.name}${x.addons?.length ? ` + ${p.addons!.filter(a => x.addons!.includes(a.id)).map(a => a.name).join(", ")}` : ""}`, qty: x.qty, note: x.note,
+      price: p.price * x.qty + (p.addons ?? []).filter(a => x.addons?.includes(a.id)).reduce((s0, a) => s0 + a.price, 0) }; }) });
+  /** Fills the quotation from the analysis: pricelist packages first (with their prices), then sections outside the pricelist. */
   const applyDraft = (d: NonNullable<typeof draft>, chatText = chat.trim()) => {
     const untouchedNotes = q.notes.every(n => newQuote().notes.some(d0 => d0.title === n.title));
-    set({ sections: d.sections.length ? d.sections : q.sections, title: q.title || d.title || "", subtitle: q.subtitle || d.subtitle || "", eyebrow: q.eyebrow || d.eyebrow || "",
+    const fromList = packageSections(parsePackages(d.packagesRaw, pricelist), pricelist), sections = [...fromList, ...d.sections];
+    const location = q.client.location || d.location || "";
+    set({ sections: sections.length ? sections : q.sections, title: q.title || d.title || "", subtitle: q.subtitle || d.subtitle || "", eyebrow: q.eyebrow || d.eyebrow || "",
       client: { ...q.client, name: q.client.name || d.client || "", location: q.client.location || d.location || "" },
-      notice: q.notice || d.notice, questions: q.questions?.length ? q.questions : d.questions.map(text => ({ id: rid(), text })), notes: d.notes.length && untouchedNotes ? d.notes : q.notes, operational: q.operational.length ? q.operational : d.operational, terms: { ...q.terms, ...d.terms },
-      brief: { chat: chatText, files: files.map(f => ({ name: f.name, size: f.size, type: f.type })), summary: { points: d.points, questions: d.questions, requests: d.requests, at: new Date().toISOString(), model } } });
-    notify("Penawaran terisi dari brief. Tinggal isi harga dan foto."); onDone();
+      notice: q.notice || d.notice, questions: q.questions?.length ? q.questions : d.questions.map(text => ({ id: rid(), text })), notes: d.notes.length && untouchedNotes ? d.notes : q.notes, operational: withTransport(q.operational.length ? q.operational : d.operational, location), terms: { ...q.terms, ...d.terms },
+      brief: { chat: chatText, files: files.map(f => ({ name: f.name, size: f.size, type: f.type })), summary: summaryOf(d) } });
+    notify(fromList.length ? `Penawaran terisi: ${fromList.length} paket dari pricelist sudah berharga. Cek lalu kirim.` : "Penawaran terisi dari brief. Tinggal isi harga dan foto."); onDone();
   };
   const apply = () => {
     if (!draft) return;
@@ -273,6 +291,7 @@ function BriefTab({ q, set, onDone }: { q: Quote; set: (p: Partial<Quote>) => vo
     {summary && <div className="panel qb-ai">
       <h4><Sparkles size={16} /> Ringkasan kebutuhan</h4>
       <ul>{summary.points.map((p, i) => <li key={i}>{p}</li>)}</ul>
+      {!!summary.packages?.length && <div className="qb-pkgs"><b>Usulan dari pricelist</b>{summary.packages.map((x, i) => <div key={i} className="qb-pkg"><span><b>{x.name}</b>{x.note && <small>{x.note}</small>}</span><em>{shortIdr(x.price)}</em></div>)}</div>}
       {summary.questions.length > 0 && <div className="qb-ask"><b>Perlu ditanyakan ke klien</b><ul>{summary.questions.map((p, i) => <li key={i}>{p}</li>)}</ul></div>}
       {!!summary.requests?.length && <div className="qb-ask"><b>Diminta klien bersama penawaran</b><ul>{summary.requests.map((p, i) => <li key={i}>{p}</li>)}</ul></div>}
       <small className="qb-hint">{[q.brief?.chat ? "Pesan klien" : "", ...(q.brief?.files.map(f => f.name) ?? [])].filter(Boolean).join(", ")} · {when(summary.at)}</small>
@@ -285,6 +304,16 @@ function BriefTab({ q, set, onDone }: { q: Quote; set: (p: Partial<Quote>) => vo
 // ---------- 2 · Isi ----------
 function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) {
   const [open, setOpen] = useState<string | null>(q.sections[0]?.id ?? null);
+  const [picking, setPicking] = useState(false);
+  const [pricelist] = usePricelist();
+  // Packages go after the sections already there; an empty starter section is replaced.
+  const addPackages = (picked: PickedPackage[]) => {
+    const fresh = packageSections(picked, pricelist);
+    const keep = q.sections.filter(s => s.items.some(i => i.name.trim() || (i.price ?? 0) > 0) || s.pricing === "none");
+    set({ sections: [...keep, ...fresh], operational: withTransport(q.operational, q.client.location) });
+    setPicking(false); setOpen(fresh[0]?.id ?? null);
+    notify(`${fresh.length} paket masuk dari pricelist.${withTransport(q.operational, q.client.location).length > q.operational.length ? " Baris transport luar kota ditambahkan." : ""}`);
+  };
   const setSection = (id: string, patch: Partial<QSection>) => set({ sections: q.sections.map(s => (s.id === id ? { ...s, ...patch } : s)) });
   const setItem = (sid: string, iid: string, patch: Partial<QItem>) => set({ sections: q.sections.map(s => (s.id === sid ? { ...s, items: s.items.map(i => (i.id === iid ? { ...i, ...patch } : i)) } : s)) });
   const move = (id: string, d: -1 | 1) => { const i = q.sections.findIndex(s => s.id === id), j = i + d; if (j < 0 || j >= q.sections.length) return; const s = [...q.sections]; [s[i], s[j]] = [s[j], s[i]]; set({ sections: s }); };
@@ -330,6 +359,7 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
           <F label="Masuk total?"><select value={s.optional ? "1" : "0"} onChange={e => setSection(s.id, { optional: e.target.value === "1" })}><option value="0">Ya</option><option value="1">Tidak — add-on opsional</option></select></F>
           <F label="Harga"><select value={s.pricing ?? "item"} onChange={e => setSection(s.id, { pricing: e.target.value as QSection["pricing"], ...(e.target.value === "section" && s.price === undefined ? { price: s.items.reduce((a, i) => a + (i.price ?? 0), 0) || null } : {}) })}><option value="item">Per item</option><option value="section">Satu harga (paket)</option><option value="none">Tanpa harga</option></select></F>
           {s.pricing === "section" && <F label="Harga paket seksi ini"><Price value={s.price ?? null} onChange={price => setSection(s.id, { price })} /></F>}
+          {(s.includes || s.fromPricelist) && <F label="Termasuk (satu per baris, tampil sebagai daftar centang)" wide><textarea rows={3} value={(s.includes ?? []).join("\n")} onChange={e => setSection(s.id, { includes: e.target.value.split("\n").map(l => l.trimStart()).slice(0, 10) })} /></F>}
         </div>
         {s.items.map(i => <div className="qb-item" key={i.id}>
           <Slot quoteId={q.id} value={i.image} onChange={image => setItem(s.id, i.id, { image })} />
@@ -341,6 +371,7 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
               <input aria-label="Satuan" value={i.unit ?? ""} onChange={e => setItem(s.id, i.id, { unit: e.target.value })} placeholder="foto" list="qb-units" />
               {s.pricing === "none" ? <span className="qb-inpkg">Tanpa harga</span> : s.pricing === "section" ? <span className="qb-inpkg">Termasuk paket</span> : <Price value={i.price} onChange={price => setItem(s.id, i.id, { price })} />}
             </div>
+            {i.list !== undefined && i.price !== i.list && s.pricing !== "none" && s.pricing !== "section" && <small className="qb-special">Harga khusus · pricelist {idr(i.list)} <button className="cx-link" onClick={() => setItem(s.id, i.id, { price: i.list! })}>Kembalikan</button></small>}
             {<textarea aria-label="Poin detail" rows={s.layout === "media" ? 3 : 2} value={(i.lines ?? []).join("\n")} onChange={e => setItem(s.id, i.id, { lines: e.target.value.split("\n").map(l => l.trimStart()).slice(0, 8) })} placeholder={s.layout === "media" ? "Detail scene, satu per baris\nFasad & arrival\nPemandangan gunung" : "Poin/sorotan (opsional), satu per baris\nPrivate jacuzzi"} />}
           </div>
           <button className="qb-icon qb-del" aria-label="Hapus item" onClick={() => setSection(s.id, { items: s.items.filter(x => x.id !== i.id) })}><Trash2 size={15} /></button>
@@ -351,7 +382,18 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
       </div>}
     </div>)}
     <datalist id="qb-units"><option value="foto" /><option value="menit" /><option value="video" /><option value="klip" /><option value="hari" /></datalist>
-    <button className="outline-button qb-wide" onClick={() => { const s: QSection = { id: rid(), title: "", layout: "cards", items: [{ id: rid(), name: "", qty: 8, unit: "foto", price: 0 }] }; set({ sections: [...q.sections, s] }); setOpen(s.id); }}><Plus size={15} /> Tambah seksi</button>
+    <div className="qb-addrow"><button className="primary-button" onClick={() => setPicking(true)}><Plus size={15} /> Dari pricelist</button><button className="outline-button" onClick={() => { const s: QSection = { id: rid(), title: "", layout: "cards", items: [{ id: rid(), name: "", qty: 8, unit: "foto", price: 0 }] }; set({ sections: [...q.sections, s] }); setOpen(s.id); }}><Plus size={15} /> Seksi kosong</button></div>
+    {picking && <PricelistPicker onClose={() => setPicking(false)} onPick={addPackages} />}
+
+    <div className="panel qb-card-p">
+      <h4 className="qb-h">Diskon</h4>
+      <div className="qb-disc">
+        <div className="qb-seg" role="group" aria-label="Jenis diskon">{(["pct", "idr"] as const).map(k => <button key={k} className={(q.discount?.type ?? "pct") === k ? "on" : ""} onClick={() => set({ discount: { type: k, value: q.discount?.type === k ? q.discount.value : 0 } })}>{k === "pct" ? "%" : "Rp"}</button>)}</div>
+        <input aria-label="Nilai diskon" inputMode="decimal" value={q.discount?.value ? (q.discount.type === "idr" ? q.discount.value.toLocaleString("id-ID") : String(q.discount.value)) : ""} placeholder={(q.discount?.type ?? "pct") === "pct" ? "mis. 5" : "mis. 500.000"}
+          onChange={e => { const type = q.discount?.type ?? "pct"; const raw = type === "idr" ? e.target.value.replace(/\D/g, "") : e.target.value.replace(",", ".").replace(/[^\d.]/g, ""); set({ discount: raw ? { type, value: type === "pct" ? Math.min(100, Number(raw) || 0) : Number(raw) } : undefined }); }} />
+      </div>
+      <p className="qb-hint">{tot.discount ? `Tampil ke klien sebagai "${discountLabel(q.discount)}" · − ${idr(tot.discount)} dari subtotal jasa.` : "Opsional. Dihitung dari subtotal jasa, tidak termasuk biaya operasional."}</p>
+    </div>
 
     <div className="panel qb-card-p">
       <h4 className="qb-h">Pertanyaan untuk klien</h4>

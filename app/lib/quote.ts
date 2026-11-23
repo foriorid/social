@@ -2,10 +2,16 @@
 // One renderer serves both the public link (/quote/<slug>/, app/quote/[slug]/route.ts) and the preview in Hub.
 // Pure and dependency-free so node:test can run it. Layout follows the "mytepro" quotation, mobile first.
 
-export type QItem = { id: string; name: string; tag?: string; desc?: string; qty?: number; unit?: string; price: number | null; image?: string; lines?: string[] };
+export type QItem = { id: string; name: string; tag?: string; desc?: string; qty?: number; unit?: string; price: number | null; image?: string; lines?: string[];
+  /** Pricelist price when the row came from a package; a different `price` is a "harga khusus". Hub only. */
+  list?: number };
 export type QLayout = "cards" | "list" | "media";
 /** pricing "section": one price for the whole section (a package), item prices ignored and hidden; "none": information only (deliverables, terms), no prices at all. */
-export type QSection = { id: string; title: string; subtitle?: string; layout: QLayout; optional?: boolean; image?: string; items: QItem[]; pricing?: "item" | "section" | "none"; price?: number | null };
+export type QSection = { id: string; title: string; subtitle?: string; layout: QLayout; optional?: boolean; image?: string; items: QItem[]; pricing?: "item" | "section" | "none"; price?: number | null;
+  /** What the package includes, shown once as a checklist under the section title. */
+  includes?: string[];
+  /** Pricelist package id this section was made from. */
+  fromPricelist?: string };
 export const sectionSubtotal = (s: QSection) => (s.pricing === "none" ? 0 : s.pricing === "section" ? s.price ?? 0 : s.items.reduce((a, i) => a + (i.price ?? 0), 0));
 /** Information only: priced "none", or a package left at Rp 0 (never shown as "Rp 0"). */
 export const isInfo = (s: QSection) => s.pricing === "none" || (s.pricing === "section" && s.price === 0);
@@ -14,7 +20,9 @@ export type QNote = { id: string; title: string; text: string };
 export type PortfolioItem = { id: string; title: string; location?: string; category?: string; image?: string; url: string };
 export type QuoteAnswer = { q: string; a: string };
 export type BriefFile = { name: string; size: number; type: string };
-export type BriefSummary = { points: string[]; questions: string[]; requests?: string[]; at: string; model: string };
+export type BriefSummary = { points: string[]; questions: string[]; requests?: string[]; at: string; model: string;
+  /** Packages Claude matched from the pricelist, as shown in the brief tab. */
+  packages?: { name: string; qty: number; price: number; note?: string }[] };
 export type Quote = {
   id: string; slug: string; status: "draft" | "sent"; lang: "id" | "en";
   number: string; date: string; validDays: number;
@@ -23,6 +31,8 @@ export type Quote = {
   notice?: string;
   sections: QSection[]; operational: QRow[]; notes: QNote[];
   terms: { dpPercent: number; production: string; delivery: string; revisions: string };
+  /** Discount on the services (not operational costs): a percentage or a rupiah amount. */
+  discount?: { type: "pct" | "idr"; value: number };
   footnote?: string;
   /** Picked from showcase.forior.id; a copy is kept so the client page never depends on the showcase. */
   portfolio?: PortfolioItem[];
@@ -61,15 +71,19 @@ export function newQuote(now = new Date()): Quote {
 }
 
 /** Totals: optional sections (add-ons) and "to be confirmed" prices stay out of the grand total. */
-export function totals(q: Pick<Quote, "sections" | "operational" | "terms">) {
+export function totals(q: Pick<Quote, "sections" | "operational" | "terms"> & { discount?: Quote["discount"] }) {
   const sub = sectionSubtotal;
   const sections = q.sections.map(s => ({ id: s.id, title: s.title, optional: !!s.optional, info: isInfo(s), subtotal: sub(s) }));
   const services = sections.filter(s => !s.optional).reduce((a, s) => a + s.subtotal, 0);
   const operational = q.operational.reduce((a, r) => a + (r.price ?? 0), 0);
-  const grand = services + operational;
+  const d = q.discount, v = Math.max(0, Number(d?.value) || 0);
+  const discount = Math.min(services, Math.round(d?.type === "pct" ? services * Math.min(100, v) / 100 : d?.type === "idr" ? v : 0));
+  const grand = services - discount + operational;
   const dp = Math.round(grand * Math.min(100, Math.max(0, q.terms.dpPercent || 0)) / 100);
-  return { sections, services, operational, grand, dp };
+  return { sections, services, discount, operational, grand, dp };
 }
+/** "Diskon 5%" or "Diskon" (amount discounts read better without repeating the number). */
+export const discountLabel = (d: Quote["discount"], word = "Diskon") => (d?.type === "pct" ? `${word} ${+(Number(d.value) || 0).toFixed(2)}%` : word);
 
 /** Headline numbers for the hero: one per (non-optional) section, summing quantities of its main unit. */
 export function stats(q: Pick<Quote, "sections">): { value: number; unit: string; label: string }[] {
@@ -84,13 +98,16 @@ export function stats(q: Pick<Quote, "sections">): { value: number; unit: string
 /** What goes into the public <slug>.json: the brief (client documents, AI notes) never leaves Hub. */
 export function publicSnapshot(q: Quote): Omit<Quote, "brief"> {
   const { brief: _brief, project: _project, ...rest } = q;
-  return rest;
+  // The pricelist price behind a "harga khusus" stays in Hub.
+  return { ...rest, sections: rest.sections.map(s => ({ ...s, items: s.items.map(({ list: _list, ...i }) => i) })) };
 }
 
 // ---------- AI brief → draft ----------
 export type BriefDraft = {
   points: string[]; questions: string[]; requests: string[]; client?: string; eyebrow?: string; title?: string; subtitle?: string; location?: string; notice?: string;
   sections: QSection[]; notes: QNote[]; operational: QRow[]; terms: Partial<Quote["terms"]>;
+  /** The model's pricelist picks, unchecked; read with parsePackages (lib/pricelist). */
+  packagesRaw?: unknown;
 };
 const str = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 /** Reads the model's JSON (tolerating ```json fences or text around it) into sections without prices. */
@@ -102,6 +119,7 @@ export function parseBrief(text: string): BriefDraft {
   const arr = (v: unknown) => (Array.isArray(v) ? v : []);
   const layouts: QLayout[] = ["cards", "list", "media"];
   return {
+    packagesRaw: raw.packages,
     points: arr(raw.points).map(p => str(p, 240)).filter(Boolean).slice(0, 12),
     questions: arr(raw.questions).map(p => str(p, 240)).filter(Boolean).slice(0, 8),
     requests: arr(raw.requests).map(p => str(p, 240)).filter(Boolean).slice(0, 8),
@@ -125,8 +143,8 @@ export function parseBrief(text: string): BriefDraft {
 
 // ---------- Client page ----------
 const T = {
-  id: { prepared: "Disiapkan untuk", location: "Lokasi project", quoteNo: "No.", valid: "Berlaku", days: "hari", subtotal: "Subtotal", optional: "Opsional", tbc: "Dikonfirmasi kemudian", notes: "Deliverables & Catatan", notesOnly: "Catatan", notesOnlySub: "Hal yang perlu diperhatikan", notesSub: "Yang Anda terima dan yang perlu diperhatikan", terms: "Ketentuan", termsSub: "Jadwal, revisi, dan pembayaran", confirm: "Konfirmasi", production: "Produksi", editing: "Editing & Revisi", delivery: "Pengiriman Final", dp: "DP saat konfirmasi", rest: "Sebelum file final dikirim", payment: "Pembayaran", validity: "Masa berlaku", ops: "Biaya Operasional", opsSub: "Estimasi biaya produksi", grand: "Grand total", services: "Subtotal jasa", opsLine: "Biaya operasional", ask: "Tanya via WhatsApp", pdf: "PDF", hello: "Halo FORIOR, saya ingin bertanya tentang penawaran", dpOf: "DP", photos: "foto", package: "Harga paket", inPackage: "Termasuk paket", portfolio: "Portofolio", portfolioSub: "Contoh project FORIOR yang serupa", viewProject: "Lihat project", allWork: "Lihat semua portofolio", askTitle: "Pertanyaan untuk Anda", askSub: "Jawaban Anda membantu kami menyesuaikan penawaran", yourName: "Nama Anda", send: "Kirim jawaban", sending: "Mengirim…", approving: "Memproses persetujuan…", sent: "Terima kasih, jawaban Anda sudah terkirim ke FORIOR.", addons: "Opsi tambahan · belum termasuk total", approveTitle: "Setujui penawaran", approveSub: "Konfirmasi bahwa Anda menyetujui penawaran ini", approveIntro: "Setelah disetujui, tim FORIOR menghubungi Anda untuk jadwal shoot dan DP.", picName: "Nama penanggung jawab", waNo: "No. WhatsApp", agree: "Saya setuju dengan ketentuan di atas", approveBtn: "Setujui penawaran ini", approved: "Penawaran disetujui", approvedBy: "Disetujui oleh", approvedOn: "pada", next: "Langkah berikutnya", next1: "Tim FORIOR mengonfirmasi jadwal shoot lewat WhatsApp", next2: "Transfer DP", next3: "Shoot, lalu foto preview dikirim lewat link galeri", chat: "Chat FORIOR di WhatsApp", approvedWa: "Halo FORIOR, saya sudah menyetujui penawaran" },
-  en: { prepared: "Prepared for", location: "Project location", quoteNo: "Quote No.", valid: "Valid", days: "days", subtotal: "Subtotal", optional: "Optional", tbc: "To be confirmed", notes: "Deliverables & Notes", notesOnly: "Notes", notesOnlySub: "Things to keep in mind", notesSub: "What to expect and what may affect coverage", terms: "Commercial Terms", termsSub: "Timeline, revisions and payment", confirm: "Confirmation", production: "Production", editing: "Editing & Revisions", delivery: "Final Delivery", dp: "Down payment upon confirmation", rest: "Before final delivery", payment: "Payment terms", validity: "Quotation validity", ops: "Production & Operational Costs", opsSub: "Operational budget estimate", grand: "Grand total", services: "Service subtotal", opsLine: "Operational costs", ask: "Ask on WhatsApp", pdf: "PDF", hello: "Hello FORIOR, I have a question about quotation", dpOf: "DP", photos: "photos", package: "Package price", inPackage: "Included in package", portfolio: "Portfolio", portfolioSub: "Similar FORIOR projects", viewProject: "View project", allWork: "See full portfolio", askTitle: "Questions for you", askSub: "Your answers help us tailor this quotation", yourName: "Your name", send: "Send answers", sending: "Sending…", approving: "Processing approval…", sent: "Thank you, your answers have been sent to FORIOR.", addons: "Optional add-ons · not included", approveTitle: "Approve this quotation", approveSub: "Confirm that you accept this quotation", approveIntro: "Once approved, FORIOR will contact you to schedule the shoot and the down payment.", picName: "Person in charge", waNo: "WhatsApp number", agree: "I agree to the terms above", approveBtn: "Approve this quotation", approved: "Quotation approved", approvedBy: "Approved by", approvedOn: "on", next: "Next steps", next1: "FORIOR confirms the shoot date on WhatsApp", next2: "Down payment", next3: "The shoot, then preview photos through a gallery link", chat: "Chat FORIOR on WhatsApp", approvedWa: "Hello FORIOR, I have approved quotation" }
+  id: { prepared: "Disiapkan untuk", location: "Lokasi project", quoteNo: "No.", valid: "Berlaku", days: "hari", subtotal: "Subtotal", optional: "Opsional", tbc: "Dikonfirmasi kemudian", notes: "Deliverables & Catatan", notesOnly: "Catatan", notesOnlySub: "Hal yang perlu diperhatikan", notesSub: "Yang Anda terima dan yang perlu diperhatikan", terms: "Ketentuan", termsSub: "Jadwal, revisi, dan pembayaran", confirm: "Konfirmasi", production: "Produksi", editing: "Editing & Revisi", delivery: "Pengiriman Final", dp: "DP saat konfirmasi", rest: "Sebelum file final dikirim", payment: "Pembayaran", validity: "Masa berlaku", ops: "Biaya Operasional", opsSub: "Estimasi biaya produksi", grand: "Grand total", services: "Subtotal jasa", opsLine: "Biaya operasional", ask: "Tanya via WhatsApp", pdf: "PDF", hello: "Halo FORIOR, saya ingin bertanya tentang penawaran", dpOf: "DP", photos: "foto", package: "Harga paket", inPackage: "Termasuk paket", portfolio: "Portofolio", portfolioSub: "Contoh project FORIOR yang serupa", viewProject: "Lihat project", allWork: "Lihat semua portofolio", askTitle: "Pertanyaan untuk Anda", askSub: "Jawaban Anda membantu kami menyesuaikan penawaran", yourName: "Nama Anda", send: "Kirim jawaban", sending: "Mengirim…", approving: "Memproses persetujuan…", sent: "Terima kasih, jawaban Anda sudah terkirim ke FORIOR.", addons: "Opsi tambahan · belum termasuk total", discount: "Diskon", includes: "Termasuk", approveTitle: "Setujui penawaran", approveSub: "Konfirmasi bahwa Anda menyetujui penawaran ini", approveIntro: "Setelah disetujui, tim FORIOR menghubungi Anda untuk jadwal shoot dan DP.", picName: "Nama penanggung jawab", waNo: "No. WhatsApp", agree: "Saya setuju dengan ketentuan di atas", approveBtn: "Setujui penawaran ini", approved: "Penawaran disetujui", approvedBy: "Disetujui oleh", approvedOn: "pada", next: "Langkah berikutnya", next1: "Tim FORIOR mengonfirmasi jadwal shoot lewat WhatsApp", next2: "Transfer DP", next3: "Shoot, lalu foto preview dikirim lewat link galeri", chat: "Chat FORIOR di WhatsApp", approvedWa: "Halo FORIOR, saya sudah menyetujui penawaran" },
+  en: { prepared: "Prepared for", location: "Project location", quoteNo: "Quote No.", valid: "Valid", days: "days", subtotal: "Subtotal", optional: "Optional", tbc: "To be confirmed", notes: "Deliverables & Notes", notesOnly: "Notes", notesOnlySub: "Things to keep in mind", notesSub: "What to expect and what may affect coverage", terms: "Commercial Terms", termsSub: "Timeline, revisions and payment", confirm: "Confirmation", production: "Production", editing: "Editing & Revisions", delivery: "Final Delivery", dp: "Down payment upon confirmation", rest: "Before final delivery", payment: "Payment terms", validity: "Quotation validity", ops: "Production & Operational Costs", opsSub: "Operational budget estimate", grand: "Grand total", services: "Service subtotal", opsLine: "Operational costs", ask: "Ask on WhatsApp", pdf: "PDF", hello: "Hello FORIOR, I have a question about quotation", dpOf: "DP", photos: "photos", package: "Package price", inPackage: "Included in package", portfolio: "Portfolio", portfolioSub: "Similar FORIOR projects", viewProject: "View project", allWork: "See full portfolio", askTitle: "Questions for you", askSub: "Your answers help us tailor this quotation", yourName: "Your name", send: "Send answers", sending: "Sending…", approving: "Processing approval…", sent: "Thank you, your answers have been sent to FORIOR.", addons: "Optional add-ons · not included", discount: "Discount", includes: "Includes", approveTitle: "Approve this quotation", approveSub: "Confirm that you accept this quotation", approveIntro: "Once approved, FORIOR will contact you to schedule the shoot and the down payment.", picName: "Person in charge", waNo: "WhatsApp number", agree: "I agree to the terms above", approveBtn: "Approve this quotation", approved: "Quotation approved", approvedBy: "Approved by", approvedOn: "on", next: "Next steps", next1: "FORIOR confirms the shoot date on WhatsApp", next2: "Down payment", next3: "The shoot, then preview photos through a gallery link", chat: "Chat FORIOR on WhatsApp", approvedWa: "Hello FORIOR, I have approved quotation" }
 };
 export const FORIOR_CONTACT = { website: "www.forior.id", wa: "6281542048268", phone: "0815 4204 8268" };
 /** The one inline script on the client page; its hash goes into the page's CSP. */
@@ -194,6 +212,7 @@ img{display:block;max-width:100%}svg.i{width:20px;height:20px;stroke:currentColo
 .total .opts{position:relative;z-index:1;margin-top:14px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.25)}.total .opts .lbl{color:#d9cff0;margin-bottom:2px}.total .opts .line{border-bottom:0;padding:5px 0;opacity:.9}
 .pf{grid-template-columns:1fr 1fr}.pfc{display:flex;flex-direction:column;background:var(--card);border-radius:16px;overflow:hidden;box-shadow:var(--sh);text-decoration:none;color:inherit}.pfc>.ph{aspect-ratio:4/3}.pfc .body{padding:10px 12px;display:grid;gap:2px}.pfc b{font-size:13px;color:var(--navy);line-height:1.3}.pfc small{font-size:11px;color:var(--muted)}.pfc span{font-size:11.5px;font-weight:700;color:var(--pi);margin-top:4px}.pf-all{margin:10px 2px 0;font-size:13px}.pf-all a{color:var(--pi);font-weight:700;text-decoration:none}
 .ask{display:grid;gap:12px}.ask label{display:grid;gap:6px}.ask span{font-size:13.5px;font-weight:700;color:var(--navy)}.ask textarea,.ask input{width:100%;font:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fafbfc;color:var(--ink)}.ask button{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:13px;padding:13px;background:var(--navy);color:#fff;font:inherit;font-weight:800;font-size:14px;cursor:pointer}.ask button svg.i{width:17px;height:17px}.sent{display:flex;gap:10px;align-items:center;color:#16884a}
+.incl{margin-bottom:10px}.incl ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:7px}.incl li{display:flex;gap:9px;align-items:flex-start;font-size:14px;color:var(--ink)}.incl li svg.i{width:16px;height:16px;color:#16884a;flex:none;margin-top:2px}.total .disc span{color:#9ee6b6}
 .appr-intro{font-size:13.5px;color:var(--muted,#667085);margin:0}.ask .agree{display:flex;gap:10px;align-items:flex-start}.ask .agree input{width:20px;height:20px;flex:none;margin-top:1px;accent-color:#16884a}.ask .agree span{font-weight:600;font-size:13px}.appr button{background:#16884a}.ask button{transition:transform .12s ease,opacity .2s,box-shadow .2s}.ask button:active{transform:scale(.97)}.ask button .bl{color:inherit;font-size:inherit;font-weight:inherit}.ask button.busy{opacity:.8;pointer-events:none;cursor:progress}.ask button.busy svg.i{display:none}.ask button.busy::before{content:"";width:16px;height:16px;border-radius:50%;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;animation:qspin .7s linear infinite}@keyframes qspin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.ask button.busy::before{animation-duration:2s}.ask button:active{transform:none}}
 .okc{display:flex;gap:14px;align-items:center;border-color:#bfe6cc;background:#f2fbf5}.okic{width:46px;height:46px;border-radius:50%;background:#16884a;color:#fff;display:grid;place-items:center;flex:none}.okic svg.i{width:22px;height:22px}.okc b{display:block;font-size:15px;color:#0f5c31}.okc span{font-size:13px;color:#3f5c49}
 .nexts{margin-top:12px}.nexts ol{margin:0 0 14px;padding-left:20px;display:grid;gap:7px;font-size:13.5px}.wa-btn{display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid #bfe6cc;border-radius:13px;padding:12px;color:#16884a;font-weight:800;text-decoration:none}.wa-btn svg.i{width:17px;height:17px}
@@ -216,6 +235,8 @@ function sectionHtml(s: QSection, letter: string, t: typeof T.id): string {
   const unit = s.items.find(i => i.unit)?.unit ?? "";
   const head = `<div class="sec-head"><div class="sec-num">${noPrice ? ic("check", "width:18px;height:18px") : esc(letter)}</div><div><h2>${esc(s.title)}${s.optional ? `<span class="pill">${t.optional}</span>` : ""}</h2>${s.subtitle ? `<p>${esc(s.subtitle)}</p>` : ""}</div></div>`;
   let body = "";
+  const inc = (s.includes ?? []).map(x => x.trim()).filter(Boolean);
+  const includes = inc.length ? `<div class="card incl"><div class="lbl">${t.includes}</div><ul>${inc.map(x => `<li>${ic("check")}<span>${esc(x)}</span></li>`).join("")}</ul></div>` : "";
   if (s.layout === "list") {
     body = `<div class="surr">${url(s.image) || url(s.items[0]?.image) ? ph(s.image || s.items[0]?.image, s.title) : ""}<div class="card">${s.items.map(i => `<div class="cat"><div class="ico">${ic(i.unit && /video|menit|min/i.test(i.unit) ? "film" : "camera")}</div><div class="t"><b>${esc(i.name)}</b>${i.desc ? `<small>${esc(i.desc)}</small>` : ""}${bullets(i.lines)}</div>${qty(i) ? `<span class="qty">${qty(i)}</span>` : ""}${i.price ? `&nbsp;${priceOf(i.price)}` : i.price === null ? `&nbsp;${priceOf(null)}` : ""}</div>`).join("")}</div></div>`;
   } else if (s.layout === "media") {
@@ -226,7 +247,7 @@ function sectionHtml(s: QSection, letter: string, t: typeof T.id): string {
   const label = `${perSection ? t.package : t.subtotal} ${esc(letter)}${totalQty ? ` — ${totalQty} ${esc(unit)}` : ""}`;
   const bar = noPrice ? "" : perSection ? `<div class="subbar"><span>${label}</span><b>${s.price === null || s.price === undefined ? t.tbc : idr(sub)}</b></div>`
     : sub > 0 && s.items.length > 1 ? `<div class="subbar"><span>${label}</span><b>${idr(sub)}</b></div>` : "";
-  return head + body + bar;
+  return head + includes + body + bar;
 }
 
 function portfolioHtml(items: PortfolioItem[], t: typeof T.id): string {
@@ -296,7 +317,7 @@ ${q.operational.length ? `<div class="sec-head"><div class="sec-num">${esc(opsLe
 ${portfolioHtml(q.portfolio ?? [], t)}
 ${questionsHtml(q.questions ?? [], t, opts)}
 <div class="total">${tot.sections.filter(s => !s.optional && !s.info).map(s => `<div class="line"><span>${esc(s.title)} (${letterOf.get(s.id)})</span><span>${idr(s.subtotal)}</span></div>`).join("")}
-${q.operational.length ? `<div class="line"><span><b>${t.services}</b></span><span><b>${idr(tot.services)}</b></span></div><div class="line"><span>${t.opsLine} (${opsLetter})</span><span>${idr(tot.operational)}</span></div>` : ""}
+${q.operational.length || tot.discount ? `<div class="line"><span><b>${t.services}</b></span><span><b>${idr(tot.services)}</b></span></div>` : ""}${tot.discount ? `<div class="line disc"><span>${esc(discountLabel(q.discount, t.discount))}</span><span>− ${idr(tot.discount)}</span></div>` : ""}${q.operational.length ? `<div class="line"><span>${t.opsLine} (${opsLetter})</span><span>${tot.operational || !q.operational.some(r => r.price === null) ? idr(tot.operational) : t.tbc}</span></div>` : ""}
 <div class="grand"><div class="lbl">${t.grand}</div><div><b>${idr(tot.grand)}</b>${q.terms.dpPercent > 0 && q.terms.dpPercent < 100 ? `<small>${t.dpOf} ${q.terms.dpPercent}% · ${idr(tot.dp)}</small>` : ""}</div></div>
 ${tot.sections.some(s => s.optional && s.subtotal > 0) ? `<div class="opts"><div class="lbl">${t.addons}</div>${tot.sections.filter(s => s.optional && s.subtotal > 0).map(s => `<div class="line"><span>+ ${esc(s.title)}</span><span>${idr(s.subtotal)}</span></div>`).join("")}</div>` : ""}</div>
 ${approveHtml(q, t, tot.dp, opts)}
