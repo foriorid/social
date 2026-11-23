@@ -74,3 +74,26 @@ export function parsePackages(raw: unknown, list: PricePackage[]): (PickedPackag
     return [{ id: pkg.id, qty, addons, note: typeof r.note === "string" ? r.note.trim().slice(0, 160) : undefined }];
   });
 }
+
+/** One line per pick, e.g. "Pro × 3; Cinematic Video + Drone Video": stored as the approval title and read back with parseChoice. */
+export function choiceTitle(picks: PickedPackage[], list: PricePackage[]): string {
+  return picks.flatMap(p => {
+    const pkg = list.find(x => x.id === p.id);
+    if (!pkg) return [];
+    const adds = (pkg.addons ?? []).filter(a => p.addons?.includes(a.id)).map(a => a.name);
+    return [`${pkg.name}${p.qty > 1 ? ` × ${p.qty}` : ""}${adds.length ? ` + ${adds.join(", ")}` : ""}`];
+  }).join("; ");
+}
+export function parseChoice(title: string, list: PricePackage[]): PickedPackage[] {
+  return title.split("; ").flatMap(part => {
+    const m = /^(.*?)(?: × (\d+))?(?: \+ (.*))?$/.exec(part.trim());
+    const pkg = m && list.find(x => x.name === m[1]);
+    if (!pkg) return [];
+    const names = m[3] ? m[3].split(", ") : [];
+    return [{ id: pkg.id, qty: Math.max(1, Number(m[2]) || 1), addons: (pkg.addons ?? []).filter(a => names.includes(a.name)).map(a => a.id) }];
+  });
+}
+export const choiceTotal = (picks: PickedPackage[], list: PricePackage[]) => picks.reduce((s, p) => {
+  const pkg = list.find(x => x.id === p.id);
+  return pkg ? s + pkg.price * p.qty + (pkg.addons ?? []).filter(a => p.addons?.includes(a.id)).reduce((t, a) => t + a.price, 0) : s;
+}, 0);

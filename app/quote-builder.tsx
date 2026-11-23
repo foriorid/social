@@ -23,7 +23,7 @@ const when = (iso?: string) => (iso ? new Date(iso).toLocaleString("id-ID", { da
 const ago = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? "baru saja" : m < 60 ? `${m} mnt lalu` : m < 1440 ? `${Math.round(m / 60)} jam lalu` : `${Math.round(m / 1440)} hari lalu`; };
 type Opens = Record<string, { n: number; last: string }>;
 type Answers = Record<string, { name: string | null; answers: QuoteAnswer[]; at: string }[]>;
-type Approval = { name: string; phone: string | null; at: string; total: number | null };
+export type Approval = { name: string; phone: string | null; at: string; total: number | null; title?: string | null };
 type Approvals = Record<string, Approval>;
 const sameClient = (a: Quote, b: Quote) => !!a.client.name.trim() && a.client.name.trim().toLowerCase() === b.client.name.trim().toLowerCase();
 /** Another option for the same client was approved, so this one was not chosen. */
@@ -47,9 +47,9 @@ export function useQuoteSignals(slugs: string[]) {
       for (const r of data ?? []) (a[r.slug] ??= []).push({ name: r.name, answers: r.answers as QuoteAnswer[], at: r.at });
       setAnswers(a);
     });
-    supabase.from("quote_approvals").select("slug, name, phone, at, total").in("slug", slugs).then(({ data }) => {
+    supabase.from("quote_approvals").select("slug, name, phone, at, total, title").in("slug", slugs).then(({ data }) => {
       const a: Approvals = {};
-      for (const r of data ?? []) a[r.slug] = { name: r.name, phone: r.phone, at: r.at, total: r.total };
+      for (const r of data ?? []) a[r.slug] = { name: r.name, phone: r.phone, at: r.at, total: r.total, title: r.title };
       setApprovals(a);
     });
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -57,7 +57,7 @@ export function useQuoteSignals(slugs: string[]) {
 }
 
 /** Writes the client-safe copy to <slug>.json (replacing an older link name) and returns the updated quotation. */
-async function publishQuote(q: Quote, slug: string): Promise<Quote> {
+export async function publishQuote(q: Quote, slug: string): Promise<Quote> {
   if (!isSlug(slug)) throw new Error("Nama link hanya huruf kecil, angka, dan tanda minus (3–63 karakter).");
   if (slug !== q.slug) {
     const { data } = await supabase.storage.from(BUCKET).list("", { limit: 1000, search: slug });
@@ -158,13 +158,13 @@ export function QuoteBuilder() {
     setQuotes(list => list.filter(x => x.id !== src.id)); setOpenId(null); notify("Penawaran dihapus.");
   };
   const update = async (src: Quote) => { try { save(await publishQuote(src, src.slug)); notify("Link diperbarui. Klien melihat versi terbaru."); } catch (e) { notify(e instanceof Error ? e.message : String(e)); } };
-  const current = quotes.find(q => q.id === openId);
+  const current = quotes.find(q => q.id === openId && q.kind !== "pricelist");
   if (current) return <QuoteEditor key={current.id} quote={current} opens={opens[current.slug]} answers={answers[current.slug]} approval={current.publishedAt ? approvals[current.slug] : undefined} notChosen={notChosen(current, quotes, approvals)} onChange={save} onBack={() => setOpenId(null)}
     onDuplicate={() => duplicate(current)} onDelete={() => remove(current)} onUpdate={() => update(current)} />;
 
   return <section className="qb-list">
-    {!quotes.length ? <div className="panel qb-empty"><FileText size={26} /><h3>Belum ada penawaran</h3><p>Buat penawaran dari brief klien. Upload shotlist atau dokumen klien, Claude merangkum kebutuhannya, Anda tinggal isi harga dan foto.</p><button className="primary-button" onClick={create}><Plus size={15} /> Penawaran baru</button></div>
-      : <div className="qb-cards">{quotes.map(q => {
+    {!quotes.some(q => q.kind !== "pricelist") ? <div className="panel qb-empty"><FileText size={26} /><h3>Belum ada penawaran</h3><p>Buat penawaran dari brief klien. Upload shotlist atau dokumen klien, Claude merangkum kebutuhannya, Anda tinggal isi harga dan foto.</p><button className="primary-button" onClick={create}><Plus size={15} /> Penawaran baru</button></div>
+      : <div className="qb-cards">{quotes.filter(q => q.kind !== "pricelist").map(q => {
         const t = totals(q), o = opens[q.slug], cover = q.cover || q.sections.flatMap(s => s.items).find(i => i.image)?.image;
         const ans = answers[q.slug]?.length ?? 0;
         return <div key={q.id} className="qb-card-wrap"><button className="qb-card" onClick={() => setOpenId(q.id)}>
@@ -674,7 +674,7 @@ function ApprovedCard({ q, approval, onMake }: { q: Quote; approval: Approval; o
 }
 
 /** Turns an approved quotation into a Photo Delivery gallery (and its shoot date), with the client filled in. */
-function MakeProjectModal({ q, approval, onClose, onDone }: { q: Quote; approval: Approval; onClose: () => void; onDone: (galleryId: string) => void }) {
+export function MakeProjectModal({ q, approval, onClose, onDone }: { q: Quote; approval: Approval; onClose: () => void; onDone: (galleryId: string) => void }) {
   const photos = q.sections.filter(s => !s.optional).flatMap(s => s.items).reduce((n, i) => n + (/foto|photo/i.test(`${i.unit ?? ""} ${i.name}`) ? Number(i.qty) || 0 : 0), 0);
   const [form, setForm] = useState({ title: [q.client.name, q.title].filter(Boolean).join(" — ") || "Project", limit: photos ? String(photos) : "", shootDate: "" });
   const [busy, setBusy] = useState(false), [error, setError] = useState("");

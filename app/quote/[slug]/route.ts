@@ -4,6 +4,7 @@
 // Hub serves both itself: Supabase sends HTML files as text/plain, so the browser would show source code.
 import { createHash } from "node:crypto";
 import { PRINT_SCRIPT, renderQuoteHtml, totals, type Quote, type QuoteApproval } from "../../lib/quote";
+import { choiceTitle, choiceTotal, type PickedPackage, type PricePackage } from "../../lib/pricelist";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ const rpc = (fn: string, body: unknown, ms: number) => fetch(`${SUPABASE_URL}/re
 
 /** Who approved the quotation and when, or null. A failed lookup shows the form, which the database still guards. */
 async function approvalOf(slug: string): Promise<QuoteApproval | null> {
-  try { const r = await rpc("quote_approval", { p_slug: slug }, 2000); const rows = r.ok ? await r.json() : []; return Array.isArray(rows) && rows[0]?.name ? { name: rows[0].name, at: rows[0].at } : null; }
+  try { const r = await rpc("quote_choice", { p_slug: slug }, 2000); const rows = r.ok ? await r.json() : []; return Array.isArray(rows) && rows[0]?.name ? { name: rows[0].name, at: rows[0].at, title: rows[0].title, total: rows[0].total } : null; }
   catch { return null; }
 }
 
@@ -88,8 +89,19 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
     // Approval: the name and the terms checkbox are required; title and total come from the published quotation.
     const name = String(form.get("name") ?? "").trim().slice(0, 80), phone = String(form.get("phone") ?? "").replace(/[^\d+ ()-]/g, "").trim().slice(0, 30);
     if (!name || form.get("agree") !== "1") return new Response(null, { status: 303, headers: { Location: `${back}#setuju` } });
+    let title = [q.eyebrow, q.title].filter(Boolean).join(" — "), total = Math.round(totals(q as Quote).grand);
+    if (q.kind === "pricelist") {
+      // The client's ticks, checked against the packages in the published link (prices never come from the form).
+      const list = (q.packages ?? []) as PricePackage[];
+      const picks: PickedPackage[] = list.filter(p => form.get(`p_${p.id}`) === "1").map(p => ({
+        id: p.id, qty: Math.max(1, Math.min(50, parseInt(String(form.get(`q_${p.id}`) ?? "1"), 10) || 1)),
+        addons: (p.addons ?? []).filter(a => form.get(`a_${p.id}_${a.id}`) === "1").map(a => a.id)
+      }));
+      if (!picks.length) return new Response(null, { status: 303, headers: { Location: `${back}#pilih` } });
+      title = choiceTitle(picks, list); total = choiceTotal(picks, list);
+    }
     try {
-      const r = await rpc("approve_quote", { p_slug: slug, p_name: name, p_phone: phone, p_title: [q.eyebrow, q.title].filter(Boolean).join(" — ").slice(0, 300), p_total: Math.round(totals(q as Quote).grand) }, 4000);
+      const r = await rpc("approve_quote", { p_slug: slug, p_name: name, p_phone: phone, p_title: title.slice(0, 300), p_total: total }, 4000);
       if (!r.ok) return unavailable();
     } catch { return unavailable(); }
     return new Response(null, { status: 303, headers: { Location: `${back}?disetujui=1#setuju` } });
