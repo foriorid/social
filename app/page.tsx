@@ -30,6 +30,7 @@ import { AutoDmPage } from "./autodm";
 import { StudioPage } from "./studio";
 import { DeliveryPage } from "./delivery";
 import { navigate, slugOf, useRoute } from "./lib/hashnav";
+import { useTheme } from "./lib/theme";
 import { useQuoteSignals } from "./quote-builder";
 import type { Quote } from "./lib/quote";
 import { BusinessDashboard, PhotoPlannerPage } from "./business";
@@ -281,6 +282,7 @@ function InsightTabs({ active, go }: { active: string; go: (nav: string) => void
 
 function AppShell() {
   const route = useRoute();
+  useTheme(); // keeps "Ikuti sistem" in step with the device
   const [platform, setPlatform] = useState<Platform>("All channels");
   const [range, setRange] = useState<Range>("Last 30 Days");
   const [showRange, setShowRange] = useState(false);

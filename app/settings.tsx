@@ -8,6 +8,7 @@ import { AccountPanel, AiButton, AiError, KeyField, MODELS, notify, TRIGGERS, us
 import { TeamSettings } from "./team";
 import { askAI, CHEAP_MODEL } from "./lib/ai";
 import { activeWorkspace, setDisplayName } from "./lib/cloud";
+import { useTheme, type ThemeChoice } from "./lib/theme";
 import { costIdr, rupiah } from "./lib/logic";
 import { useCallLog, useSettings } from "./lib/store";
 
@@ -41,6 +42,16 @@ export function SettingsPage() {
   </div>;
 }
 
+/** Light / dark / follow the device, for this device only. */
+function ThemeGroup() {
+  const [theme, setTheme] = useTheme();
+  const opts: [ThemeChoice, string, string][] = [["light", "Terang", "☀︎"], ["dark", "Gelap", "☾"], ["system", "Ikuti sistem", "◐"]];
+  return <Group icon={<Gauge size={17} />} title="Tampilan" sub={`${opts.find(o => o[0] === theme)?.[1] ?? "Terang"} · disimpan di perangkat ini`}>
+    <div className="sx-theme" role="radiogroup" aria-label="Tampilan">{opts.map(([v, label, icon]) => <button key={v} role="radio" aria-checked={theme === v} className={theme === v ? "on" : ""} onClick={() => setTheme(v)}><i>{icon}</i>{label}</button>)}</div>
+    <small className="sx-hint">Halaman yang dilihat klien (penawaran, pricelist, galeri) tetap terang.</small>
+  </Group>;
+}
+
 /** Display name for the greeting and avatar; stored on the account, so it follows the user across workspaces. */
 function ProfileGroup() {
   const [cloud] = useCloud();
@@ -66,6 +77,7 @@ function WorkspaceTab({ go }: { go: (t: Tab) => void }) {
     <div className="sx-hero"><div><b>Pengaturan Workspace</b><small>Identitas, brand, AI, integrasi, dan akses tim {ws?.name ?? ""}.</small></div><BriefcaseBusiness size={30} /></div>
     <h3 className="sx-h">Profil</h3>
     <ProfileGroup />
+    <ThemeGroup />
     <h3 className="sx-h">Informasi</h3>
     <Group icon={<BriefcaseBusiness size={17} />} title={`${ws?.name ?? "Workspace"} · ${ws?.kind === "business" ? "Business" : "Personal"}`} sub={`${role} · ${cloud.email ?? ""}`}>
       <div className="settings-field"><label>WORKSPACE NAME</label><input value={ws?.name ?? ""} readOnly /><small>Nama workspace tampil di pemilih workspace. Perubahan nama menyusul.</small></div>
