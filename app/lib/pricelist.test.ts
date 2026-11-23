@@ -67,3 +67,12 @@ test("pricelist link page: package cards with ticks for the client; after choosi
   assert.match(done, /Pilihan Anda: Pro × 3/);
   assert.doesNotMatch(done, /name="p_pro"/);
 });
+
+test("package photos: absolute URLs go on the section; saved lists without photos get the defaults", async () => {
+  const { absoluteImages, withDefaultImages } = await import("./pricelist.ts");
+  const abs = absoluteImages(DEFAULT_PRICELIST, "https://hub.forior.id");
+  assert.equal(abs[1].image, "https://hub.forior.id/stock/pricelist/pro.jpg");
+  assert.equal(packageSections([{ id: "pro", qty: 1 }], abs)[0].image, "https://hub.forior.id/stock/pricelist/pro.jpg");
+  assert.equal(packageSections([{ id: "pro", qty: 1 }], DEFAULT_PRICELIST)[0].image, undefined);
+  assert.equal(withDefaultImages([{ ...DEFAULT_PRICELIST[0], image: undefined }])[0].image, "/stock/pricelist/basic.jpg");
+});

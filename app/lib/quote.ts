@@ -44,7 +44,7 @@ export type Quote = {
   /** Opening message on a pricelist link, addressed to the client. */
   intro?: string;
   /** Pricelist link: the packages on offer, copied when the link was made. */
-  packages?: { id: string; cat?: string; name: string; price: number; per: string; fit?: string; includes: string[]; addons?: { id: string; name: string; price: number }[] }[];
+  packages?: { id: string; cat?: string; image?: string; name: string; price: number; per: string; fit?: string; includes: string[]; addons?: { id: string; name: string; price: number }[] }[];
   /** Set by "Jadikan proyek" after the client approved: the Photo Delivery gallery made from this quotation. */
   project?: { galleryId: string; at: string };
   publishedAt?: string; updatedAt: string; createdAt: string;
@@ -221,6 +221,7 @@ img{display:block;max-width:100%}svg.i{width:20px;height:20px;stroke:currentColo
 .plintro{font-size:14.5px;line-height:1.6;color:var(--ink);margin-bottom:12px}
 .grid.pks{display:grid;gap:12px;grid-template-columns:1fr}@media(min-width:720px){.grid.pks{grid-template-columns:1fr 1fr}}
 .pkc{background:#fff;border:1.5px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--sh);transition:border-color .15s,box-shadow .15s}.pkc.on{border-color:var(--navy);box-shadow:0 0 0 3px rgba(29,44,69,.1)}
+.pkc{overflow:hidden}.pkimg{margin:-16px -16px 14px;aspect-ratio:16/10;position:relative}.pkimg .ph{position:absolute;inset:0;border-radius:0}.pkimg .ph::after{display:none}
 .pkt{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.pkt h3{margin:0;font-size:18px;color:var(--navy)}.pkt .fit{display:inline-block;margin-top:5px;font-size:11.5px;font-weight:700;color:var(--pi);background:var(--ps);border-radius:999px;padding:3px 9px}
 .pkp{text-align:right;font-weight:800;color:var(--navy);font-size:17px;white-space:nowrap}.pkp small{display:block;font-size:11.5px;color:var(--muted);font-weight:600}
 .pkc ul{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:6px}.pkc li{display:flex;gap:8px;font-size:13.5px;color:#3d4556}.pkc li svg.i{width:15px;height:15px;color:#16884a;flex:none;margin-top:2px}
@@ -302,7 +303,7 @@ function approveHtml(q: Omit<Quote, "brief">, t: typeof T.id, dp: number, opts: 
 function pricelistBody(q: Omit<Quote, "brief">, t: typeof T.id, opts: { preview?: boolean; approval?: QuoteApproval | null; pageUrl?: string }): string {
   const pk = q.packages ?? [];
   const chosen = new Set((opts.approval?.title ?? "").split("; ").map(x => x.split(" × ")[0].split(" + ")[0]));
-  const card = (p: NonNullable<Quote["packages"]>[number], live: boolean) => `<div class="pkc${!live && chosen.has(p.name) ? " on" : ""}">
+  const card = (p: NonNullable<Quote["packages"]>[number], live: boolean) => `<div class="pkc${!live && chosen.has(p.name) ? " on" : ""}">${url(p.image) ? `<div class="pkimg">${ph(p.image, p.name)}</div>` : ""}
 <div class="pkt"><div><h3>${esc(p.name)}</h3>${p.fit ? `<span class="fit">${esc(p.fit)}</span>` : ""}</div><div class="pkp">${idr(p.price)}<small>${t.perOf} ${esc(p.per)}</small></div></div>
 <ul>${p.includes.map(x => `<li>${ic("check")}<span>${esc(x)}</span></li>`).join("")}</ul>
 ${live ? `<div class="pkpick"><label class="pkcb"><input type="checkbox" name="p_${esc(p.id)}" value="1" data-pk data-price="${p.price}" data-name="${esc(p.name)}"${opts.preview ? " disabled" : ""}><span>${t.pick}</span></label><label class="pkq">${t.qtyOf} <input type="number" name="q_${esc(p.id)}" min="1" max="50" value="1" inputmode="numeric" data-q${opts.preview ? " disabled" : ""}> ${esc(p.per)}</label></div>
