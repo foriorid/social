@@ -3483,3 +3483,12 @@ html[data-theme="dark"] .dl-pcard, html[data-theme="dark"] .dl-prow { background
 html[data-theme="dark"] .dl-empty, html[data-theme="dark"] .dl-empty-tab { background:#16121f !important; }
 html[data-theme="dark"] .qb-empty, html[data-theme="dark"] .qb-sec-head { background:transparent !important; color:#ece8f6 !important; }
 html[data-theme="dark"] .bd-hero-t, html[data-theme="dark"] .bd-hero-t * { text-shadow:none !important; }
+html[data-theme="dark"] .sx-sum, html[data-theme="dark"] .sx-sum > span, html[data-theme="dark"] .sx-int, html[data-theme="dark"] .sx-int > button, html[data-theme="dark"] .sx-bar { background:#1a1625 !important; border-color:#2c2640 !important; color:#ece8f6 !important; }
+html[data-theme="dark"] .sc-gcal { background:#241f35 !important; color:#c9c2dc !important; }
+html[data-theme="dark"] .f-sheet .ic.p { background:rgba(135,86,232,.18) !important; color:#c7b2ff !important; }
+html[data-theme="dark"] .f-sheet .ic.b { background:rgba(59,130,246,.16) !important; color:#93c5fd !important; }
+html[data-theme="dark"] .f-sheet .ic.g { background:rgba(22,163,106,.16) !important; color:#86efac !important; }
+html[data-theme="dark"] .sx-stats > *, html[data-theme="dark"] .sx-modes button, html[data-theme="dark"] .sx-seg button, html[data-theme="dark"] .sx-month, html[data-theme="dark"] .sx-two > * { background:#1a1625 !important; border-color:#2c2640 !important; color:#ece8f6 !important; }
+html[data-theme="dark"] .sx-modes button.on, html[data-theme="dark"] .sx-seg button.on { background:rgba(135,86,232,.22) !important; border-color:#8756e8 !important; color:#fff !important; }
+html[data-theme="dark"] .sx-seg, html[data-theme="dark"] .f-account, html[data-theme="dark"] .sc-setup, html[data-theme="dark"] .ad-copy, html[data-theme="dark"] .ad-copy code { background:#1a1625 !important; border-color:#2c2640 !important; color:#ece8f6 !important; }
+html[data-theme="dark"] .sc-setup ol, html[data-theme="dark"] .sc-setup li, html[data-theme="dark"] .f-account span, html[data-theme="dark"] .f-account small { color:#c9c2dc !important; }
