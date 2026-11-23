@@ -8,7 +8,7 @@ import {
   Instagram, Lightbulb, Menu, MessageCircle, MoreHorizontal, Play, Plus,
   Search, Send, Settings, Sparkles, Target, Users, Video, X, Youtube,
   ChartNoAxesCombined, Clock3, Layers3, BriefcaseBusiness, TrendingUp, Bookmark,
-  Hash, Eye, Flame, LayoutGrid, WandSparkles, PlusCircle, ChevronRight, Filter, CirclePlay,
+  Hash, Eye, Flame, LayoutGrid, Sun, Moon, WandSparkles, PlusCircle, ChevronRight, Filter, CirclePlay,
   MessageSquareText, ChartLine, Lightbulb as LightbulbIcon, Cloud, Database, UploadCloud, Music2, UserCircle2, UserPlus, History, ShieldCheck, Info, ExternalLink, FolderPlus, AtSign, Zap, Images, LogOut, ClipboardList, CalendarClock
 } from "lucide-react";
 
@@ -282,7 +282,7 @@ function InsightTabs({ active, go }: { active: string; go: (nav: string) => void
 
 function AppShell() {
   const route = useRoute();
-  useTheme(); // keeps "Ikuti sistem" in step with the device
+  const [, setTheme, isDark] = useTheme(); // also keeps "Ikuti sistem" in step with the device
   const [platform, setPlatform] = useState<Platform>("All channels");
   const [range, setRange] = useState<Range>("Last 30 Days");
   const [showRange, setShowRange] = useState(false);
@@ -456,6 +456,7 @@ function AppShell() {
             </div>
           </div>}
           <div className="top-account">
+            <button className="icon-button theme-toggle" aria-label={isDark ? "Ganti ke mode terang" : "Ganti ke mode gelap"} title={isDark ? "Mode terang" : "Mode gelap"} onClick={() => setTheme(isDark ? "light" : "dark")}>{isDark ? <Sun size={18} /> : <Moon size={18} />}</button>
             <div className="dropdown-wrap">
               <button className={`icon-button ${showNotifications ? "selected" : ""}`} aria-label={`Notifikasi${unseen ? `, ${unseen} baru` : ""}`} aria-expanded={showNotifications} onClick={() => { if (!showNotifications) setNoticeSeen(new Date().toISOString()); setShowNotifications(!showNotifications); setShowProfile(false); setShowRange(false); setShowPlatform(false); }}><Bell size={19} />{unseen > 0 && <i />}</button>
               {showNotifications && <div className="floating-menu notification-menu">

@@ -3406,6 +3406,13 @@ body:has(.qb-pick) .qb-bottom, body:has(.qb-pick) .qb-fab { display:none; } .qb-
 .sx-theme button.on { border-color:#8756e8; background:#f5f0ff; color:#3d2a7a; }
 .sx-hint { display:block; margin-top:8px; color:#8a83a0; font-size:12px; }
 
+/* Light/dark toggle in the top bar, next to the bell (same size as the other top-bar buttons) */
+.theme-toggle svg { transition:transform .25s ease; } .theme-toggle:active svg { transform:rotate(-30deg) scale(.9); }
+@media (max-width:800px) {
+  .top-account { gap:6px; }
+  .top-account .icon-button, .top-account .avatar-profile { width:40px; height:40px; }
+}
+
 /* ---------- Dark mode (Settings › Profil › Tampilan). Generated from scratchpad dark-src.css; scoped to html[data-theme=dark]. ---------- */
 html[data-theme="dark"] { --ink:#ece8f6; --muted:#a49cb8; --line:#2c2640; --lavender:#241f35; color-scheme:dark; }
 html[data-theme="dark"] body, html[data-theme="dark"] .app-shell, html[data-theme="dark"] .main-area { background:#0f0c17 !important; color:#ece8f6; }

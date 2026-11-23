@@ -15,17 +15,23 @@ export function applyTheme(choice: ThemeChoice) {
   document.documentElement.dataset.theme = dark ? "dark" : "light";
 }
 
-export function useTheme(): [ThemeChoice, (c: ThemeChoice) => void] {
+const darkNow = () => document.documentElement.dataset.theme === "dark";
+/** [choice, setChoice, isDark]: isDark is what is on screen now (also when the choice is "system"). */
+export function useTheme(): [ThemeChoice, (c: ThemeChoice) => void, boolean] {
   const [choice, setChoice] = useState<ThemeChoice>("light");
+  const [dark, setDark] = useState(false);
   useEffect(() => {
     let c: ThemeChoice = "light";
     try { c = (localStorage.getItem(KEY) as ThemeChoice) || "light"; } catch { /* private mode */ }
-    setChoice(c); applyTheme(c);
+    setChoice(c); applyTheme(c); setDark(darkNow());
     // "Ikuti sistem" follows the device switching between light and dark while the Hub is open.
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => { try { if ((localStorage.getItem(KEY) || "light") === "system") applyTheme("system"); } catch { /* ignore */ } };
+    const onChange = () => { try { if ((localStorage.getItem(KEY) || "light") === "system") { applyTheme("system"); setDark(darkNow()); } } catch { /* ignore */ } };
     mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
+    // Another toggle (top bar vs Settings) changed it: show the same choice everywhere.
+    const onSet = () => { try { setChoice((localStorage.getItem(KEY) as ThemeChoice) || "light"); } catch { /* ignore */ } setDark(darkNow()); };
+    window.addEventListener("forior-theme", onSet);
+    return () => { mq.removeEventListener("change", onChange); window.removeEventListener("forior-theme", onSet); };
   }, []);
-  return [choice, c => { try { localStorage.setItem(KEY, c); } catch { /* ignore */ } setChoice(c); applyTheme(c); }];
+  return [choice, c => { try { localStorage.setItem(KEY, c); } catch { /* ignore */ } setChoice(c); applyTheme(c); setDark(darkNow()); window.dispatchEvent(new Event("forior-theme")); }, dark];
 }
