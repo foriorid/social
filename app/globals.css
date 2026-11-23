@@ -3396,3 +3396,5 @@ body:has(.qb-pick) .qb-bottom, body:has(.qb-pick) .qb-fab { display:none; } .qb-
 .pl-st { margin-left:auto; flex:none; max-width:46%; font-style:normal; font-size:11px; font-weight:800; border-radius:999px; padding:4px 9px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .pl-st.ok { background:#16884a; color:#fff; } .pl-st.op { background:#e6f7ee; color:#16884a; } .pl-st.nw { background:#e8f0ff; color:#2c5fd6; }
 .pl-dhead b { display:block; font-size:17px; } .pl-dhead small { color:#7a7590; font-size:12.5px; }
 .pl-cats { flex-wrap:wrap; }
+.pl-thumb { width:56px; height:56px; border-radius:12px; object-fit:cover; flex:none; background:#efe8fc; }
+.pl-imgpick { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-bottom:6px; } .pl-imgpick button { padding:0; border:2px solid transparent; border-radius:10px; overflow:hidden; aspect-ratio:1; background:#f3f0f8; cursor:pointer; } .pl-imgpick button.on { border-color:#6d3fe0; } .pl-imgpick img { width:100%; height:100%; object-fit:cover; display:block; }

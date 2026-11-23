@@ -10,8 +10,8 @@ import { readCloud, supabase } from "./lib/cloud";
 import { newGallery, slugify as slugifyGallery, uniqueSlug } from "../supabase/functions/gallery/delivery";
 import { useStored } from "./lib/store";
 import { navigate, useDetail } from "./lib/hashnav";
-import { PricelistPicker, usePricelist } from "./pricelist";
-import { packageSections, parsePackages, pricelistForPrompt, withTransport, type PickedPackage, type PricePackage } from "./lib/pricelist";
+import { appOrigin, PricelistPicker, usePricelist } from "./pricelist";
+import { absoluteImages, packageSections, parsePackages, pricelistForPrompt, withTransport, type PickedPackage, type PricePackage } from "./lib/pricelist";
 import { BackButton, notify } from "./modules";
 import { askAIDocs, AiSetupError, CHEAP_MODEL, type AiDoc } from "./lib/ai";
 import { docxText } from "./lib/docx";
@@ -258,7 +258,7 @@ function BriefTab({ q, set, onDone }: { q: Quote; set: (p: Partial<Quote>) => vo
   /** Fills the quotation from the analysis: pricelist packages first (with their prices), then sections outside the pricelist. */
   const applyDraft = (d: NonNullable<typeof draft>, chatText = chat.trim()) => {
     const untouchedNotes = q.notes.every(n => newQuote().notes.some(d0 => d0.title === n.title));
-    const fromList = packageSections(parsePackages(d.packagesRaw, pricelist), pricelist), sections = [...fromList, ...d.sections];
+    const fromList = packageSections(parsePackages(d.packagesRaw, pricelist), absoluteImages(pricelist, appOrigin())), sections = [...fromList, ...d.sections];
     const location = q.client.location || d.location || "";
     set({ sections: sections.length ? sections : q.sections, title: q.title || d.title || "", subtitle: q.subtitle || d.subtitle || "", eyebrow: q.eyebrow || d.eyebrow || "",
       client: { ...q.client, name: q.client.name || d.client || "", location: q.client.location || d.location || "" },
@@ -308,7 +308,7 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
   const [pricelist] = usePricelist();
   // Packages go after the sections already there; an empty starter section is replaced.
   const addPackages = (picked: PickedPackage[]) => {
-    const fresh = packageSections(picked, pricelist);
+    const fresh = packageSections(picked, absoluteImages(pricelist, appOrigin()));
     const keep = q.sections.filter(s => s.items.some(i => i.name.trim() || (i.price ?? 0) > 0) || s.pricing === "none");
     set({ sections: [...keep, ...fresh], operational: withTransport(q.operational, q.client.location) });
     setPicking(false); setOpen(fresh[0]?.id ?? null);

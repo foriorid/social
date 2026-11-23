@@ -10,10 +10,17 @@ import { navigate } from "./lib/hashnav";
 import { supabase } from "./lib/cloud";
 import { useStored } from "./lib/store";
 import { idr, newQuote, rid, shortIdr, slugify, type Quote } from "./lib/quote";
-import { CAT_LABEL, DEFAULT_PRICELIST, needsTransport, packageSections, parseChoice, withTransport, type PickedPackage, type PriceCat, type PricePackage } from "./lib/pricelist";
+import { absoluteImages, CAT_LABEL, DEFAULT_PRICELIST, needsTransport, withDefaultImages, packageSections, parseChoice, withTransport, type PickedPackage, type PriceCat, type PricePackage } from "./lib/pricelist";
 import { notify } from "./modules";
 
-export const usePricelist = () => useStored<PricePackage[]>("pricelist", DEFAULT_PRICELIST);
+export function usePricelist(): [PricePackage[], (next: PricePackage[] | ((old: PricePackage[]) => PricePackage[])) => void] {
+  const [list, setList] = useStored<PricePackage[]>("pricelist", DEFAULT_PRICELIST);
+  return [withDefaultImages(list), setList];
+}
+/** Where this app is served from (domain root on Vercel, /social on GitHub Pages), for absolute photo URLs. */
+export const appOrigin = () => (typeof window === "undefined" ? "" : `${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, "")}`);
+const imgSrc = (img?: string) => (img ? (img.startsWith("/") ? appOrigin() + img : img) : "");
+const Thumb = ({ p }: { p: PricePackage }) => p.image ? <img className="pl-thumb" src={imgSrc(p.image)} alt="" loading="lazy" /> : <Thumb p={p} />;
 const CATS: PriceCat[] = ["Foto", "Video", "Drone", "360"];
 const CatIcon = ({ cat }: { cat: PriceCat }) => cat === "Foto" ? <Camera size={18} /> : cat === "Video" ? <Clapperboard size={18} /> : cat === "Drone" ? <Plane size={18} /> : <Globe2 size={18} />;
 const sub = (p: PricePackage) => p.includes.slice(0, 3).join(" · ");
@@ -49,7 +56,7 @@ export function PricelistPage({ openQuote }: { openQuote?: (id: string) => void 
     {CATS.map(cat => { const items = list.filter(p => p.cat === cat); return items.length ? <div key={cat}>
       <h4 className="pl-grp">{CAT_LABEL[cat]}</h4>
       {items.map(p => <button key={p.id} className="panel pl-pk" onClick={() => setEdit(p)}>
-        <span className={`pl-ic ${cat}`}><CatIcon cat={cat} /></span>
+        <Thumb p={p} />
         <span className="pl-x"><b>{p.name}</b><small>{sub(p)}</small>{(p.fit || p.addons?.length) && <span className="pl-tags">{p.fit && <em>{p.fit}</em>}{p.addons?.map(a => <em key={a.id} className="o">+ {a.name} {shortIdr(a.price)}</em>)}</span>}</span>
         <span className="pl-pr">{shortIdr(p.price)}<small>per {p.per}</small></span>
       </button>)}
@@ -81,6 +88,8 @@ function PackageEditor({ value, isNew, onSave, onDelete, onClose }: { value: Pri
       <label className="qb-f"><span>Jumlah utama</span><input inputMode="numeric" value={p.qty ?? ""} onChange={e => set({ qty: Number(e.target.value.replace(/\D/g, "")) || undefined })} placeholder="15" /></label>
       <label className="qb-f"><span>Satuan</span><input value={p.qtyUnit ?? ""} onChange={e => set({ qtyUnit: e.target.value })} placeholder="foto" /></label>
     </div>
+    <div className="qb-f"><span>Foto paket</span><div className="pl-imgpick">{["basic", "pro", "max", "ultra", "cinematic", "drone", "drone-video", "tour360"].map(f => `/stock/pricelist/${f}.jpg`).concat(["/stock/villa-exterior-dusk.jpg", "/stock/living-room-wood-ceiling.jpg", "/stock/villa-interior-dining.jpg", "/stock/japanese-restaurant.jpg"]).map(src => <button key={src} type="button" className={p.image === src ? "on" : ""} onClick={() => set({ image: src })} aria-label="Pilih foto"><img src={imgSrc(src)} alt="" loading="lazy" /></button>)}</div>
+      <input value={p.image?.startsWith("/") ? "" : p.image ?? ""} onChange={e => set({ image: e.target.value.trim() || undefined })} placeholder="atau tempel link foto (https://…)" /></div>
     <label className="qb-f"><span>Cocok untuk</span><input value={p.fit ?? ""} onChange={e => set({ fit: e.target.value || undefined })} placeholder="2 – 3BR" /></label>
     <label className="qb-f"><span>Termasuk (satu per baris, tampil ke klien)</span><textarea rows={4} value={inc} onChange={e => setInc(e.target.value)} placeholder={"15 foto edit\n5 foto original (tanpa edit)\nMaks. 2 jam pemotretan"} /></label>
     <label className="qb-f"><span>Add-on (satu per baris: nama | harga)</span><textarea rows={2} value={adds} onChange={e => setAdds(e.target.value)} placeholder="Drone Video | 2000000" /></label>
@@ -129,7 +138,7 @@ function SendPricelistModal({ list, onClose, onSent }: { list: PricePackage[]; o
         subtitle: form.intro.trim() ? "" : `Pricelist khusus untuk ${form.name.trim()}. Pilih paket yang paling sesuai kebutuhan Anda.`,
         cover: `${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, "")}/stock/japanese-restaurant.jpg`, intro: form.intro.trim() || undefined, client: { name: form.name.trim(), location: form.location.trim() }, sections: [], operational: [], notes: [], questions: [],
         notice: form.location.trim() && needsTransport(form.location) ? `Harga termasuk transport Jakarta Kota. Untuk ${form.location.trim()} ada biaya transport yang akan kami konfirmasi.` : "Harga termasuk transport Jakarta Kota.",
-        packages: pk.map(p => ({ id: p.id, cat: p.cat, name: p.name, price: p.price, per: p.per, fit: p.fit, includes: p.includes, addons: p.addons })) };
+        packages: absoluteImages(pk, appOrigin()).map(p => ({ id: p.id, cat: p.cat, image: p.image, name: p.name, price: p.price, per: p.per, fit: p.fit, includes: p.includes, addons: p.addons })) };
       const slug = `${slugify(`pricelist ${form.name}`).slice(0, 48).replace(/-+$/, "")}-${rid().slice(0, 4)}`;
       const published = await publishQuote(q, slug);
       try { await navigator.clipboard.writeText(linkOf(slug)); notify("Pricelist terkirim. Link disalin."); } catch { notify("Pricelist terkirim."); }

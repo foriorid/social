@@ -17,18 +17,20 @@ export type PricePackage = {
   /** Who it suits, e.g. "2–3BR". */
   fit?: string;
   addons?: PriceAddon[];
+  /** Photo for the package card: a path under public/ (e.g. /stock/pricelist/pro.jpg) or an https URL. */
+  image?: string;
 };
 
 export const CAT_LABEL: Record<PriceCat, string> = { Foto: "Foto Interior", Video: "Video", Drone: "Drone", "360": "Virtual Tour 360" };
 
 export const DEFAULT_PRICELIST: PricePackage[] = [
-  { id: "basic", cat: "Foto", name: "Basic", price: 1_500_000, per: "unit", qty: 10, qtyUnit: "foto", fit: "Studio – 1BR", includes: ["10 foto edit", "5 foto original (tanpa edit)", "Maks. 1 jam pemotretan", "Hasil dikirim dalam 5 hari"] },
-  { id: "pro", cat: "Foto", name: "Pro", price: 2_500_000, per: "unit", qty: 15, qtyUnit: "foto", fit: "2 – 3BR", includes: ["15 foto edit", "5 foto original (tanpa edit)", "Maks. 2 jam pemotretan", "Hasil dikirim dalam 5 hari"] },
-  { id: "max", cat: "Foto", name: "Max", price: 3_500_000, per: "unit", qty: 25, qtyUnit: "foto", fit: "3 – 4BR", includes: ["25 foto edit", "5 foto original (tanpa edit)", "Maks. 3 jam pemotretan", "Hasil dikirim dalam 5 hari"] },
-  { id: "ultra", cat: "Foto", name: "Ultra", price: 4_500_000, per: "unit", qty: 40, qtyUnit: "foto", fit: "4BR+", includes: ["40 foto edit", "5 foto original (tanpa edit)", "Maks. 4 jam pemotretan", "Hasil dikirim dalam 5 hari"] },
-  { id: "cinematic", cat: "Video", name: "Cinematic Video", price: 3_500_000, per: "video", qty: 1, qtyUnit: "video", includes: ["Video cinematic 2 menit", "Maks. 3 jam produksi", "Termasuk editing, 2× revisi minor", "File dikirim dalam 7 hari"], addons: [{ id: "drone-video", name: "Drone Video", price: 2_000_000 }] },
-  { id: "drone", cat: "Drone", name: "Drone Photo & Video", price: 3_500_000, per: "lokasi", qty: 15, qtyUnit: "foto", includes: ["15 foto drone edit", "Video drone 3 menit", "3 jam produksi", "File dikirim dalam 7 hari"] },
-  { id: "tour360", cat: "360", name: "Virtual Tour 360", price: 3_000_000, per: "unit", qty: 10, qtyUnit: "POV", fit: "1 – 2BR", includes: ["Kamera 360 otomatis", "Maks. 10 titik POV", "Online, web based (HTML / embed)", "Tampilan dasar desktop & mobile"] }
+  { id: "basic", image: "/stock/pricelist/basic.jpg", cat: "Foto", name: "Basic", price: 1_500_000, per: "unit", qty: 10, qtyUnit: "foto", fit: "Studio – 1BR", includes: ["10 foto edit", "5 foto original (tanpa edit)", "Maks. 1 jam pemotretan", "Hasil dikirim dalam 5 hari"] },
+  { id: "pro", image: "/stock/pricelist/pro.jpg", cat: "Foto", name: "Pro", price: 2_500_000, per: "unit", qty: 15, qtyUnit: "foto", fit: "2 – 3BR", includes: ["15 foto edit", "5 foto original (tanpa edit)", "Maks. 2 jam pemotretan", "Hasil dikirim dalam 5 hari"] },
+  { id: "max", image: "/stock/pricelist/max.jpg", cat: "Foto", name: "Max", price: 3_500_000, per: "unit", qty: 25, qtyUnit: "foto", fit: "3 – 4BR", includes: ["25 foto edit", "5 foto original (tanpa edit)", "Maks. 3 jam pemotretan", "Hasil dikirim dalam 5 hari"] },
+  { id: "ultra", image: "/stock/pricelist/ultra.jpg", cat: "Foto", name: "Ultra", price: 4_500_000, per: "unit", qty: 40, qtyUnit: "foto", fit: "4BR+", includes: ["40 foto edit", "5 foto original (tanpa edit)", "Maks. 4 jam pemotretan", "Hasil dikirim dalam 5 hari"] },
+  { id: "cinematic", image: "/stock/pricelist/cinematic.jpg", cat: "Video", name: "Cinematic Video", price: 3_500_000, per: "video", qty: 1, qtyUnit: "video", includes: ["Video cinematic 2 menit", "Maks. 3 jam produksi", "Termasuk editing, 2× revisi minor", "File dikirim dalam 7 hari"], addons: [{ id: "drone-video", name: "Drone Video", price: 2_000_000 }] },
+  { id: "drone", image: "/stock/pricelist/drone.jpg", cat: "Drone", name: "Drone Photo & Video", price: 3_500_000, per: "lokasi", qty: 15, qtyUnit: "foto", includes: ["15 foto drone edit", "Video drone 3 menit", "3 jam produksi", "File dikirim dalam 7 hari"] },
+  { id: "tour360", image: "/stock/pricelist/tour360.jpg", cat: "360", name: "Virtual Tour 360", price: 3_000_000, per: "unit", qty: 10, qtyUnit: "POV", fit: "1 – 2BR", includes: ["Kamera 360 otomatis", "Maks. 10 titik POV", "Online, web based (HTML / embed)", "Tampilan dasar desktop & mobile"] }
 ];
 
 export type PickedPackage = { id: string; qty: number; addons?: string[] };
@@ -47,7 +49,8 @@ export function packageSections(picked: PickedPackage[], list: PricePackage[]): 
     return [{
       id: rid(), title: pkg.cat === "Foto" ? `${CAT_LABEL.Foto} · ${pkg.name}` : pkg.name,
       subtitle: [n > 1 ? `${n} ${pkg.per}` : "", pkg.fit ? `cocok untuk ${pkg.fit}` : ""].filter(Boolean).join(" · "),
-      layout: "list" as const, pricing: "item" as const, includes: pkg.includes, items: [...rows, ...addons], fromPricelist: pkg.id
+      layout: "list" as const, pricing: "item" as const, includes: pkg.includes, items: [...rows, ...addons], fromPricelist: pkg.id,
+      ...(pkg.image && /^https:\/\//.test(pkg.image) ? { image: pkg.image } : {})
     }];
   });
 }
@@ -97,3 +100,8 @@ export const choiceTotal = (picks: PickedPackage[], list: PricePackage[]) => pic
   const pkg = list.find(x => x.id === p.id);
   return pkg ? s + pkg.price * p.qty + (pkg.addons ?? []).filter(a => p.addons?.includes(a.id)).reduce((t, a) => t + a.price, 0) : s;
 }, 0);
+
+/** Saved pricelists from before photos existed get the default photo of the same package. */
+export const withDefaultImages = (list: PricePackage[]) => list.map(p => (p.image ? p : { ...p, image: DEFAULT_PRICELIST.find(d => d.id === p.id)?.image }));
+/** Package photos as absolute URLs (the client page and quotations only show https images). */
+export const absoluteImages = (list: PricePackage[], origin: string) => list.map(p => (p.image && p.image.startsWith("/") ? { ...p, image: origin + p.image } : p));
