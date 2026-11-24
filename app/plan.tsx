@@ -2,6 +2,7 @@
 
 // Content Plan: pick a client and a batch, see its content as a calendar, timeline or list, and open one
 // content item into Brief / Storyboard / Desain. Clients are plan.accounts and batches are plan.campaigns.
+import { confirmDialog } from "./lib/confirm";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, Palette, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock, Code2, Copy, FileText, Film, Image as ImageIcon, Layers3, List, MoreHorizontal, Pencil, Play, Plus, Printer, Search, Send, Share2, Sparkles, Trash2, Users, X, Zap } from "lucide-react";
 import { DriveBrowser } from "./assets";
@@ -93,9 +94,9 @@ function ContentDetail({ campaign, item, onBack, onOpenStudio }: { campaign: Cam
   const photos = (item.assets ?? []).filter(a => a.kind === "Foto");
   const stage = stageOf(item.status);
 
-  const generate = () => {
+  const generate = async () => {
     if (!ready) return notify("Isi API key di Settings → AI & Models dulu.");
-    if (board.length && !window.confirm("Storyboard, hook, dan caption yang sekarang akan diganti hasil AI. Lanjutkan?")) return;
+    if (board.length && !await confirmDialog("Storyboard, hook, dan caption yang sekarang akan diganti hasil AI. Lanjutkan?")) return;
     if (!enqueue(campaign.id, item.day, false, "brief")) return notify("Agen sedang mengerjakan konten ini.");
     notify("Agen menulis brief + storyboard (±Rp 9). Hasilnya muncul di sini.");
   };
@@ -127,7 +128,7 @@ function ContentDetail({ campaign, item, onBack, onOpenStudio }: { campaign: Cam
         <select className={`cx-stage-select cx-s-${stageKey(stage)}`} aria-label="Status" value={stage} onChange={e => set({ status: e.target.value })}>{STAGES.map(s => <option key={s}>{s}</option>)}</select>
         <button className="primary-button" onClick={submit} disabled={stage === "Review"}><Send size={15} /> {stage === "Review" ? "Menunggu review" : "Ajukan review"}</button>
         <div className="cx-menu-wrap"><button className="outline-button" aria-label="Aksi lain" onClick={() => setMenu(menu === "head" ? null : "head")}><MoreHorizontal size={16} /></button>
-          {menu === "head" && <div className="floating-menu cx-menu"><button onClick={() => { setMenu(null); copy(`${item.caption}\n\n${item.hashtags ?? ""}`.trim(), "Caption"); }}>Salin caption + hashtag<Copy size={14} /></button><button className="x-danger" onClick={() => { if (!window.confirm(`Hapus konten “${item.title}”? Brief dan storyboard-nya ikut terhapus.`)) return; patchCampaign(campaign.id, c => ({ ...c, items: c.items.filter(x => x.day !== item.day) })); dropTasks(t => t.campaignId === campaign.id && t.day === item.day); onBack(); }}>Hapus konten<Trash2 size={14} /></button></div>}</div>
+          {menu === "head" && <div className="floating-menu cx-menu"><button onClick={() => { setMenu(null); copy(`${item.caption}\n\n${item.hashtags ?? ""}`.trim(), "Caption"); }}>Salin caption + hashtag<Copy size={14} /></button><button className="x-danger" onClick={async () => { if (!await confirmDialog(`Hapus konten “${item.title}”? Brief dan storyboard-nya ikut terhapus.`)) return; patchCampaign(campaign.id, c => ({ ...c, items: c.items.filter(x => x.day !== item.day) })); dropTasks(t => t.campaignId === campaign.id && t.day === item.day); onBack(); }}>Hapus konten<Trash2 size={14} /></button></div>}</div>
       </div>
     </header>
 
@@ -185,7 +186,7 @@ function ContentDetail({ campaign, item, onBack, onOpenStudio }: { campaign: Cam
         </> : <>
           <p className="cx-hint">Tambah, ubah, dan urutkan {unit} langsung di kartu. {video ? "Durasi tiap scene menyusun timeline otomatis." : "Urutan kartu = urutan slide."}</p>
           <button className="primary-button cx-wide" onClick={addScene}><Plus size={16} /> Tambah {unit}</button>
-          {!video && <div className="cx-field"><label>Mulai dari struktur slide</label><div className="cx-presets">{SLIDE_PRESETS.map(pr => <button key={pr.name} onClick={() => { if (board.length && !window.confirm(`Ganti ${board.length} slide yang ada dengan struktur “${pr.name}”?`)) return; setBoard(pr.slides.map(([label, text, sub]) => ({ label, text, sub, visual: "", audio: "" }))); }}><b>{pr.name}</b><small>{pr.slides.length} slide · {pr.hint}</small></button>)}</div></div>}
+          {!video && <div className="cx-field"><label>Mulai dari struktur slide</label><div className="cx-presets">{SLIDE_PRESETS.map(pr => <button key={pr.name} onClick={async () => { if (board.length && !await confirmDialog(`Ganti ${board.length} slide yang ada dengan struktur “${pr.name}”?`)) return; setBoard(pr.slides.map(([label, text, sub]) => ({ label, text, sub, visual: "", audio: "" }))); }}><b>{pr.name}</b><small>{pr.slides.length} slide · {pr.hint}</small></button>)}</div></div>}
         </>}
       </aside>
 
@@ -277,8 +278,8 @@ export function ContentPlanPage({ onOpenStudio, onShare, target, onTargetDone }:
     else { const id = "c" + Date.now(); setPlan(o => ({ ...o, accounts: o.accounts.includes(account) ? o.accounts : [...o.accounts, account], campaigns: [{ id, cover: "living", items: [], ...fields }, ...o.campaigns] })); setClient(account); setBatchId(id); if (form.start) setMonth({ y: Number(form.start.slice(0, 4)), m: Number(form.start.slice(5, 7)) - 1 }); notify("Campaign dibuat. Tambahkan konten atau minta AI mengusulkan judul."); }
     setModal("");
   };
-  const deleteBatch = (c: CampaignData) => {
-    if (!window.confirm(`Hapus campaign “${c.name}” beserta ${c.items.length} kontennya? Tindakan ini tidak bisa dibatalkan.`)) return;
+  const deleteBatch = async (c: CampaignData) => {
+    if (!await confirmDialog(`Hapus campaign “${c.name}” beserta ${c.items.length} kontennya? Tindakan ini tidak bisa dibatalkan.`)) return;
     setPlan(o => ({ ...o, campaigns: o.campaigns.filter(x => x.id !== c.id) })); dropTasks(t => t.campaignId === c.id); setBatchId(""); setModal(""); notify("Campaign dihapus.");
   };
   const openNewContent = (date = "") => { if (!scope.length) return openNewBatch(); setDraft({ title: "", format: "Reels", date, batch: batch?.id ?? scope[0].id }); setModal("content"); };
@@ -300,7 +301,7 @@ export function ContentPlanPage({ onOpenStudio, onShare, target, onTargetDone }:
   const downloadBatch = (d: CampaignData) => { const url = URL.createObjectURL(new Blob([campaignHtml(d)], { type: "text/html;charset=utf-8" })); const a = document.createElement("a"); a.href = url; a.download = d.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-content-plan.html"; a.click(); URL.revokeObjectURL(url); };
   const addClient = () => { const n = form.account.trim(); if (!n) return; if (plan.accounts.includes(n)) return notify("Klien itu sudah ada."); setPlan(o => ({ ...o, accounts: [...o.accounts, n] })); pickClient(n); setModal(""); };
   const renameClient = () => { const from = activeClient, to = form.account.trim(); if (!to || to === from) return setModal(""); if (plan.accounts.includes(to)) return notify("Nama klien itu sudah ada."); setPlan(o => { const kits = { ...o.brandKits }; if (kits[from]) { kits[to] = kits[from]; delete kits[from]; } return { ...o, brandKits: kits, accounts: o.accounts.map(a => (a === from ? to : a)), campaigns: o.campaigns.map(c => (c.account === from ? { ...c, account: to } : c)) }; }); setClient(to); setModal(""); };
-  const deleteClient = () => { const name = activeClient, owned = plan.campaigns.filter(c => c.account === name); if (!window.confirm(owned.length ? `Hapus klien “${name}” beserta ${owned.length} campaign di dalamnya?` : `Hapus klien “${name}”?`)) return; const ids = new Set(owned.map(c => c.id)); setPlan(o => { const kits = { ...o.brandKits }; delete kits[name]; return { ...o, brandKits: kits, accounts: o.accounts.filter(a => a !== name), campaigns: o.campaigns.filter(c => c.account !== name) }; }); dropTasks(t => ids.has(t.campaignId)); pickClient(""); setModal(""); };
+  const deleteClient = async () => { const name = activeClient, owned = plan.campaigns.filter(c => c.account === name); if (!await confirmDialog(owned.length ? `Hapus klien “${name}” beserta ${owned.length} campaign di dalamnya?` : `Hapus klien “${name}”?`)) return; const ids = new Set(owned.map(c => c.id)); setPlan(o => { const kits = { ...o.brandKits }; delete kits[name]; return { ...o, brandKits: kits, accounts: o.accounts.filter(a => a !== name), campaigns: o.campaigns.filter(c => c.account !== name) }; }); dropTasks(t => ids.has(t.campaignId)); pickClient(""); setModal(""); };
 
   const byDate = new Map<string, Row[]>();
   shown.forEach(r => { const d = dateOf(r.x); if (d) byDate.set(d, [...(byDate.get(d) ?? []), r]); });

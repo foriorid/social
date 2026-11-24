@@ -2,6 +2,7 @@
 
 // Team side of the Client Review Portal: publish a batch snapshot to a private link, see the client's
 // decisions and comments, and reply. Rules shared with the public Edge Function live in review.ts.
+import { confirmDialog } from "./lib/confirm";
 import { useCallback, useEffect, useState } from "react";
 import { Check, Copy, ExternalLink, Link2, Loader2, MessageSquare, RefreshCw, Send, ShieldOff } from "lucide-react";
 import { readCloud, supabase } from "./lib/cloud";
@@ -87,7 +88,7 @@ export function ReviewPanel({ campaign, review }: { campaign: CampaignData; revi
     {p && <><div className="rv-progress"><b>{Math.round((p.approved / Math.max(1, p.total)) * 100)}%</b><span>{p.approved}/{p.total} disetujui{p.revision ? ` · ${p.revision} revisi` : ""}</span></div><i className="cx-bar-mini rv-bar"><em style={{ width: `${(p.approved / Math.max(1, p.total)) * 100}%` }} /></i></>}
     {general.length > 0 && <div className="rv-general"><MessageSquare size={14} /><span><b>{general.at(-1)!.by}:</b> {general.at(-1)!.text}</span></div>}
     {!row.revoked && <code className="rv-link">{reviewLink(row.token).replace(/^https?:\/\//, "")}</code>}
-    {!row.revoked && !row.token.includes("-") && <button className="cx-link rv-tidy" disabled={busy} onClick={() => { if (window.confirm("Ganti ke link yang rapi? Link lama tidak bisa dibuka lagi, jadi kirim link baru ke klien.")) tidy(campaign); }}>Rapikan alamat link</button>}
+    {!row.revoked && !row.token.includes("-") && <button className="cx-link rv-tidy" disabled={busy} onClick={async () => { if (await confirmDialog("Ganti ke link yang rapi? Link lama tidak bisa dibuka lagi, jadi kirim link baru ke klien.")) tidy(campaign); }}>Rapikan alamat link</button>}
     {changes > 0 && !row.revoked && <p className="rv-changes">{changes} konten berubah sejak dibagikan. Perbarui agar klien melihat versi terbaru. Konten yang berubah perlu disetujui ulang.</p>}
     <div className="cx-batch-actions">
       {row.revoked ? <button className="primary-button" disabled={busy} onClick={() => setRevoked(false)}><Check size={14} /> Aktifkan lagi</button> : <>
@@ -96,7 +97,7 @@ export function ReviewPanel({ campaign, review }: { campaign: CampaignData; revi
         <button className={changes ? "primary-button" : "outline-button"} disabled={busy} onClick={() => publish(campaign)}><RefreshCw size={14} /> Perbarui{changes ? ` (${changes})` : ""}</button>
       </>}
     </div>
-    <p className="cx-hint">Terakhir dibagikan {when(row.snapshot.publishedAt)}.{!row.revoked && <> <button className="cx-link" onClick={() => { if (window.confirm("Nonaktifkan link? Klien tidak bisa membukanya lagi; feedback tetap tersimpan.")) setRevoked(true); }}><ShieldOff size={12} /> Nonaktifkan</button></>}</p>
+    <p className="cx-hint">Terakhir dibagikan {when(row.snapshot.publishedAt)}.{!row.revoked && <> <button className="cx-link" onClick={async () => { if (await confirmDialog("Nonaktifkan link? Klien tidak bisa membukanya lagi; feedback tetap tersimpan.")) setRevoked(true); }}><ShieldOff size={12} /> Nonaktifkan</button></>}</p>
   </div>;
 }
 

@@ -3420,6 +3420,19 @@ body:has(.qb-pick) .qb-bottom, body:has(.qb-pick) .qb-fab { display:none; } .qb-
 .qb-howto { margin:4px 2px 8px; } .qb-howto b { color:#3d2a7a; }
 .qb-sub { font-weight:500; color:#8a83a0; font-size:11.5px; margin-left:4px; }
 
+/* Hub confirmation dialog (lib/confirm.tsx), replaces window.confirm */
+.cf-back { position:fixed; inset:0; z-index:300; display:grid; place-items:center; padding:20px; background:rgba(24,16,39,.42); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); animation:cf-fade .15s ease; }
+.cf-box { width:min(420px,100%); background:#fff; border-radius:22px; padding:22px 22px 18px; box-shadow:0 24px 60px -12px rgba(42,27,71,.4); text-align:left; animation:cf-pop .18s cubic-bezier(.2,.9,.3,1.2); }
+.cf-ic { width:44px; height:44px; border-radius:14px; display:grid; place-items:center; background:#efe8fc; color:#6d3fe0; margin-bottom:14px; }
+.cf-ic.danger { background:#fdecec; color:#c0392b; }
+.cf-box h3 { margin:0 0 6px; font-family:Manrope,sans-serif; font-size:19px; font-weight:800; color:var(--ink); }
+.cf-box p { margin:0; font-size:14px; line-height:1.55; color:#5d5770; }
+.cf-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:20px; }
+.cf-actions button { min-height:46px; justify-content:center; font-weight:700; }
+.cf-danger { background:#c0392b !important; border-color:#c0392b !important; box-shadow:0 8px 18px -8px rgba(192,57,43,.6) !important; }
+@keyframes cf-fade { from { opacity:0; } } @keyframes cf-pop { from { opacity:0; transform:translateY(8px) scale(.97); } }
+@media (max-width:600px) { .cf-back { place-items:end center; padding:0 12px calc(16px + env(safe-area-inset-bottom)); } .cf-box { border-radius:22px; } }
+
 /* ---------- Dark mode (Settings › Profil › Tampilan). Generated from scratchpad dark-src.css; scoped to html[data-theme=dark]. ---------- */
 html[data-theme="dark"] { --ink:#ece8f6; --muted:#a49cb8; --line:#2c2640; --lavender:#241f35; color-scheme:dark; }
 html[data-theme="dark"] body, html[data-theme="dark"] .app-shell, html[data-theme="dark"] .main-area { background:#0f0c17 !important; color:#ece8f6; }
@@ -3509,3 +3522,8 @@ html[data-theme="dark"] .sc-setup ol, html[data-theme="dark"] .sc-setup li, html
 html[data-theme="dark"] .qb-kinds button { background:#1a1625 !important; border-color:#2c2640 !important; color:#c9c2dc !important; }
 html[data-theme="dark"] .qb-kinds button.on { background:#ece8f6 !important; border-color:#ece8f6 !important; color:#14111e !important; }
 html[data-theme="dark"] .qb-howto b { color:#c7b2ff !important; }
+html[data-theme="dark"] .cf-box { background:#1a1625 !important; border:1px solid #2c2640; }
+html[data-theme="dark"] .cf-box p { color:#a49cb8 !important; }
+html[data-theme="dark"] .cf-ic { background:rgba(135,86,232,.18) !important; color:#c7b2ff !important; }
+html[data-theme="dark"] .cf-ic.danger { background:rgba(239,68,68,.15) !important; color:#fca5a5 !important; }
+html[data-theme="dark"] .cf-back { background:rgba(5,3,10,.6) !important; }

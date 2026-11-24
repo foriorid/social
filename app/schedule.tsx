@@ -2,6 +2,7 @@
 
 // Jadwal Shoot: shoots (projects with a shoot date) and events from several connected Google Calendars in one
 // month view. New shoots can be created here directly; they become a project and, optionally, a Calendar event.
+import { confirmDialog } from "./lib/confirm";
 import { useCallback, useEffect, useState } from "react";
 import { CalendarDays, Users, Check, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, Link2, Loader2, MapPin, Plus, RefreshCw, Star, Trash2, X } from "lucide-react";
 import { SUPABASE_URL, readCloud, supabase } from "./lib/cloud";
@@ -102,7 +103,7 @@ export function CalendarPage({ openGallery }: { openGallery: (id: string) => voi
     if (error) return notify(error.message); loadBase();
   };
   const disconnect = async (a: Account) => {
-    if (!window.confirm(`Lepas ${a.email}? Event yang sudah dibuat tetap ada di Google Calendar.`)) return;
+    if (!await confirmDialog(`Lepas ${a.email}? Event yang sudah dibuat tetap ada di Google Calendar.`)) return;
     try { await gcal("disconnect", { accountId: a.id }); notify(`${a.email} dilepas.`); loadBase(); } catch (e) { notify(e instanceof Error ? e.message : String(e)); }
   };
   const pushToCalendar = async (r: Row, accountId: string, extra: Partial<Sync> = {}) => {

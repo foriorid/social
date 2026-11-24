@@ -2,6 +2,7 @@
 
 // Photo Delivery (admin): client galleries fed from Google Drive folders. Copied from the FORIOR Workspace
 // module with the same workflow and data shape; stored in Supabase `galleries` (owner-only via RLS).
+import { confirmDialog } from "./lib/confirm";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUpDown, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Download, ExternalLink, FileText, FolderOpen, Heart, History, Images, LayoutGrid, Link2, List, Mail, MessageCircle, MessageSquare, MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, User, X } from "lucide-react";
@@ -108,7 +109,7 @@ function DeliveryInner() {
     return true;
   };
   const remove = async (row: Row) => {
-    if (!window.confirm(`Hapus galeri “${row.data.title}”? Link klien akan berhenti bekerja. Foto di Google Drive tidak terhapus.`)) return;
+    if (!await confirmDialog(`Hapus galeri “${row.data.title}”? Link klien akan berhenti bekerja. Foto di Google Drive tidak terhapus.`)) return;
     const { error } = await supabase.from("galleries").delete().eq("id", row.id);
     if (error) return notify(`Gagal menghapus: ${error.message}`);
     setRows(rs => rs.filter(r => r.id !== row.id)); setOpenId(null); notify("Galeri dihapus.");
@@ -370,8 +371,8 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
       return true;
     } catch (e) { notify(e instanceof Error ? e.message : String(e)); return false; }
   };
-  const changePhase = (p: string) => {
-    if (p === "Preview" && g.previewSubmittedAt && !window.confirm("Buka kembali pemilihan? Klien bisa mengubah pilihan lalu mengirim ulang. Pilihan dan catatan yang ada tetap tersimpan.")) return;
+  const changePhase = async (p: string) => {
+    if (p === "Preview" && g.previewSubmittedAt && !await confirmDialog("Buka kembali pemilihan? Klien bisa mengubah pilihan lalu mengirim ulang. Pilihan dan catatan yang ada tetap tersimpan.")) return;
     onSave(setPhase(g, p)).then(ok => ok && notify(`Tahap diubah ke ${PHASE_SHORT[p as Phase] ?? p}.`));
   };
   const resolve = (id: string, status: "Open" | "Resolved") => onSave({ ...g, revisions: g.revisions.map(r => (r.id === id ? { ...r, status } : r)) });
