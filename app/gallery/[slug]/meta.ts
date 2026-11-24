@@ -11,7 +11,7 @@ export async function galleryFor(slug: string): Promise<Omit<Gallery, "notes"> |
   try {
     const r = await fetch(`${SUPABASE_URL}/functions/v1/gallery`, {
       method: "POST", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ slug, action: "get" }), signal: AbortSignal.timeout(3000), next: { revalidate: 300 }
+      body: JSON.stringify({ slug, action: "get" }), signal: AbortSignal.timeout(7000), cache: "no-store"
     });
     return r.ok ? await r.json() : null;
   } catch { return null; }

@@ -2,7 +2,7 @@
 // (previewers handle a plain image URL here more reliably than Drive's redirecting thumbnail links).
 import { coverIdOf, galleryFor } from "../meta";
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 export async function GET(req: Request, ctx: { params: Promise<{ slug: string }> }) {
   const { slug } = await ctx.params;
@@ -14,6 +14,6 @@ export async function GET(req: Request, ctx: { params: Promise<{ slug: string }>
     const r = await fetch(`https://drive.google.com/thumbnail?id=${id}&sz=w1200`, { redirect: "follow", signal: AbortSignal.timeout(5000) });
     const type = r.headers.get("content-type") ?? "";
     if (!r.ok || !type.startsWith("image/") || !r.body) return fallback();
-    return new Response(r.body, { headers: { "Content-Type": type, "Cache-Control": "public, max-age=3600, s-maxage=86400" } });
+    return new Response(r.body, { headers: { "Content-Type": type, "Cache-Control": "public, max-age=600, s-maxage=3600" } });
   } catch { return fallback(); }
 }
