@@ -21,6 +21,7 @@ export type PricePackage = {
   image?: string;
 };
 
+const KIND_OF = { Foto: "photo", Video: "video", Drone: "drone", "360": "360" } as const;
 export const CAT_LABEL: Record<PriceCat, string> = { Foto: "Foto Interior", Video: "Video", Drone: "Drone", "360": "Virtual Tour 360" };
 
 export const DEFAULT_PRICELIST: PricePackage[] = [
@@ -43,9 +44,9 @@ export function packageSections(picked: PickedPackage[], list: PricePackage[]): 
     const n = Math.max(1, Math.min(50, Math.round(p.qty) || 1));
     const rows = Array.from({ length: n }, (_, k) => ({
       id: rid(), name: n > 1 ? `${pkg.per === "unit" ? "Unit" : pkg.per[0].toUpperCase() + pkg.per.slice(1)} ${k + 1}` : pkg.name,
-      qty: pkg.qty, unit: pkg.qtyUnit, price: pkg.price, list: pkg.price
+      qty: pkg.qty, unit: pkg.qtyUnit, price: pkg.price, list: pkg.price, kind: KIND_OF[pkg.cat]
     }));
-    const addons = (pkg.addons ?? []).filter(a => p.addons?.includes(a.id)).map(a => ({ id: rid(), name: `Add-on: ${a.name}`, price: a.price, list: a.price }));
+    const addons = (pkg.addons ?? []).filter(a => p.addons?.includes(a.id)).map(a => ({ id: rid(), name: `Add-on: ${a.name}`, price: a.price, list: a.price, kind: /drone/i.test(a.name) ? "drone" as const : KIND_OF[pkg.cat] }));
     return [{
       id: rid(), title: pkg.cat === "Foto" ? `${CAT_LABEL.Foto} · ${pkg.name}` : pkg.name,
       subtitle: [n > 1 ? `${n} ${pkg.per}` : "", pkg.fit ? `cocok untuk ${pkg.fit}` : ""].filter(Boolean).join(" · "),
