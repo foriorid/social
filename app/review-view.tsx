@@ -2,6 +2,7 @@
 
 // Client Review Portal (no login). One private link per batch: the client scans all content, opens one,
 // and approves, asks for revision, or comments (per scene too). Rules live in supabase/functions/review/review.ts.
+import { confirmDialog } from "./lib/confirm";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, FileText, HelpCircle, Image as ImageIcon, Layers3, Loader2, MessageSquare, Pencil, Play, Send, Target, X } from "lucide-react";
 import { supabase } from "./lib/cloud";
@@ -154,7 +155,7 @@ export function PublicReviewPage() {
         <div className="rv-card"><h3>Informasi campaign</h3><dl className="rv-dl"><dt><CalendarDays size={15} /> Periode</dt><dd>{s.period || "-"}</dd><dt><Target size={15} /> Tujuan</dt><dd>{s.goal}</dd><dt><Layers3 size={15} /> Total konten</dt><dd>{s.items.length} konten</dd><dt><Clock size={15} /> Diperbarui</dt><dd>{when(s.publishedAt)}</dd></dl>
           {s.brief && <p className="rv-brief">{s.brief}</p>}</div>
         <div className="rv-card"><h3><FileText size={17} /> Catatan untuk review</h3><ul className="rv-tips"><li>Review setiap konten, lalu setujui atau beri catatan revisi.</li><li>Klik “Lihat detail” untuk melihat storyboard (Reels), slide (Carousel), atau desain (Feed).</li><li>Revisi dapat diajukan per konten, komentar bisa per scene.</li></ul></div>
-        <button className="primary-button rv-all" disabled={busy || p.approved === p.total} onClick={() => { if (window.confirm(`Setujui ${p.total - p.approved} konten yang belum disetujui?`)) act({ action: "approve-all" }); }}><Check size={17} /> {p.approved === p.total ? "Seluruh konten disetujui" : `Setujui seluruh konten (${p.total - p.approved})`}</button>
+        <button className="primary-button rv-all" disabled={busy || p.approved === p.total} onClick={async () => { if (await confirmDialog(`Setujui ${p.total - p.approved} konten yang belum disetujui?`)) act({ action: "approve-all" }); }}><Check size={17} /> {p.approved === p.total ? "Seluruh konten disetujui" : `Setujui seluruh konten (${p.total - p.approved})`}</button>
         <div className="rv-card"><h3><MessageSquare size={17} /> Catatan umum</h3>
           {notes.length > 0 && <ul className="rv-comments">{notes.map(c => <li key={c.id} className={c.team ? "team" : ""}><span className="rv-av">{c.by[0]}</span><div><b>{c.by}</b><p>{c.text}</p><small>{when(c.at)}</small></div></li>)}</ul>}
           <div className="rv-compose"><textarea rows={2} maxLength={1000} value={general} onChange={e => setGeneral(e.target.value)} placeholder="Masukan untuk seluruh campaign…" aria-label="Catatan umum" /><button className="primary-button" disabled={busy || !general.trim()} onClick={async () => { if (await act({ action: "comment", day: 0, text: general })) setGeneral(""); }} aria-label="Kirim catatan umum"><Send size={15} /></button></div>

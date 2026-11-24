@@ -1,6 +1,7 @@
 "use client";
 
 // Campaign stock UI: link one Google Drive folder per campaign, index it, and pick or auto-fill scene pictures.
+import { confirmDialog } from "./lib/confirm";
 import { useState } from "react";
 import { FolderOpen, Loader2, RefreshCw, Sparkles, Unlink } from "lucide-react";
 import { driveThumb, indexStock } from "./assets";
@@ -34,7 +35,7 @@ export function StockCard({ campaign }: { campaign: CampaignData }) {
       : stock ? <>
         <div className="sk-counts"><span><b>{count("Foto")}</b> foto</span><span><b>{count("Video")}</b> video</span><span><b>{count("Audio")}</b> audio</span></div>
         <div className="bk-pills">{topTags(stock.files, 8).map(t => <em key={t.tag}>{t.tag} · {t.count}</em>)}</div>
-        <p className="cx-hint">Diindeks {when(stock.indexedAt)} · <a href={stock.url} target="_blank" rel="noreferrer">Buka folder</a> · <button className="cx-link" onClick={() => { if (window.confirm("Lepas folder stok dari campaign ini? Gambar yang sudah dipakai di storyboard tetap ada.")) patchCampaign(campaign.id, c => ({ ...c, stock: undefined })); }}><Unlink size={12} /> Lepas</button></p>
+        <p className="cx-hint">Diindeks {when(stock.indexedAt)} · <a href={stock.url} target="_blank" rel="noreferrer">Buka folder</a> · <button className="cx-link" onClick={async () => { if (await confirmDialog("Lepas folder stok dari campaign ini? Gambar yang sudah dipakai di storyboard tetap ada.")) patchCampaign(campaign.id, c => ({ ...c, stock: undefined })); }}><Unlink size={12} /> Lepas</button></p>
       </>
       : <>
         <p className="cx-hint">Tautkan satu folder Drive berisi foto, video, dan audio campaign ini. Subfolder (mis. <i>Pool</i>, <i>Kitchen</i>, <i>Bedroom</i>) dipakai sebagai tag untuk mengisi storyboard otomatis.</p>
@@ -72,8 +73,8 @@ export function FillButton({ campaign, item }: { campaign: CampaignData; item: C
   if (!item.board?.length) return null;
   if (!campaign.stock?.files.length) return <span className="cx-hint">Tautkan folder stok di panel campaign untuk isi gambar otomatis.</span>;
   const empty = item.board.filter(s => !s.image).length;
-  return <button className="outline-button" onClick={() => {
-    if (!empty && !window.confirm("Semua scene sudah bergambar. Pilih ulang semuanya dari stok?")) return;
+  return <button className="outline-button" onClick={async () => {
+    if (!empty && !await confirmDialog("Semua scene sudah bergambar. Pilih ulang semuanya dari stok?")) return;
     const n = fillFromStock(campaign, item, !empty);
     notify(n ? `${n} scene diisi dari stok.` : "Tidak ada stok yang cocok. Coba tambah subfolder atau tag di nama file.");
   }}><Sparkles size={14} /> {empty ? `Isi ${empty} scene dari stok` : "Pilih ulang dari stok"}</button>;

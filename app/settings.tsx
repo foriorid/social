@@ -2,6 +2,7 @@
 
 // Settings: everything the old eight tabs held, grouped into four (Workspace, AI & Models, Integrasi, Akses)
 // with collapsible cards so a phone screen shows a short list instead of one long page.
+import { confirmDialog } from "./lib/confirm";
 import { useState } from "react";
 import { Bell, Bot, UserRound, BriefcaseBusiness, Calculator, Check, ChevronDown, Cloud as CloudIcon, Database, Info, Instagram, KeyRound, Layers, Music2, ShieldCheck, Sparkles, Trash2, Users, WandSparkles, Youtube, CalendarDays, Gauge, History } from "lucide-react";
 import { AccountPanel, AiButton, AiError, KeyField, MODELS, notify, TRIGGERS, useAI, useCloud, useMonthUsage } from "./modules";
@@ -174,7 +175,7 @@ function AiUsage() {
       <div><small>Token masuk</small><b>{usage.inputTokens.toLocaleString("id-ID")}</b><em>prompt + konteks brand</em></div>
       <div><small>Token keluar</small><b>{usage.outputTokens.toLocaleString("id-ID")}</b><em>hasil tulisan</em></div>
     </div>
-    <div className="sx-hrow"><h3 className="sx-h">Riwayat ({log.length} panggilan terakhir)</h3>{log.length > 0 && <button className="outline-button" onClick={() => { if (window.confirm("Kosongkan riwayat biaya?")) setLog([]); }}><Trash2 size={14} /> Kosongkan</button>}</div>
+    <div className="sx-hrow"><h3 className="sx-h">Riwayat ({log.length} panggilan terakhir)</h3>{log.length > 0 && <button className="outline-button" onClick={async () => { if (await confirmDialog("Kosongkan riwayat biaya?")) setLog([]); }}><Trash2 size={14} /> Kosongkan</button>}</div>
     <div className="sx-chips">{["", ...CATS.map(c => c[0]), "Lainnya"].map(c => <button key={c || "all"} className={cat === c ? "on" : ""} onClick={() => setCat(c)}>{c || "Semua"}</button>)}</div>
     {!rows.length ? <p className="x-empty">Belum ada panggilan{cat ? " di kategori ini" : " sejak fitur ini aktif"}.</p> :
       <div className="sx-list sx-log">{(all ? rows : rows.slice(0, 10)).map(c => <div key={c.at + c.label} className="sx-row sx-static"><span className="sx-x"><b>{c.label}</b><small>{new Date(c.at).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {c.model.replace("claude-", "")} · {c.input.toLocaleString("id-ID")} / {c.output.toLocaleString("id-ID")} token</small></span><b className={settings.maxCallIdr > 0 && c.idr > settings.maxCallIdr ? "sx-over" : ""}>{rupiah(c.idr)}</b></div>)}</div>}

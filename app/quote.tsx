@@ -2,6 +2,7 @@
 
 // Penawaran: upload a ready-made HTML quotation and get a link to send to the client.
 // The file is stored as-is in the Storage bucket `quotes` as <slug>.html; /quote/<slug>/ shows it.
+import { confirmDialog } from "./lib/confirm";
 import { useEffect, useState } from "react";
 import { Copy, ExternalLink, FileText, Pencil, RefreshCw, Trash2, Upload } from "lucide-react";
 import { supabase } from "./lib/cloud";
@@ -46,7 +47,7 @@ function HtmlQuotes() {
     if (!file) { setError("Pilih file HTML dulu."); return; }
     if (!isSlug(slug)) { setError("Nama link hanya boleh huruf kecil, angka, dan tanda minus (3–63 karakter). Contoh: mytepro"); return; }
     const exists = !!items?.some(i => i.slug === slug);
-    if (exists && !window.confirm(`Link "${slug}" sudah ada. Ganti dengan file ini?`)) return;
+    if (exists && !await confirmDialog(`Link "${slug}" sudah ada. Ganti dengan file ini?`)) return;
     setBusy(true);
     const { error } = await supabase.storage.from(BUCKET).upload(`${slug}.html`, file, { contentType: "text/html; charset=utf-8", cacheControl: "0", upsert: exists });
     setBusy(false);
@@ -74,7 +75,7 @@ function HtmlQuotes() {
   };
 
   const remove = async (s: string) => {
-    if (!window.confirm(`Hapus penawaran "${s}"? Link-nya tidak akan bisa dibuka lagi.`)) return;
+    if (!await confirmDialog(`Hapus penawaran "${s}"? Link-nya tidak akan bisa dibuka lagi.`)) return;
     const { error } = await supabase.storage.from(BUCKET).remove([`${s}.html`]);
     if (error) { notify(`Gagal menghapus: ${error.message}`); return; }
     notify("Penawaran dihapus.");

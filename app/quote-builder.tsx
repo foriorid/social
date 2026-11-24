@@ -3,6 +3,7 @@
 // Penawaran › Builder: quotations made as data in Hub, published as hub.forior.id/quote/<slug>/.
 // Drafts live in the workspace store ("quotes"); publishing writes a client-safe <slug>.json to the public
 // Storage bucket `quotes`, with photos under img/<quote id>/. The page itself is rendered by app/lib/quote.ts.
+import { confirmDialog } from "./lib/confirm";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, Check, Copy, Eye, MoreHorizontal, Pencil, Search, FileText, Image as ImageIcon, Link2, Loader2, MessageCircle, Plus, RefreshCw, Sparkles, Trash2, Upload, X, ChevronDown, ChevronUp, CopyPlus, ExternalLink, Send, Undo2, Images, FolderPlus, Camera, Clapperboard, Globe, Circle } from "lucide-react";
@@ -157,7 +158,7 @@ export function QuoteBuilder() {
   const create = () => { const q = newQuote(); setQuotes(list => [q, ...list]); setOpenId(q.id); };
   const duplicate = (src: Quote) => { const now = new Date().toISOString(); const copy: Quote = { ...structuredClone(src), id: rid() + rid(), slug: "", status: "draft", publishedAt: undefined, eyebrow: src.eyebrow.replace(/\d+/, d => String(Number(d) + 1)), createdAt: now, updatedAt: now }; setQuotes(list => [copy, ...list]); setOpenId(copy.id); notify("Penawaran diduplikat. Edit sebagai opsi berikutnya."); };
   const remove = async (src: Quote) => {
-    if (!window.confirm(`Hapus penawaran "${src.title || "tanpa judul"}"?${src.publishedAt ? " Link-nya juga akan berhenti." : ""}`)) return;
+    if (!await confirmDialog(`Hapus penawaran "${src.title || "tanpa judul"}"?${src.publishedAt ? " Link-nya juga akan berhenti." : ""}`)) return;
     if (src.publishedAt && src.slug) { const { error } = await supabase.storage.from(BUCKET).remove([`${src.slug}.json`]); if (error) return notify(`Gagal menghapus link: ${error.message}`); }
     setQuotes(list => list.filter(x => x.id !== src.id)); setOpenId(null); notify("Penawaran dihapus.");
   };
@@ -201,7 +202,7 @@ function QuoteEditor({ quote: q, opens, answers, approval, notChosen, onChange, 
   const html = useMemo(() => renderQuoteHtml(publicSnapshot(q), { preview: true }), [q]);
   const dirty = isDirty(q);
   // The client approved the version they saw; changing the link after that needs a deliberate yes.
-  const onUpdate = async () => { if (approval && !window.confirm(`${approval.name} sudah menyetujui versi sebelumnya. Tetap perbarui link?`)) return; await update(); };
+  const onUpdate = async () => { if (approval && !await confirmDialog(`${approval.name} sudah menyetujui versi sebelumnya. Tetap perbarui link?`)) return; await update(); };
 
   return <div className="qb-editor">
     <BackButton label="Penawaran" onClick={onBack} />
@@ -270,9 +271,9 @@ function BriefTab({ q, set, onDone }: { q: Quote; set: (p: Partial<Quote>) => vo
       brief: { chat: chatText, files: files.map(f => ({ name: f.name, size: f.size, type: f.type })), summary: summaryOf(d) } });
     notify(fromList.length ? `Penawaran terisi: ${fromList.length} paket dari pricelist sudah berharga. Cek lalu kirim.` : "Penawaran terisi dari brief. Tinggal isi harga dan foto."); onDone();
   };
-  const apply = () => {
+  const apply = async () => {
     if (!draft) return;
-    if (!window.confirm("Isi penawaran yang sudah ada akan diganti dengan draf dari brief. Lanjutkan?")) return;
+    if (!await confirmDialog("Isi penawaran yang sudah ada akan diganti dengan draf dari brief. Lanjutkan?")) return;
     applyDraft(draft);
   };
   return <>
@@ -354,7 +355,7 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
         <div className="qb-sec-tools">
           <button className="qb-icon" aria-label="Naikkan seksi" onClick={() => move(s.id, -1)}><ChevronUp size={16} /></button>
           <button className="qb-icon" aria-label="Turunkan seksi" onClick={() => move(s.id, 1)}><ChevronDown size={16} /></button>
-          <button className="outline-button x-danger" onClick={() => { if (window.confirm(`Hapus seksi "${s.title || "tanpa judul"}" beserta ${s.items.length} item di dalamnya?`)) set({ sections: q.sections.filter(x => x.id !== s.id) }); }}><Trash2 size={14} /> Hapus seksi</button>
+          <button className="outline-button x-danger" onClick={async () => { if (await confirmDialog(`Hapus seksi "${s.title || "tanpa judul"}" beserta ${s.items.length} item di dalamnya?`)) set({ sections: q.sections.filter(x => x.id !== s.id) }); }}><Trash2 size={14} /> Hapus seksi</button>
         </div>
         <div className="qb-grid">
           <F label="Judul seksi" wide><input value={s.title} onChange={e => setSection(s.id, { title: e.target.value })} /></F>
@@ -617,7 +618,7 @@ function SendTab({ q, set, opens, answers, approval, notChosen, dirty, onDuplica
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
   const unpublish = async () => {
-    if (!window.confirm("Tarik penawaran ini? Link-nya tidak bisa dibuka lagi sampai dikirim ulang.")) return;
+    if (!await confirmDialog("Tarik penawaran ini? Link-nya tidak bisa dibuka lagi sampai dikirim ulang.")) return;
     const { error: e } = await supabase.storage.from(BUCKET).remove([`${q.slug}.json`]);
     if (e) return notify(`Gagal: ${e.message}`);
     set({ status: "draft", publishedAt: undefined }); notify("Link ditarik.");

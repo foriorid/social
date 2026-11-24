@@ -1,6 +1,7 @@
 "use client";
 
 // Penawaran › Pricelist: FORIOR's packages (one source of prices), and the picker that drops them into a quotation.
+import { confirmDialog } from "./lib/confirm";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Camera, Check, Clapperboard, Copy, ExternalLink, FolderPlus, Globe2, Images, Loader2, MessageCircle, Minus, Plane, Plus, Send, Trash2, X } from "lucide-react";
@@ -41,7 +42,7 @@ export function PricelistPage({ openQuote }: { openQuote?: (id: string) => void 
   if (current) return <PricelistLinkDetail q={current} opens={opens[current.slug]} approval={approvals[current.slug]} onBack={() => setOpenId(null)}
     onChange={next => setQuotes(l => l.map(x => (x.id === next.id ? next : x)))} onDelete={() => { setQuotes(l => l.filter(x => x.id !== current.id)); setOpenId(null); }} openQuote={openQuote} addQuote={q => setQuotes(l => [q, ...l])} />;
   const save = (p: PricePackage) => { setList(l => (l.some(x => x.id === p.id) ? l.map(x => (x.id === p.id ? p : x)) : [...l, p])); setEdit(null); notify("Pricelist disimpan."); };
-  const remove = (p: PricePackage) => { if (!window.confirm(`Hapus paket "${p.name}" dari pricelist? Penawaran yang sudah dibuat tidak berubah.`)) return; setList(l => l.filter(x => x.id !== p.id)); setEdit(null); };
+  const remove = async (p: PricePackage) => { if (!await confirmDialog(`Hapus paket "${p.name}" dari pricelist? Penawaran yang sudah dibuat tidak berubah.`)) return; setList(l => l.filter(x => x.id !== p.id)); setEdit(null); };
   return <section className="pl-page">
     <button className="pl-send" onClick={() => setSending(true)}><span><Send size={18} /></span><span><b>Kirim pricelist ke klien</b><small>Link pribadi, klien pilih paket sendiri</small></span></button>
     {sentLinks.length > 0 && <><h4 className="pl-grp">Pricelist terkirim · {sentLinks.length}</h4>
@@ -62,7 +63,7 @@ export function PricelistPage({ openQuote }: { openQuote?: (id: string) => void 
       </button>)}
     </div> : null; })}
     <button className="primary-button qb-wide" onClick={() => setEdit({ id: rid(), cat: "Foto", name: "", price: 0, per: "unit", includes: [] })}><Plus size={15} /> Paket baru</button>
-    <button className="outline-button qb-wide" onClick={() => { if (window.confirm("Kembalikan pricelist ke versi FORIOR 2026? Perubahan Anda di pricelist akan hilang (penawaran tidak berubah).")) setList(DEFAULT_PRICELIST); }}>Kembalikan ke pricelist 2026</button>
+    <button className="outline-button qb-wide" onClick={async () => { if (await confirmDialog("Kembalikan pricelist ke versi FORIOR 2026? Perubahan Anda di pricelist akan hilang (penawaran tidak berubah).")) setList(DEFAULT_PRICELIST); }}>Kembalikan ke pricelist 2026</button>
     {edit && <PackageEditor value={edit} isNew={!list.some(x => x.id === edit.id)} onSave={save} onDelete={() => remove(edit)} onClose={() => setEdit(null)} />}
   </section>;
 }
@@ -172,7 +173,7 @@ function PricelistLinkDetail({ q, opens, approval, onBack, onChange, onDelete, o
     addQuote(full); notify("Draf penawaran dibuat dari pilihan klien."); openQuote?.(full.id);
   };
   const remove = async () => {
-    if (!window.confirm(`Hapus pricelist untuk ${q.client.name}? Link-nya berhenti bekerja.`)) return;
+    if (!await confirmDialog(`Hapus pricelist untuk ${q.client.name}? Link-nya berhenti bekerja.`)) return;
     const { error } = await supabase.storage.from("quotes").remove([`${q.slug}.json`]);
     if (error) return notify(`Gagal menghapus link: ${error.message}`);
     onDelete(); notify("Pricelist dihapus.");

@@ -3,6 +3,7 @@
 // Settings › Anggota tim: invite people to the business workspace, change roles, remove members.
 // Invites produce a hub.forior.id/?invite=… link shared by copy or WhatsApp (no email service needed);
 // the link shows "Terima undangan", then "Buat kata sandi", then the person is inside the workspace.
+import { confirmDialog } from "./lib/confirm";
 import { useCallback, useEffect, useState } from "react";
 import { Copy, Link2, Loader2, MessageCircle, UserPlus, Users, X } from "lucide-react";
 import { activeWorkspace, callServer, switchWorkspace, type Role } from "./lib/cloud";
@@ -63,7 +64,7 @@ export function TeamSettings() {
   };
   const relink = (m: Member) => run(`link:${m.userId}`, async () => { const r = await callServer<{ link: string }>("members.link", { userId: m.userId, redirectTo: appUrl() }); setShared({ email: m.email, link: r.link }); });
   const changeRole = (m: Member, next: Role) => run(`role:${m.userId}`, async () => { await callServer("members.role", { userId: m.userId, role: next }); notify(`${m.email} sekarang ${ROLE_LABEL[next]}.`); await load(); });
-  const remove = (m: Member) => { if (!window.confirm(`Keluarkan ${m.email} dari ${ws.name}? Aksesnya langsung dicabut; konten yang ia buat tetap ada.`)) return; run(`rm:${m.userId}`, async () => { await callServer("members.remove", { userId: m.userId }); notify(`${m.email} dikeluarkan.`); await load(); }); };
+  const remove = async (m: Member) => { if (!await confirmDialog(`Keluarkan ${m.email} dari ${ws.name}? Aksesnya langsung dicabut; konten yang ia buat tetap ada.`)) return; run(`rm:${m.userId}`, async () => { await callServer("members.remove", { userId: m.userId }); notify(`${m.email} dikeluarkan.`); await load(); }); };
   const manageable = (m: Member) => canManage && !m.self && m.role !== "owner" && (me === "owner" || m.role === "editor");
 
   return <div className="tm">

@@ -2,6 +2,7 @@
 
 // Auto DM (ManyChat-style): keyword comment → public reply → DM with a button → follow check → link.
 // Automations and stats live in Supabase; the public `ig-webhook` Edge Function runs them.
+import { confirmDialog } from "./lib/confirm";
 import { useCallback, useEffect, useState } from "react";
 import { AtSign, Check, CheckCircle2, Circle, Copy, Lock, MessageCircle, Pencil, Plus, Send, Trash2, UserCheck, X, Zap } from "lucide-react";
 import { SUPABASE_URL, readCloud, supabase } from "./lib/cloud";
@@ -55,7 +56,7 @@ export function AutoDmPage() {
     setEdit(null); notify("Automation disimpan."); load();
   };
   const toggle = async (r: Row) => { const { error } = await supabase.from("dm_automations").update({ active: !r.active }).eq("id", r.id); if (error) return notify(error.message); load(); };
-  const remove = async (r: Row) => { if (!window.confirm(`Hapus automation “${r.name}”? Statistiknya ikut terhapus.`)) return; const { error } = await supabase.from("dm_automations").delete().eq("id", r.id); if (error) return notify(error.message); load(); };
+  const remove = async (r: Row) => { if (!await confirmDialog(`Hapus automation “${r.name}”? Statistiknya ikut terhapus.`)) return; const { error } = await supabase.from("dm_automations").delete().eq("id", r.id); if (error) return notify(error.message); load(); };
 
   const steps = [
     { ok: !!cloud.keys.meta_token, label: "Token Meta tersimpan", hint: "Settings → AI & Models → Meta Access Token (izin instagram_manage_messages & instagram_manage_comments)." },
