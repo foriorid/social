@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { PublicGalleryPage } from "../../gallery-view";
 import { descriptionOf, galleryFor } from "./meta";
 
+// Always look the gallery up fresh: a cached miss (new gallery, or a slow first call) would show the generic preview.
+export const dynamic = "force-dynamic";
+
 // The page itself is the same client gallery; this server wrapper only adds the link-preview tags.
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
