@@ -5,7 +5,7 @@
 // Storage bucket `quotes`, with photos under img/<quote id>/. The page itself is rendered by app/lib/quote.ts.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Check, Copy, Eye, MoreHorizontal, Pencil, Search, FileText, Image as ImageIcon, Link2, Loader2, MessageCircle, Plus, RefreshCw, Sparkles, Trash2, Upload, X, ChevronDown, ChevronUp, CopyPlus, ExternalLink, Send, Undo2, Images, FolderPlus } from "lucide-react";
+import { ArrowLeft, Check, Copy, Eye, MoreHorizontal, Pencil, Search, FileText, Image as ImageIcon, Link2, Loader2, MessageCircle, Plus, RefreshCw, Sparkles, Trash2, Upload, X, ChevronDown, ChevronUp, CopyPlus, ExternalLink, Send, Undo2, Images, FolderPlus, Camera, Clapperboard, Globe, Circle } from "lucide-react";
 import { readCloud, supabase } from "./lib/cloud";
 import { newGallery, slugify as slugifyGallery, uniqueSlug } from "../supabase/functions/gallery/delivery";
 import { useStored } from "./lib/store";
@@ -15,7 +15,7 @@ import { absoluteImages, packageSections, parsePackages, pricelistForPrompt, wit
 import { BackButton, notify } from "./modules";
 import { askAIDocs, AiSetupError, CHEAP_MODEL, type AiDoc } from "./lib/ai";
 import { docxText } from "./lib/docx";
-import { discountLabel, isSlug, newQuote, parseBrief, publicSnapshot, renderQuoteHtml, rid, shortIdr, slugify, idr, totals, type PortfolioItem, type QItem, type QLayout, type QRow, type QSection, type Quote, type QuoteAnswer } from "./lib/quote";
+import { discountLabel, isSlug, kindOf, type QKind, newQuote, parseBrief, publicSnapshot, renderQuoteHtml, rid, shortIdr, slugify, idr, totals, type PortfolioItem, type QItem, type QLayout, type QRow, type QSection, type Quote, type QuoteAnswer } from "./lib/quote";
 
 const BUCKET = "quotes";
 const SONNET = "claude-sonnet-5-5";
@@ -137,6 +137,10 @@ Tambahkan ke JSON: "packages":[{"id":"id paket dari pricelist","qty":jumlah unit
 - Pakai paket pricelist bila kebutuhan klien cocok (foto unit/kamar → paket foto sesuai jumlah kamar atau jumlah foto yang diminta; video → Cinematic Video; drone → Drone Photo & Video atau add-on Drone Video bila bersama Cinematic; 360 → Virtual Tour 360).
 - Kebutuhan yang sudah tertutup "packages" JANGAN dibuat lagi di "sections". "sections" hanya untuk kebutuhan di luar pricelist.
 - Bila lokasi di luar Jakarta, tambahkan "Transport luar kota" di "operational".`;
+
+/** Item types, one-colour icons. Drone has no lucide icon, so a small inline one. */
+const DroneIcon = ({ size = 14 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="5" cy="5" r="3" /><circle cx="19" cy="5" r="3" /><circle cx="5" cy="19" r="3" /><circle cx="19" cy="19" r="3" /><path d="M7.5 7.5l2 2M16.5 7.5l-2 2M7.5 16.5l2-2M16.5 16.5l-2-2" /><rect x="9" y="9" width="6" height="6" rx="1.5" /></svg>;
+const KINDS: [QKind, string, (p: { size?: number }) => React.ReactNode][] = [["photo", "Foto", Camera], ["video", "Video", Clapperboard], ["drone", "Drone", DroneIcon], ["360", "360", Globe], ["other", "Lainnya", Circle]];
 
 // ---------- list ----------
 export function QuoteBuilder() {
@@ -364,11 +368,10 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
         {s.items.map(i => <div className="qb-item" key={i.id}>
           <Slot quoteId={q.id} value={i.image} onChange={image => setItem(s.id, i.id, { image })} />
           <div className="qb-item-f">
-            <div className="qb-row2"><input aria-label="Nama item" value={i.name} onChange={e => setItem(s.id, i.id, { name: e.target.value })} placeholder="1BR show unit" /><input aria-label="Label" className="qb-tag" value={i.tag ?? ""} onChange={e => setItem(s.id, i.id, { tag: e.target.value })} placeholder="Label" maxLength={12} /></div>
+            <div className="qb-row2"><input aria-label="Nama item" value={i.name} onChange={e => setItem(s.id, i.id, { name: e.target.value })} placeholder="1BR show unit" /></div>
+            <div className="qb-kinds" role="radiogroup" aria-label="Jenis item">{KINDS.map(([k, label, Icon]) => <button key={k} type="button" role="radio" aria-checked={kindOf(i) === k} className={kindOf(i) === k ? "on" : ""} onClick={() => setItem(s.id, i.id, { kind: k })}><Icon size={14} />{label}</button>)}</div>
             <input aria-label="Keterangan" value={i.desc ?? ""} onChange={e => setItem(s.id, i.id, { desc: e.target.value })} placeholder="Keterangan singkat (opsional)" />
             <div className="qb-row3">
-              <input aria-label="Jumlah" type="number" min={0} value={i.qty ?? ""} onChange={e => setItem(s.id, i.id, { qty: e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)) })} placeholder="Jml" />
-              <input aria-label="Satuan" value={i.unit ?? ""} onChange={e => setItem(s.id, i.id, { unit: e.target.value })} placeholder="foto" list="qb-units" />
               {s.pricing === "none" ? <span className="qb-inpkg">Tanpa harga</span> : s.pricing === "section" ? <span className="qb-inpkg">Termasuk paket</span> : <Price value={i.price} onChange={price => setItem(s.id, i.id, { price })} />}
             </div>
             {i.list !== undefined && i.price !== i.list && s.pricing !== "none" && s.pricing !== "section" && <small className="qb-special">Harga khusus · pricelist {idr(i.list)} <button className="cx-link" onClick={() => setItem(s.id, i.id, { price: i.list! })}>Kembalikan</button></small>}
@@ -377,12 +380,13 @@ function ContentTab({ q, set }: { q: Quote; set: (p: Partial<Quote>) => void }) 
           <button className="qb-icon qb-del" aria-label="Hapus item" onClick={() => setSection(s.id, { items: s.items.filter(x => x.id !== i.id) })}><Trash2 size={15} /></button>
         </div>)}
         <div className="qb-actions">
-          <button className="outline-button" onClick={() => setSection(s.id, { items: [...s.items, { id: rid(), name: "", qty: s.items.at(-1)?.qty, unit: s.items.at(-1)?.unit ?? "foto", price: 0 }] })}><Plus size={14} /> Item</button>
+          <button className="outline-button" onClick={() => setSection(s.id, { items: [...s.items, { id: rid(), name: "", qty: s.items.at(-1)?.qty, unit: s.items.at(-1)?.unit ?? "foto", price: 0 }] })}><Plus size={14} /> Item <small className="qb-sub">satu pekerjaan berharga</small></button>
         </div>
       </div>}
     </div>)}
     <datalist id="qb-units"><option value="foto" /><option value="menit" /><option value="video" /><option value="klip" /><option value="hari" /></datalist>
-    <div className="qb-addrow"><button className="primary-button" onClick={() => setPicking(true)}><Plus size={15} /> Dari pricelist</button><button className="outline-button" onClick={() => { const s: QSection = { id: rid(), title: "", layout: "cards", items: [{ id: rid(), name: "", qty: 8, unit: "foto", price: 0 }] }; set({ sections: [...q.sections, s] }); setOpen(s.id); }}><Plus size={15} /> Seksi kosong</button></div>
+    <p className="qb-hint qb-howto"><b>Seksi</b> = kelompok: satu properti, lokasi, acara, atau paket (huruf A/B/C + subtotal). <b>Item</b> = satu pekerjaan yang dijual di dalam seksi: foto interior, video, drone, recap. Pilih <b>Jenis</b> pada item supaya label, tombol play, dan ikon tampil otomatis.</p>
+    <div className="qb-addrow"><button className="primary-button" onClick={() => setPicking(true)}><Plus size={15} /> Dari pricelist</button><button className="outline-button" onClick={() => { const s: QSection = { id: rid(), title: "", layout: "cards", items: [{ id: rid(), name: "", qty: 8, unit: "foto", price: 0 }] }; set({ sections: [...q.sections, s] }); setOpen(s.id); }}><Plus size={15} /> Seksi baru <small className="qb-sub">properti / acara</small></button></div>
     {picking && <PricelistPicker onClose={() => setPicking(false)} onPick={addPackages} />}
 
     <div className="panel qb-card-p">

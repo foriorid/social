@@ -62,7 +62,7 @@ test("parseBrief also reads requests, notes, operational (no price) and terms", 
   assert.equal(d.operational[0].price, null);
   assert.deepEqual(d.terms, { production: "3 hari" }); assert.equal(d.sections[0].optional, true);
   const html = renderQuoteHtml({ ...newQuote(), sections: d.sections });
-  assert.ok(html.includes("<li>Private jacuzzi</li>") && !html.includes("<li></li>"));
+  assert.ok(html.includes("<span>Private jacuzzi</span></li>") && !html.includes("<span></span></li>"));
 });
 
 test("portfolio cards link out; questions become a form (disabled in preview, thank-you after sending)", () => {
@@ -80,7 +80,7 @@ test("per-section pricing: one package price, item prices ignored and hidden", (
   const q = { ...newQuote(), sections: [{ id: "a", title: "Villa", layout: "cards" as const, pricing: "section" as const, price: 18_000_000, items: [{ id: "1", name: "Palmspring", qty: 15, unit: "foto", price: 999 }, { id: "2", name: "Homewood", qty: 15, unit: "foto", price: null }] }] };
   assert.equal(totals(q).grand, 18_000_000);
   const html = renderQuoteHtml(q);
-  assert.ok(html.includes("Harga paket A — 30 foto") && html.includes("Rp 18.000.000") && !html.includes("Rp 999") && !html.includes("Dikonfirmasi kemudian"));
+  assert.ok(html.includes("Harga paket A<") && html.includes("Rp 18.000.000") && !html.includes("Rp 999") && !html.includes("Dikonfirmasi kemudian"));
   assert.ok(renderQuoteHtml({ ...q, sections: [{ ...q.sections[0], price: null }] }).includes("Dikonfirmasi kemudian"));
 });
 
@@ -90,7 +90,7 @@ test("info-only sections: no price anywhere, no letter, out of totals; package p
     { id: "d", title: "Deliverables", layout: "list" as const, pricing: "none" as const, items: [{ id: "2", name: "File high-res", price: 0 }] }] };
   const html = renderQuoteHtml(q);
   assert.equal(totals(q).grand, 6_500_000);
-  assert.ok(!html.includes('class="sec-price"') && html.includes("Harga paket A — 6 video"));
+  assert.ok(!html.includes('class="sec-price"') && html.includes("Harga paket A<"));
   assert.ok(html.includes("Termasuk paket"));
   assert.ok(!html.includes("Harga paket B") && !html.includes("Rp 0") && !html.includes("Deliverables (B)"));
   assert.deepEqual(stats(q).map(s => s.label), ["Video"]);
@@ -130,4 +130,16 @@ test("client page: approval form until approved, then who approved and the DP", 
 test("publicSnapshot keeps the linked project private", () => {
   const q = { ...newQuote(), project: { galleryId: "g1", at: "x" } };
   assert.equal("project" in publicSnapshot(q), false);
+});
+
+test("item kind: photo label on the photo, play button on video, detail icons follow the kind; older items guessed", async () => {
+  const { kindOf } = await import("./quote.ts");
+  assert.equal(kindOf({ name: "Cinematic Video" }), "video");
+  assert.equal(kindOf({ name: "Aerial drone shot" }), "drone");
+  assert.equal(kindOf({ name: "Interior" }), "photo");
+  assert.equal(kindOf({ name: "Interior", kind: "360" }), "360");
+  const q = { ...newQuote(), sections: [{ id: "s", title: "A", layout: "cards" as const, items: [{ id: "1", name: "Foto", kind: "photo" as const, price: 1, image: "https://x/a.jpg", lines: ["50 edited"] }, { id: "2", name: "Video", kind: "video" as const, price: 1, image: "https://x/b.jpg" }] }] };
+  const html = renderQuoteHtml(q);
+  assert.match(html, /class="tag ktag"><svg class="i"[^>]*>.*?<\/svg>Foto<\/span>/);
+  assert.equal((html.match(/class="playb"/g) ?? []).length, 1);
 });

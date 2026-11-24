@@ -3142,7 +3142,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .qb-sec-t { flex:1; min-width:0; display:grid; } .qb-sec-t b { font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .qb-sec-t small { font-size:11.5px; color:#8a85a0; } .qb-sec-p { font-weight:800; font-size:13px; color:#2b1d55; white-space:nowrap; }
 .qb-sec-body { display:grid; gap:12px; padding:0 14px 14px; }
 .qb-item { display:flex; gap:10px; align-items:flex-start; padding-top:12px; border-top:1px solid #f0edf6; } .qb-item-f { flex:1; min-width:0; display:grid; gap:7px; }
-.qb-row2 { display:grid; grid-template-columns:1fr 84px; gap:7px; } .qb-row3 { display:grid; grid-template-columns:62px 74px 1fr; gap:7px; }
+.qb-row2 { display:grid; grid-template-columns:1fr 84px; gap:7px; } .qb-row3 { display:grid; grid-template-columns:1fr; gap:7px; }
 .qb-price-in { display:flex; align-items:center; border:1px solid #e3def0; border-radius:11px; background:#fff; padding-left:10px; min-width:0; } .qb-price-in > span { font-size:12.5px; color:#8a85a0; font-weight:700; } .qb-editor .qb-price-in input { border:0; padding-left:6px; font-weight:700; } .qb-price-in:focus-within { outline:2px solid #cbbcf0; }
 .qb-actions { display:flex; gap:6px; align-items:center; } .qb-actions .outline-button { margin-right:auto; }
 .qb-slot { position:relative; flex:none; } .qb-slot-btn { width:72px; height:58px; border-radius:11px; overflow:hidden; border:0; padding:0; cursor:pointer; background:#f1edfb; color:#6a3fd0; display:grid; place-items:center; } .qb-slot-btn img { width:100%; height:100%; object-fit:cover; } .qb-slot-btn.empty { border:1.5px dashed #cbbcf0; background:#faf8ff; }
@@ -3413,6 +3413,13 @@ body:has(.qb-pick) .qb-bottom, body:has(.qb-pick) .qb-fab { display:none; } .qb-
   .top-account .icon-button, .top-account .avatar-profile { width:40px; height:40px; }
 }
 
+/* Item type (Jenis) chips in the editor; one-colour icons */
+.qb-kinds { display:flex; flex-wrap:wrap; gap:6px; }
+.qb-kinds button { display:inline-flex; align-items:center; gap:6px; border:1px solid #e3def0; background:#fff; color:#4b4462; border-radius:999px; padding:6px 11px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer; }
+.qb-kinds button.on { background:#241a3d; border-color:#241a3d; color:#fff; }
+.qb-howto { margin:4px 2px 8px; } .qb-howto b { color:#3d2a7a; }
+.qb-sub { font-weight:500; color:#8a83a0; font-size:11.5px; margin-left:4px; }
+
 /* ---------- Dark mode (Settings › Profil › Tampilan). Generated from scratchpad dark-src.css; scoped to html[data-theme=dark]. ---------- */
 html[data-theme="dark"] { --ink:#ece8f6; --muted:#a49cb8; --line:#2c2640; --lavender:#241f35; color-scheme:dark; }
 html[data-theme="dark"] body, html[data-theme="dark"] .app-shell, html[data-theme="dark"] .main-area { background:#0f0c17 !important; color:#ece8f6; }
@@ -3499,3 +3506,6 @@ html[data-theme="dark"] .sx-stats > *, html[data-theme="dark"] .sx-modes button,
 html[data-theme="dark"] .sx-modes button.on, html[data-theme="dark"] .sx-seg button.on { background:rgba(135,86,232,.22) !important; border-color:#8756e8 !important; color:#fff !important; }
 html[data-theme="dark"] .sx-seg, html[data-theme="dark"] .f-account, html[data-theme="dark"] .sc-setup, html[data-theme="dark"] .ad-copy, html[data-theme="dark"] .ad-copy code { background:#1a1625 !important; border-color:#2c2640 !important; color:#ece8f6 !important; }
 html[data-theme="dark"] .sc-setup ol, html[data-theme="dark"] .sc-setup li, html[data-theme="dark"] .f-account span, html[data-theme="dark"] .f-account small { color:#c9c2dc !important; }
+html[data-theme="dark"] .qb-kinds button { background:#1a1625 !important; border-color:#2c2640 !important; color:#c9c2dc !important; }
+html[data-theme="dark"] .qb-kinds button.on { background:#ece8f6 !important; border-color:#ece8f6 !important; color:#14111e !important; }
+html[data-theme="dark"] .qb-howto b { color:#c7b2ff !important; }
