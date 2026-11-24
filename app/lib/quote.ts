@@ -20,7 +20,7 @@ export const sectionSubtotal = (s: QSection) => (s.pricing === "none" ? 0 : s.pr
 /** Information only: priced "none", or a package left at Rp 0 (never shown as "Rp 0"). */
 export const isInfo = (s: QSection) => s.pricing === "none" || (s.pricing === "section" && s.price === 0);
 export type QRow = { id: string; name: string; note?: string; price: number | null };
-export type QNote = { id: string; title: string; text: string };
+export type QNote = { id: string; title: string; text: string; icon?: string };
 export type PortfolioItem = { id: string; title: string; location?: string; category?: string; image?: string; url: string };
 export type QuoteAnswer = { q: string; a: string };
 export type BriefFile = { name: string; size: number; type: string };
@@ -72,8 +72,11 @@ export function newQuote(now = new Date()): Quote {
     client: { name: "", location: "" },
     sections: [{ id: rid(), title: "Fotografi Interior", subtitle: "", layout: "cards", items: [{ id: rid(), name: "", qty: 8, unit: "foto", price: 0 }] }],
     operational: [], notes: [
-      { id: rid(), title: "Foto resolusi tinggi", text: "Foto edit dikirim dalam JPG resolusi tinggi sesuai shotlist yang disetujui." },
-      { id: rid(), title: "Area belum siap", text: "Area yang belum siap atau belum selesai bisa memerlukan jadwal shooting tambahan." }
+      { id: rid(), icon: "image", title: "High-res JPG", text: "Edited photos delivered in high resolution; coverage subject to approved shot list." },
+      { id: rid(), icon: "film", title: "Video format", text: "Clips without dialogue; clip count, duration, aspect ratio and music to be confirmed." },
+      { id: rid(), icon: "cloud", title: "Drone conditions", text: "Subject to weather, airspace, safety, site permission and flight feasibility." },
+      { id: rid(), icon: "key", title: "Third-party access", text: "Destinations may require access approval and/or location fees — excluded until confirmed." },
+      { id: rid(), icon: "refresh", title: "Unfinished areas", text: "Unavailable or unfinished areas may require a separate revisit / additional shooting day." }
     ],
     terms: { dpPercent: 50, production: "1 hari produksi", delivery: "7–10 hari kerja", revisions: "2 kali revisi" },
     updatedAt: iso, createdAt: iso
@@ -96,12 +99,25 @@ export function totals(q: Pick<Quote, "sections" | "operational" | "terms"> & { 
 export const discountLabel = (d: Quote["discount"], word = "Diskon") => (d?.type === "pct" ? `${word} ${+(Number(d.value) || 0).toFixed(2)}%` : word);
 
 /** Headline numbers for the hero: one per (non-optional) section, summing quantities of its main unit. */
-export function stats(q: Pick<Quote, "sections">): { value: number; unit: string; label: string }[] {
+/** The headline number of an item: its quantity, else the first number in its first detail line ("50 edited photos", "Video 3 menit"). */
+function headline(i: QItem): { n: number; unit: string } | null {
+  if (i.qty && i.qty > 0) return { n: i.qty, unit: i.unit ?? "" };
+  const src = [i.lines?.find(l => l.trim()), i.desc].find(Boolean) ?? "";
+  const m = /(\d+(?:[.,]\d+)?)\s*(menit|min(?:ute)?s?|jam|hours?|foto|photos?|video|klip|clips?|pov)?/i.exec(src);
+  if (!m) return null;
+  return { n: Number(m[1].replace(",", ".")), unit: m[2] ?? "" };
+}
+/** Short unit for the card: durations keep their unit ("3 min"); counts are explained by the label. */
+const statUnit = (u: string) => (/^(menit|min)/i.test(u) ? (/^menit/i.test(u) ? "menit" : "min") : /^(jam|hour)/i.test(u) ? u.toLowerCase().startsWith("jam") ? "jam" : "h" : /^pov$/i.test(u) ? "POV" : "");
+
+/** Headline cards: one per (non-optional) section, numbers taken from its items, icon from the first item's type. */
+export function stats(q: Pick<Quote, "sections">): { value: number; unit: string; label: string; kind: QKind }[] {
   return q.sections.filter(s => !s.optional && !isInfo(s)).map(s => {
-    const byUnit = new Map<string, number>();
-    for (const i of s.items) if (i.qty && i.qty > 0) byUnit.set(i.unit || "", (byUnit.get(i.unit || "") ?? 0) + i.qty);
-    const [unit, value] = [...byUnit.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["", 0];
-    return { value, unit, label: s.title };
+    const hs = s.items.map(i => ({ h: headline(i), kind: kindOf(i) })).filter(x => x.h);
+    const main = hs[0]?.h;
+    const same = hs.filter(x => statUnit(x.h!.unit) === statUnit(main?.unit ?? ""));
+    const value = Math.round(same.reduce((a, x) => a + x.h!.n, 0) * 10) / 10;
+    return { value, unit: statUnit(main?.unit ?? "") || (main?.unit ?? "").toLowerCase().replace(/^photos?$/, "foto"), label: s.title, kind: hs[0]?.kind ?? kindOf(s.items[0] ?? { name: "" }) };
   }).filter(s => s.value > 0).slice(0, 4);
 }
 
@@ -182,6 +198,10 @@ const ICON: Record<string, string> = {
   phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
   drone: '<circle cx="5" cy="5" r="3"/><circle cx="19" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><path d="M7.5 7.5l2 2M16.5 7.5l-2 2M7.5 16.5l2-2M16.5 16.5l-2-2"/><rect x="9" y="9" width="6" height="6" rx="1.5"/>',
   play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
+  cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9z"/>',
+  key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>',
+  refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.8 9.8 0 0 1 6.7 2.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.8 9.8 0 0 1-6.7-2.7L3 16"/><path d="M8 16H3v5"/>',
   globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/>',
   down: '<path d="M12 3v12M6 11l6 6 6-6M4 21h16"/>'
 };
@@ -202,7 +222,8 @@ img{display:block;max-width:100%}svg.i{width:20px;height:20px;stroke:currentColo
 .card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:18px}.grid{display:grid;gap:12px}
 .client{display:grid;gap:10px;margin-top:-34px;position:relative;z-index:3;padding:0 14px}.client .card{display:flex;gap:12px;align-items:center;padding:14px 16px}
 .ico{width:40px;height:40px;border-radius:12px;background:var(--ps);color:var(--pi);display:grid;place-items:center;flex:none}.lbl{font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px}.val{font-size:15px;font-weight:700;color:var(--navy)}
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}.stat{background:var(--card);border-radius:16px;padding:14px;box-shadow:var(--sh);position:relative;overflow:hidden}.stat::before{content:"";position:absolute;right:-18px;top:-18px;width:64px;height:64px;border-radius:50%;background:var(--ps)}.stat b{position:relative;display:block;font-size:25px;color:var(--navy);line-height:1}.stat b small{font-size:13px;font-weight:700}.stat span{position:relative;font-size:11.5px;color:var(--muted)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}.stat{background:var(--card);border-radius:16px;padding:14px;box-shadow:var(--sh);position:relative;overflow:hidden}.stat::before{content:"";position:absolute;right:-18px;top:-18px;width:64px;height:64px;border-radius:50%;background:var(--ps)}.sico{position:relative;width:36px;height:36px;border-radius:11px;background:var(--ps);color:var(--pi);display:grid;place-items:center;margin-bottom:12px}.sico svg.i{width:19px;height:19px}
+.stat b{position:relative;display:block;font-size:25px;color:var(--navy);line-height:1}.stat b small{font-size:13px;font-weight:700}.stat span{position:relative;font-size:11.5px;color:var(--muted)}
 .notice{display:flex;gap:10px;align-items:flex-start;background:var(--gs);border:1px solid #efdfb4;color:#6d5214;border-radius:14px;padding:13px 14px;font-size:13px;margin-top:16px}.notice svg.i{color:#a07a1d}
 .sec-head{display:flex;align-items:center;gap:12px;margin:30px 0 12px}.sec-num{width:36px;height:36px;border-radius:12px;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px;flex:none}.sec-head h2{margin:0;font-size:18px;color:var(--navy);line-height:1.2}.sec-head p{margin:2px 0 0;font-size:12.5px;color:var(--muted)}.pill{display:inline-block;background:var(--ps);color:var(--pi);font-weight:700;padding:3px 9px;border-radius:999px;font-size:11px;vertical-align:middle;margin-left:6px}
 .units{grid-template-columns:1fr}.unit{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh);display:flex}.unit .ph{width:42%;min-height:118px;flex:none}.tag{position:absolute;z-index:2;left:10px;top:10px;background:#fff;color:var(--navy);font-weight:800;font-size:12px;padding:5px 9px;border-radius:9px}
@@ -360,11 +381,11 @@ export function renderQuoteHtml(q: Omit<Quote, "brief">, opts: { pageUrl?: strin
 <div class="client"><div class="card"><div class="ico">${ic("user")}</div><div><div class="lbl">${q.kind === "pricelist" ? t.forYou : t.prepared}</div><div class="val">${esc(q.client.name || "—")}</div></div></div>${q.client.location ? `<div class="card"><div class="ico">${ic("pin")}</div><div><div class="lbl">${t.location}</div><div class="val">${esc(q.client.location)}</div></div></div>` : ""}</div>
 <div class="pad">
 ${q.kind === "pricelist" ? `${q.intro ? `<div class="card plintro">${esc(q.intro).replace(/\n/g, "<br>")}</div>` : ""}${q.notice ? `<div class="notice">${ic("info")}<div>${esc(q.notice)}</div></div>` : ""}${pricelistBody(q, t, opts)}
-` : `${st.length ? `<div class="stats">${st.map(s => `<div class="stat"><b>${s.value}${s.unit ? ` <small>${esc(s.unit)}</small>` : ""}</b><span>${esc(s.label)}</span></div>`).join("")}</div>` : ""}
+` : `${st.length ? `<div class="stats">${st.map(s => `<div class="stat"><div class="sico">${ic(KIND_ICON[s.kind])}</div><b>${s.value}${s.unit ? ` <small>${esc(s.unit)}</small>` : ""}</b><span>${esc(s.label)}</span></div>`).join("")}</div>` : ""}
 ${q.notice ? `<div class="notice">${ic("info")}<div>${esc(q.notice)}</div></div>` : ""}
 ${main.map(s => sectionHtml(s, letterOf.get(s.id) ?? "•", t)).join("")}
 ${extra.map(s => sectionHtml(s, "+", t)).join("")}
-${q.notes.length ? `<div class="sec-head"><div class="sec-num">${ic("send", "width:18px;height:18px")}</div><div><h2>${main.some(isInfo) ? t.notesOnly : t.notes}</h2><p>${main.some(isInfo) ? t.notesOnlySub : t.notesSub}</p></div></div><div class="grid deliv">${q.notes.map(n => `<div class="dl"><div class="ico">${ic("check")}</div><div><b>${esc(n.title)}</b><p>${esc(n.text)}</p></div></div>`).join("")}</div>` : ""}
+${q.notes.length ? `<div class="sec-head"><div class="sec-num">${ic("send", "width:18px;height:18px")}</div><div><h2>${main.some(isInfo) ? t.notesOnly : t.notes}</h2><p>${main.some(isInfo) ? t.notesOnlySub : t.notesSub}</p></div></div><div class="grid deliv">${q.notes.map(n => `<div class="dl"><div class="ico">${ic(n.icon && ICON[n.icon] ? n.icon : "check")}</div><div><b>${esc(n.title)}</b><p>${esc(n.text)}</p></div></div>`).join("")}</div>` : ""}
 <div class="sec-head"><div class="sec-num">${ic("hand", "width:18px;height:18px")}</div><div><h2>${t.terms}</h2><p>${t.termsSub}</p></div></div>
 <div class="card"><div class="tl"><div class="step"><div class="ico">${ic("hand")}</div><div><b>${t.confirm}</b><span>${t.dpOf} ${q.terms.dpPercent}%</span></div></div><div class="step"><div class="ico">${ic("camera")}</div><div><b>${t.production}</b><span>${esc(q.terms.production)}</span></div></div><div class="step"><div class="ico">${ic("edit")}</div><div><b>${t.editing}</b><span>${esc(q.terms.revisions)}</span></div></div><div class="step"><div class="ico">${ic("send")}</div><div><b>${t.delivery}</b><span>${esc(q.terms.delivery)}</span></div></div></div></div>
 <div class="grid terms" style="margin-top:12px"><div class="card"><div class="lbl" style="margin-bottom:8px">${t.payment}</div><div class="pay"><div><b>${q.terms.dpPercent}%</b><span>${t.dp}</span></div><div><b>${100 - q.terms.dpPercent}%</b><span>${t.rest}</span></div></div></div>

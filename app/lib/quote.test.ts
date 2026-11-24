@@ -25,7 +25,7 @@ test("totals skip optional sections and to-be-confirmed prices; DP from percent"
 });
 
 test("stats sum the main unit per section", () => {
-  assert.deepEqual(stats(sample()), [{ value: 16, unit: "foto", label: "Show Unit" }, { value: 3, unit: "menit", label: "Drone" }]);
+  assert.deepEqual(stats(sample()).map(s => [s.value, s.unit, s.label]), [[16, "foto", "Show Unit"], [3, "menit", "Drone"]]);
 });
 
 test("slug helpers", () => {
@@ -142,4 +142,19 @@ test("item kind: photo label on the photo, play button on video, detail icons fo
   const html = renderQuoteHtml(q);
   assert.match(html, /class="tag ktag"><svg class="i"[^>]*>.*?<\/svg>Foto<\/span>/);
   assert.equal((html.match(/class="playb"/g) ?? []).length, 1);
+});
+
+test("headline cards read numbers from item details when there is no quantity", () => {
+  const q = { ...newQuote(), sections: [
+    { id: "a", title: "Show unit photos", layout: "cards" as const, items: [{ id: "1", name: "1BR", price: 1, lines: ["8 edited photos"] }, { id: "2", name: "2BR", price: 1, lines: ["16 edited photos", "All RAW"] }] },
+    { id: "b", title: "Cinematic video", layout: "media" as const, items: [{ id: "3", name: "Cinematic Video", kind: "video" as const, price: 1, lines: ["Video 2 menit"] }] },
+    { id: "c", title: "No numbers", layout: "list" as const, items: [{ id: "4", name: "Styling", price: 1, lines: ["Props"] }] }] };
+  assert.deepEqual(stats(q).map(s => [s.value, s.unit, s.label, s.kind]), [[24, "", "Show unit photos", "photo"], [2, "menit", "Cinematic video", "video"]]);
+  assert.match(renderQuoteHtml(q), /class="sico"/);
+});
+
+test("new quotations come with the five default notes, each with its icon", () => {
+  const n = newQuote().notes;
+  assert.deepEqual(n.map(x => x.title), ["High-res JPG", "Video format", "Drone conditions", "Third-party access", "Unfinished areas"]);
+  assert.ok(renderQuoteHtml({ ...newQuote(), notes: n }).includes("Subject to weather"));
 });
