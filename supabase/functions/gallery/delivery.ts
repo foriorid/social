@@ -202,3 +202,6 @@ export function mergeImport(hub: Gallery, ws: Gallery, hubEdited: boolean): Gall
     revisions: [...hub.revisions, ...ws.revisions.filter(r => !revIds.has(r.id))]
   };
 }
+
+/** File names for Lightroom Classic's filename filter: no extension (so RAW files match too), no duplicates, one line separated by spaces. */
+export const lightroomList = (names: string[]) => [...new Set(names.map(n => n.trim().replace(/\.[A-Za-z0-9]{2,5}$/, "")).filter(Boolean))].join(" ");
