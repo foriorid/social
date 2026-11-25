@@ -107,7 +107,7 @@ export function BusinessDashboard({ go, openGallery }: { go: (nav: string) => vo
         {!rows ? <p className="x-empty">Memuat galeri…</p> : !active.length ? <p className="x-empty">Belum ada project berjalan. Buat atau impor di Projects.</p> :
           <div className="bd-dl">{active.slice(0, 8).map(r => { const t = thumbOf(r.data); return <button key={r.id} className={`bd-dc${t ? "" : " empty"}`} onClick={() => openGallery(r.id)}>
             <i className="bd-dc-img">{t ? <img src={t} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = "none"; }} /> : null}</i>
-            <span><b>{r.data.title}</b><small>{r.next.text}</small><em className={`dl-phase ${PHASE_CLASS[r.data.phase]}`}>{PHASE_SHORT[r.data.phase]}</em></span></button>; })}</div>}
+            <span title={`${r.data.title} — ${r.next.text}`}><b>{r.data.title}</b><em className={`dl-phase ${PHASE_CLASS[r.data.phase]}`}>{PHASE_SHORT[r.data.phase]}</em></span></button>; })}</div>}
       </section>
 
       <div className="bd-side">

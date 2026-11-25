@@ -3443,6 +3443,12 @@ body:has(.qb-pick) .qb-bottom, body:has(.qb-pick) .qb-fab { display:none; } .qb-
   body:has(.qb-bottom) .x-toast { bottom:calc(146px + env(safe-area-inset-bottom)); }
 }
 
+/* Dashboard project cards: photo, short title, stage chip only (the next step shows on hover and inside the project) */
+.bd-dl .bd-dc > span { padding:9px 11px 11px; gap:7px; }
+.bd-dl .bd-dc b { font-size:13px !important; line-height:1.35 !important; font-weight:600 !important; letter-spacing:0; -webkit-line-clamp:2; }
+.bd-dl .bd-dc em { margin-top:auto; font-size:11.5px; padding:3px 9px; }
+.bd-dl .bd-dc-img { aspect-ratio:4/3; }
+
 /* ---------- Dark mode (Settings › Profil › Tampilan). Generated from scratchpad dark-src.css; scoped to html[data-theme=dark]. ---------- */
 html[data-theme="dark"] { --ink:#ece8f6; --muted:#a49cb8; --line:#2c2640; --lavender:#241f35; color-scheme:dark; }
 html[data-theme="dark"] body, html[data-theme="dark"] .app-shell, html[data-theme="dark"] .main-area { background:#0f0c17 !important; color:#ece8f6; }
