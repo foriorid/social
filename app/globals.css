@@ -3433,6 +3433,16 @@ body:has(.qb-pick) .qb-bottom, body:has(.qb-pick) .qb-fab { display:none; } .qb-
 @keyframes cf-fade { from { opacity:0; } } @keyframes cf-pop { from { opacity:0; transform:translateY(8px) scale(.97); } }
 @media (max-width:600px) { .cf-back { place-items:end center; padding:0 12px calc(16px + env(safe-area-inset-bottom)); } .cf-box { border-radius:22px; } }
 
+/* Bottom bar docked to the screen edge (not floating); everything above it moves down to match */
+@media (max-width:800px) {
+  .f-bottomnav { left:0; right:0; bottom:0; border-radius:20px 20px 0 0; border-width:1px 0 0; padding:6px 10px calc(6px + env(safe-area-inset-bottom)); box-shadow:0 -6px 20px rgba(76,45,150,.08); background:rgba(255,255,255,.96); }
+  .main-area { padding-bottom:calc(80px + env(safe-area-inset-bottom)); }
+  .x-toast { bottom:calc(72px + env(safe-area-inset-bottom)); }
+  .qb-bottom { bottom:calc(70px + env(safe-area-inset-bottom)) !important; }
+  .qb-fab { bottom:calc(76px + env(safe-area-inset-bottom)) !important; }
+  body:has(.qb-bottom) .x-toast { bottom:calc(146px + env(safe-area-inset-bottom)); }
+}
+
 /* ---------- Dark mode (Settings › Profil › Tampilan). Generated from scratchpad dark-src.css; scoped to html[data-theme=dark]. ---------- */
 html[data-theme="dark"] { --ink:#ece8f6; --muted:#a49cb8; --line:#2c2640; --lavender:#241f35; color-scheme:dark; }
 html[data-theme="dark"] body, html[data-theme="dark"] .app-shell, html[data-theme="dark"] .main-area { background:#0f0c17 !important; color:#ece8f6; }
@@ -3450,7 +3460,7 @@ html[data-theme="dark"] .bd-kpi b { color:#fff !important; }
 html[data-theme="dark"] .bd-chip, html[data-theme="dark"] .bd-chips span { background:#2a2033 !important; border-color:#3a2c44 !important; }
 html[data-theme="dark"] .bd-dc > span { background:#1a1625 !important; }
 html[data-theme="dark"] .dl-phase, html[data-theme="dark"] .qb-st, html[data-theme="dark"] .pl-st, html[data-theme="dark"] .bd-st, html[data-theme="dark"] em[class*="tag"] { filter:saturate(1.1) brightness(.95); }
-html[data-theme="dark"] .f-bottomnav { background:rgba(26,22,37,.92) !important; border-color:#2c2640 !important; }
+html[data-theme="dark"] .f-bottomnav { background:rgba(26,22,37,.97) !important; border-color:#2c2640 !important; }
 html[data-theme="dark"] .f-bottomnav button { color:#c9c2dc !important; }
 html[data-theme="dark"] .f-bottomnav button.active { color:#fff !important; }
 html[data-theme="dark"] .f-bottomnav button.active span { color:#fff !important; }
@@ -3527,3 +3537,4 @@ html[data-theme="dark"] .cf-box p { color:#a49cb8 !important; }
 html[data-theme="dark"] .cf-ic { background:rgba(135,86,232,.18) !important; color:#c7b2ff !important; }
 html[data-theme="dark"] .cf-ic.danger { background:rgba(239,68,68,.15) !important; color:#fca5a5 !important; }
 html[data-theme="dark"] .cf-back { background:rgba(5,3,10,.6) !important; }
+html[data-theme="dark"] .bd-mini, html[data-theme="dark"] .bd-mini > * { background:#201a2e !important; border-color:#2c2640 !important; color:#ece8f6 !important; }
