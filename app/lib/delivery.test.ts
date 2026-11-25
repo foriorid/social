@@ -85,3 +85,8 @@ test("mergeImport keeps Hub notes and picks, adds Workspace notes written after 
   const fresh = mergeImport(hub, ws, false);
   assert.equal(fresh.title, "WS title"); assert.equal(fresh.phase, "Done"); assert.equal(fresh.slug, hub.slug);
 });
+
+test("Lightroom list: no extensions, no duplicates, one line", async () => {
+  const { lightroomList } = await import("../../supabase/functions/gallery/delivery.ts");
+  assert.equal(lightroomList(["11F02785.jpg", "11F02791.JPG", "11F02785.jpeg", " IMG_0001.CR3 "]), "11F02785 11F02791 IMG_0001");
+});
