@@ -412,7 +412,8 @@ function GalleryManage({ row, onBack, onSave, onDelete }: { row: Row; onBack: ()
     { at: g.importedAt, text: "Data diperbarui dari Workspace", icon: <RefreshCw size={14} /> }
   ].filter((x): x is { at: string; text: string; icon: React.ReactElement } => !!x.at).sort((a, b) => b.at.localeCompare(a.at));
 
-  const copyNames = (list: Photo[], what: string) => copyText(list.map(p => p.name).join("\n"), `${list.length} nama file ${what} disalin. Tempel di Lightroom/Finder untuk mencari fotonya.`);
+  // Previews are exported as JPG but the edit is done on the RAW, so names are copied without the extension.
+  const copyNames = (list: Photo[], what: string) => copyText(lightroomList(list.map(p => p.name)).split(" ").join("\n"), `${list.length} nama file ${what} disalin (tanpa ekstensi).`);
   // Lightroom Classic: Library Filter › Text › Filename › Contains takes one line; names without the extension also match the RAW files.
   const copyForLightroom = (list: Photo[], what: string) => copyText(lightroomList(list.map(p => p.name)), `${list.length} ${what} disalin untuk Lightroom. Library Filter › Text › Filename › Contains, lalu tempel.`);
   const showPicks = () => { setTab("galeri"); setSet("preview"); setFilter("edit"); };
